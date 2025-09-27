@@ -1,0 +1,742 @@
+//
+//  MySpaceView.swift
+//  Personal Space
+//
+//  Created by Penn on 2025/1/27.
+//
+
+import SwiftUI
+
+struct MySpaceView: View {
+    @EnvironmentObject var userState: UserState
+    @EnvironmentObject var partnerState: PartnerState
+    @State private var showingFABMenu = false
+    @State private var showingMoodSlider = false
+    @State private var currentMood: Double = 5.0
+    // 移除 showingMomentDetail 状态，改用 NavigationLink
+    
+    private let functionCards = [
+        FunctionCard(title: "知行合一", icon: "target", color: .green, content: "今日目标：冥想15分钟 ✓", action: { }),
+        FunctionCard(title: "焦虑平复指南", icon: "cross.case.fill", color: .orange, content: "推荐：深呼吸练习", action: { })
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                // 背景渐变
+                AppGradient.background
+                    .ignoresSafeArea()
+                
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(spacing: AppTheme.Spacing.xxl) {
+                        // 顶部状态区
+                        statusSection
+                        
+                        // 能量预规划
+                        EnergyProgressView()
+                            .environmentObject(userState)
+                        
+                        // 心情记录
+                        MoodChartView()
+                            .environmentObject(userState)
+                        
+                        // 知行合一卡片
+                        FunctionCardView(card: functionCards[0])
+                        
+                        // 我的瞬间内容部分
+                        MyMomentSection()
+                        
+                        // 焦虑平复指南卡片（放在最后）
+                        FunctionCardView(card: functionCards[1])
+                        
+                        Spacer(minLength: 120) // 为FAB留出更多空间
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.lg)
+                    .padding(.top, AppTheme.Spacing.lg)
+                }
+                
+                // 悬浮按钮 (FAB)
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        FABMenuView(isShowing: $showingFABMenu)
+                    }
+                    .padding(.trailing, AppTheme.Spacing.xl)
+                    .padding(.bottom, AppTheme.Spacing.xl)
+                }
+            }
+            .navigationBarHidden(true)
+        }
+    }
+    
+    // MARK: - 顶部状态区
+    private var statusSection: some View {
+        VStack(spacing: 0) {
+            // 主卡片区域 - 固定高度
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // 顶部：能量状态 + 快速操作
+                HStack(spacing: AppTheme.Spacing.lg) {
+                    // 左侧：能量状态（电池图标设计）
+                    VStack(spacing: AppTheme.Spacing.sm) {
+                        ZStack {
+                            // 背景圆形渐变
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            userState.displayEnergyLevel.color.opacity(0.2),
+                                            userState.displayEnergyLevel.color.opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 120, height: 120)
+                            
+                            // 电池图标
+                            BatteryIconView(energyLevel: userState.displayEnergyLevel)
+                        }
+                        
+                        Text(userState.displayEnergyLevel.description)
+                            .font(.system(size: AppTheme.FontSize.subheadline, weight: .semibold))
+                            .foregroundColor(userState.displayEnergyLevel.color)
+                    }
+                    .onLongPressGesture {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            let currentIndex = EnergyLevel.allCases.firstIndex(of: userState.energyLevel) ?? 0
+                            let nextIndex = (currentIndex + 1) % EnergyLevel.allCases.count
+                            userState.energyLevel = EnergyLevel.allCases[nextIndex]
+                            userState.isEnergyBoostActive = false
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // 右侧：快速操作按钮组 - 上1下3布局
+                    VStack(spacing: AppTheme.Spacing.md) {
+                        // 第一行：TA状态（不可点击）
+                        HStack {
+                            Spacer()
+                            
+                            // TA状态 - 不可点击，仅显示
+                            VStack(spacing: 4) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.blue.opacity(0.1))
+                                        .frame(width: 50, height: 50)
+                                    
+                                    // 小电池图标
+                                    BatteryIconView(energyLevel: partnerState.energyLevel)
+                                        .scaleEffect(0.6) // 缩小到60%
+                                }
+                                Text("TA")
+                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        
+                        // 第二行：可点击按钮（平复、专注、快充）
+                        HStack(spacing: AppTheme.Spacing.lg) {
+                            // 平复按钮 - 可点击
+                            VStack(spacing: 4) {
+                                Button(action: {
+                                    // 焦虑平复功能
+                                }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.red.opacity(0.15))
+                                            .frame(width: 50, height: 50)
+                                        
+                                        Image(systemName: "cross.case.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(.red)
+                                    }
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                Text("平复")
+                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                            
+                            // 专注模式 - 可点击（根据能量状态）
+                            VStack(spacing: 4) {
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        userState.isFocusModeOn.toggle()
+                                    }
+                                }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(
+                                                (userState.displayEnergyLevel == .high || userState.displayEnergyLevel == .medium) 
+                                                ? (userState.isFocusModeOn ? Color.blue.opacity(0.2) : Color.blue.opacity(0.1))
+                                                : Color.gray.opacity(0.05)
+                                            )
+                                            .frame(width: 50, height: 50)
+                                        
+                                        Image(systemName: userState.isFocusModeOn ? "moon.fill" : "moon")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(
+                                                (userState.displayEnergyLevel == .high || userState.displayEnergyLevel == .medium)
+                                                ? (userState.isFocusModeOn ? .blue : .blue.opacity(0.7))
+                                                : AppTheme.Colors.textSecondary.opacity(0.3)
+                                            )
+                                    }
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .disabled(userState.displayEnergyLevel == .low)
+                                
+                                Text("专注")
+                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                    .foregroundColor(
+                                        (userState.displayEnergyLevel == .high || userState.displayEnergyLevel == .medium)
+                                        ? AppTheme.Colors.textSecondary
+                                        : AppTheme.Colors.textSecondary.opacity(0.3)
+                                    )
+                            }
+                            
+                            // 快充按钮 - 可点击（根据能量状态）
+                            VStack(spacing: 4) {
+                                Button(action: { 
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        userState.isEnergyBoostActive = true
+                                    }
+                                }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(
+                                                (userState.displayEnergyLevel == .medium || userState.displayEnergyLevel == .low)
+                                                ? Color.green.opacity(0.15)
+                                                : Color.gray.opacity(0.05)
+                                            )
+                                            .frame(width: 50, height: 50)
+                                        
+                                        Image(systemName: "bolt.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(
+                                                (userState.displayEnergyLevel == .medium || userState.displayEnergyLevel == .low)
+                                                ? .green
+                                                : AppTheme.Colors.textSecondary.opacity(0.3)
+                                            )
+                                    }
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .disabled(userState.displayEnergyLevel == .high)
+                                
+                                Text("快充")
+                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                    .foregroundColor(
+                                        (userState.displayEnergyLevel == .medium || userState.displayEnergyLevel == .low)
+                                        ? AppTheme.Colors.textSecondary
+                                        : AppTheme.Colors.textSecondary.opacity(0.3)
+                                    )
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(height: 140) // 压缩高度
+            .padding(AppTheme.Spacing.xl)
+            .background(
+                ZStack {
+                    // 主背景
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    AppTheme.Colors.cardBg,
+                                    AppTheme.Colors.cardBg.opacity(0.95)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    
+                    // 玻璃态效果
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.3)
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                AppTheme.Colors.border.opacity(0.5),
+                                AppTheme.Colors.border.opacity(0.2)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(
+                color: AppTheme.Shadows.card.opacity(0.8),
+                radius: 12,
+                x: 0,
+                y: 6
+            )
+            .shadow(
+                color: AppTheme.Shadows.card.opacity(0.4),
+                radius: 4,
+                x: 0,
+                y: 2
+            )
+        }
+    }
+    
+    
+    // MARK: - 功能卡片区
+    private var functionCardsSection: some View {
+        VStack(spacing: AppTheme.Spacing.lg) {
+            ForEach(functionCards) { card in
+                FunctionCardView(card: card)
+            }
+        }
+    }
+    
+}
+
+// MARK: - 我的瞬间部分
+struct MyMomentSection: View {
+    var body: some View {
+        NavigationLink(destination: MyMomentDetailView()) {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // 标题行
+                HStack {
+                    Text("我的瞬间")
+                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                
+                // 只展示两条数据
+                VStack(spacing: AppTheme.Spacing.md) {
+                    ForEach(0..<2) { index in
+                        MomentItemView(index: index)
+                    }
+                }
+            }
+            .padding(AppTheme.Spacing.lg)
+            .background(AppTheme.Colors.cardBg)
+            .cornerRadius(AppTheme.Radius.large)
+            .shadow(color: AppTheme.Shadows.card, radius: 6, x: 0, y: 3)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - 瞬间条目视图
+struct MomentItemView: View {
+    let index: Int
+    
+    var body: some View {
+        HStack {
+            Circle()
+                .fill(AppTheme.Colors.primary.opacity(0.2))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Text("\(index + 1)")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                )
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("瞬间记录 \(index + 1)")
+                    .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.text)
+                
+                Text("这是第 \(index + 1) 条瞬间记录的内容预览...")
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+            
+            Spacer()
+            
+            Text("2小时前")
+                .font(.system(size: AppTheme.FontSize.caption2))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(AppTheme.Colors.cardBg)
+        .cornerRadius(AppTheme.Radius.medium)
+        .shadow(color: AppTheme.Shadows.card, radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - 功能卡片视图
+struct FunctionCardView: View {
+    let card: FunctionCard
+    
+    var body: some View {
+        Button(action: card.action) {
+            HStack(spacing: AppTheme.Spacing.lg) {
+                // 左侧图标区域
+                VStack {
+                    Image(systemName: card.icon)
+                        .font(.system(size: 32))
+                        .foregroundColor(card.color)
+                        .shadow(color: card.color.opacity(0.3), radius: 4, x: 0, y: 2)
+                        .frame(width: 60, height: 60)
+                        .background(card.color.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                
+                // 中间内容区域
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                    Text(card.title)
+                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.text)
+                    
+                    Text(card.content)
+                        .font(.system(size: AppTheme.FontSize.body))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // 右侧箭头
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            .padding(AppTheme.Spacing.lg)
+            .background(AppTheme.Colors.cardBg)
+            .cornerRadius(AppTheme.Radius.large)
+            .shadow(
+                color: AppTheme.Shadows.card,
+                radius: 6,
+                x: 0,
+                y: 3
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.large)
+                    .stroke(AppTheme.Colors.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(1.0)
+        .animation(.easeInOut(duration: 0.2), value: card.title)
+    }
+}
+
+// MARK: - FAB菜单视图
+struct FABMenuView: View {
+    @Binding var isShowing: Bool
+    
+    private let fabItems = [
+        ("发起邀请", "envelope", Color.blue),
+        ("安心确认", "checkmark.circle", Color.green),
+        ("赠送心意", "gift", Color.pink),
+        ("分享碎片", "photo", Color.orange),
+        ("发布瞬间", "camera", Color.purple)
+    ]
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            if isShowing {
+                VStack(spacing: AppTheme.Spacing.sm) {
+                    ForEach(fabItems, id: \.0) { item in
+                        FABMenuItem(
+                            title: item.0,
+                            icon: item.1,
+                            color: item.2,
+                            action: {
+                                // TODO: 实现具体功能
+                                isShowing = false
+                            }
+                        )
+                    }
+                }
+                .padding(AppTheme.Spacing.lg)
+                .background(AppTheme.Colors.cardBg)
+                .cornerRadius(AppTheme.Radius.card)
+                .shadow(
+                    color: AppTheme.Shadows.cardHover,
+                    radius: 16,
+                    x: 0,
+                    y: 8
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                        .stroke(AppTheme.Colors.border, lineWidth: 1)
+                )
+                .transition(.scale.combined(with: .opacity))
+            }
+            
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isShowing.toggle()
+                }
+            }) {
+                Image(systemName: isShowing ? "xmark" : "plus")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 64, height: 64)
+                    .background(AppGradient.primaryGradient)
+                    .clipShape(Circle())
+                    .shadow(
+                        color: AppTheme.Shadows.floating,
+                        radius: 10,
+                        x: 0,
+                        y: 6
+                    )
+            }
+        }
+    }
+}
+
+// MARK: - FAB菜单项视图
+struct FABMenuItem: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: AppTheme.Spacing.md) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(color)
+                    .frame(width: 36, height: 36)
+                    .background(color.opacity(0.1))
+                    .clipShape(Circle())
+                
+                Text(title)
+                    .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.text)
+                
+                Spacer()
+            }
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            .padding(.vertical, AppTheme.Spacing.md)
+            .background(AppTheme.Colors.bgMain)
+            .cornerRadius(AppTheme.Radius.medium)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - 我的瞬间详情页面
+struct MyMomentDetailView: View {
+    @State private var moments: [Moment] = [
+        Moment(
+            content: "今天天气真好，心情也很棒！在公园里散步，看到了很多美丽的花朵。",
+            images: ["flower1", "flower2"],
+            createdAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
+            isFromMe: true,
+            isTextHidden: false,
+            likes: 5,
+            comments: 2
+        ),
+        Moment(
+            content: "刚刚完成了一个重要的项目，感觉很有成就感！",
+            images: ["project1"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
+            isFromMe: true,
+            isTextHidden: false,
+            likes: 8,
+            comments: 3
+        ),
+        Moment(
+            content: "和朋友一起吃饭，聊了很多有趣的话题。友谊真的很珍贵！",
+            images: ["dinner1", "dinner2", "dinner3"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
+            isFromMe: true,
+            isTextHidden: false,
+            likes: 12,
+            comments: 5
+        ),
+        Moment(
+            content: "今天学会了做一道新菜，味道还不错！",
+            images: ["food1"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date(),
+            isFromMe: true,
+            isTextHidden: false,
+            likes: 6,
+            comments: 1
+        ),
+        Moment(
+            content: "看了一部很棒的电影，推荐给大家！",
+            images: ["movie1"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -4, to: Date()) ?? Date(),
+            isFromMe: true,
+            isTextHidden: false,
+            likes: 9,
+            comments: 4
+        )
+    ]
+    
+    var body: some View {
+        ZStack {
+            AppGradient.background
+                .ignoresSafeArea()
+            
+            ScrollView {
+                LazyVStack(spacing: AppTheme.Spacing.lg) {
+                    ForEach(moments) { moment in
+                        MomentDetailCard(moment: moment)
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.lg)
+                .padding(.top, AppTheme.Spacing.lg)
+            }
+        }
+        .navigationTitle("我的瞬间")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(false)
+    }
+}
+
+// MARK: - 瞬间数据模型已在 AppModels.swift 中定义
+
+// MARK: - 瞬间详情卡片
+struct MomentDetailCard: View {
+    let moment: Moment
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            // 用户信息和时间
+            HStack {
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [.blue, .purple],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Text("我")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("SSSPenn")
+                        .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.text)
+                    
+                    Text(formatTime(moment.createdAt))
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                
+                Spacer()
+            }
+            
+            // 内容文字
+            Text(moment.content)
+                .font(.system(size: AppTheme.FontSize.body))
+                .foregroundColor(AppTheme.Colors.text)
+                .lineLimit(nil)
+            
+            // 图片网格
+            if !moment.images.isEmpty {
+                LazyVGrid(columns: getImageColumns(), spacing: AppTheme.Spacing.sm) {
+                    ForEach(moment.images, id: \.self) { imageName in
+                        Rectangle()
+                            .fill(AppTheme.Colors.primary.opacity(0.1))
+                            .aspectRatio(1, contentMode: .fit)
+                            .cornerRadius(AppTheme.Radius.medium)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(AppTheme.Colors.primary.opacity(0.5))
+                            )
+                    }
+                }
+            }
+        }
+        .padding(AppTheme.Spacing.lg)
+        .background(AppTheme.Colors.cardBg)
+        .cornerRadius(AppTheme.Radius.large)
+        .shadow(color: AppTheme.Shadows.card, radius: 6, x: 0, y: 3)
+    }
+    
+    private func getImageColumns() -> [GridItem] {
+        let count = moment.images.count
+        if count == 1 {
+            return [GridItem(.flexible())]
+        } else if count == 2 {
+            return [GridItem(.flexible()), GridItem(.flexible())]
+        } else {
+            return Array(repeating: GridItem(.flexible()), count: 3)
+        }
+    }
+    
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM月dd日 HH:mm"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - 电池图标视图
+struct BatteryIconView: View {
+    let energyLevel: EnergyLevel
+    
+    var body: some View {
+        ZStack {
+            // 电池外框
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(energyLevel.color, lineWidth: 5)
+                .frame(width: 70, height: 40)
+            
+            // 电池正极
+            RoundedRectangle(cornerRadius: 4)
+                .fill(energyLevel.color)
+                .frame(width: 6, height: 20)
+                .offset(x: 40)
+            
+            // 电池电量
+            HStack(spacing: 4) {
+                ForEach(0..<getBatterySegments(), id: \.self) { _ in
+                    Rectangle()
+                        .fill(energyLevel.color)
+                        .frame(width: 10, height: 26)
+                        .cornerRadius(2)
+                }
+            }
+            .offset(x: -4)
+            
+            // 省电模式图标（黄色时显示）
+            if energyLevel == .medium {
+                Image(systemName: "leaf.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.green)
+                    .offset(x: 22, y: -12)
+            }
+        }
+    }
+    
+    private func getBatterySegments() -> Int {
+        switch energyLevel {
+        case .high:
+            return 4  // 满电：4格
+        case .medium:
+            return 2  // 半满：2格
+        case .low:
+            return 1  // 低电量：1格
+        }
+    }
+}
+
+#Preview {
+    MySpaceView()
+        .environmentObject(UserState())
+        .environmentObject(PartnerState())
+        .environmentObject(GrowthGarden())
+}
