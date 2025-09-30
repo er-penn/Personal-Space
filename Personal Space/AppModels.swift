@@ -14,12 +14,14 @@ enum EnergyLevel: String, CaseIterable, Codable {
     case high = "🟢"
     case medium = "🟡"
     case low = "🔴"
+    case unplanned = "⚪"
     
     var description: String {
         switch self {
         case .high: return "高能量"
         case .medium: return "中等能量"
         case .low: return "低能量"
+        case .unplanned: return "待规划"
         }
     }
     
@@ -28,6 +30,7 @@ enum EnergyLevel: String, CaseIterable, Codable {
         case .high: return .green
         case .medium: return .yellow
         case .low: return .red
+        case .unplanned: return Color.gray.opacity(0.3)
         }
     }
 }
@@ -39,10 +42,13 @@ class UserState: ObservableObject {
     @Published var isEnergyBoostActive: Bool = false
     @Published var moodRecords: [MoodRecord] = [] // 心情记录
     @Published var energyPlans: [EnergyPlan] = [] // 能量预规划
+    @Published var actualEnergyRecords: [ActualEnergyRecord] = [] // 实际能量记录
     
     init() {
         // 添加一些示例能量规划数据
         setupSampleEnergyPlans()
+        // 添加一些示例实际能量记录数据
+        setupSampleActualEnergyRecords()
     }
     
     private func setupSampleEnergyPlans() {
@@ -101,6 +107,119 @@ class UserState: ObservableObject {
         
         // 4. 每日能量状态签到 (最低优先级)
         return energyLevel
+    }
+    
+    // MARK: - 能量规划相关方法
+    
+    // 获取有规划的日期
+    func getPlannedDates() -> [Date] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        return energyPlans
+            .filter { calendar.isDate($0.date, inSameDayAs: today) || $0.date > today }
+            .map { calendar.startOfDay(for: $0.date) }
+            .removingDuplicates()
+            .sorted()
+    }
+    
+    // 获取指定日期的能量规划
+    func getEnergyPlans(for date: Date) -> [EnergyPlan] {
+        let calendar = Calendar.current
+        let targetDate = calendar.startOfDay(for: date)
+        
+        return energyPlans.filter { plan in
+            calendar.isDate(plan.date, inSameDayAs: targetDate)
+        }.sorted { $0.hour < $1.hour }
+    }
+    
+    // MARK: - 实际能量记录相关方法
+    
+    // 获取有实际记录的日期
+    func getActualEnergyRecordDates() -> [Date] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        return actualEnergyRecords
+            .filter { calendar.isDate($0.date, inSameDayAs: today) || $0.date < today }
+            .map { calendar.startOfDay(for: $0.date) }
+            .removingDuplicates()
+            .sorted()
+    }
+    
+    // 获取指定日期的实际记录
+    func getActualEnergyRecords(for date: Date) -> [ActualEnergyRecord] {
+        let calendar = Calendar.current
+        let targetDate = calendar.startOfDay(for: date)
+        
+        return actualEnergyRecords.filter { record in
+            calendar.isDate(record.date, inSameDayAs: targetDate)
+        }.sorted { $0.hour < $1.hour }
+    }
+    
+    // 设置示例实际记录数据
+    private func setupSampleActualEnergyRecords() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        // 添加昨天的一些示例记录
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+        
+        // 昨天的高能量时段
+        for hour in 9...11 {
+            let record = ActualEnergyRecord(
+                date: yesterday,
+                hour: hour,
+                energyLevel: .high,
+                recordedAt: calendar.date(byAdding: .hour, value: hour, to: yesterday)!
+            )
+            actualEnergyRecords.append(record)
+        }
+        
+        // 昨天的中等能量时段
+        for hour in 14...16 {
+            let record = ActualEnergyRecord(
+                date: yesterday,
+                hour: hour,
+                energyLevel: .medium,
+                recordedAt: calendar.date(byAdding: .hour, value: hour, to: yesterday)!
+            )
+            actualEnergyRecords.append(record)
+        }
+        
+        // 昨天的低能量时段
+        for hour in 19...21 {
+            let record = ActualEnergyRecord(
+                date: yesterday,
+                hour: hour,
+                energyLevel: .low,
+                recordedAt: calendar.date(byAdding: .hour, value: hour, to: yesterday)!
+            )
+            actualEnergyRecords.append(record)
+        }
+        
+        // 添加前天的记录
+        let dayBeforeYesterday = calendar.date(byAdding: .day, value: -2, to: today)!
+        
+        for hour in 8...10 {
+            let record = ActualEnergyRecord(
+                date: dayBeforeYesterday,
+                hour: hour,
+                energyLevel: .high,
+                recordedAt: calendar.date(byAdding: .hour, value: hour, to: dayBeforeYesterday)!
+            )
+            actualEnergyRecords.append(record)
+        }
+        
+        for hour in 15...17 {
+            let record = ActualEnergyRecord(
+                date: dayBeforeYesterday,
+                hour: hour,
+                energyLevel: .medium,
+                recordedAt: calendar.date(byAdding: .hour, value: hour, to: dayBeforeYesterday)!
+            )
+            actualEnergyRecords.append(record)
+        }
     }
 }
 
@@ -242,6 +361,25 @@ struct EnergyPlan: Identifiable, Codable {
     }
 }
 
+// MARK: - 实际能量记录模型
+struct ActualEnergyRecord: Identifiable, Codable {
+    let id: UUID
+    let date: Date // 记录日期
+    let hour: Int // 小时 (0-23)
+    let energyLevel: EnergyLevel // 实际经历的能量状态
+    let recordedAt: Date // 记录时间
+    let note: String? // 可选备注
+
+    init(date: Date, hour: Int, energyLevel: EnergyLevel, recordedAt: Date = Date(), note: String? = nil) {
+        self.id = UUID()
+        self.date = date
+        self.hour = hour
+        self.energyLevel = energyLevel
+        self.recordedAt = recordedAt
+        self.note = note
+    }
+}
+
 // MARK: - 能量状态优先级枚举
 enum EnergyPriority: Int, CaseIterable {
     case dailyCheckIn = 1    // 每天能量状态签到 (最弱)
@@ -271,5 +409,18 @@ class GrowthGarden: ObservableObject {
         if waterLevel >= 5 && plantLevel < 5 {
             plantLevel += 1
         }
+    }
+}
+
+// MARK: - Array扩展
+extension Array where Element: Equatable {
+    func removingDuplicates() -> [Element] {
+        var result: [Element] = []
+        for element in self {
+            if !result.contains(element) {
+                result.append(element)
+            }
+        }
+        return result
     }
 }

@@ -18,6 +18,9 @@ struct EnergyPlanningView: View {
     @State private var batchEndHour: Int? = nil
     @State private var showingBatchSelector = false
     @State private var showingHistory = false
+    @State private var showingEnergyButtons = false
+    @State private var selectedHourForButtons: Int? = nil
+    @State private var showingUnselectableHint = false
     
     private let hours = Array(6...22) // 6点到22点
     
@@ -59,7 +62,7 @@ struct EnergyPlanningView: View {
                 
                 ScrollView {
                     VStack(spacing: AppTheme.Spacing.lg) {
-                        // 能量规划时间轴（包含日期选择）
+                        // 当前编辑日期的能量规划时间轴
                         EnergyTimelineView(
                             selectedDate: $selectedDate,
                             selectedHour: $selectedHour,
@@ -67,50 +70,76 @@ struct EnergyPlanningView: View {
                             batchStartHour: $batchStartHour,
                             batchEndHour: $batchEndHour,
                             showingBatchSelector: $showingBatchSelector,
-                            showingCalendar: $showingCalendar
+                            showingCalendar: $showingCalendar,
+                            showingEnergyButtons: $showingEnergyButtons,
+                            selectedHourForButtons: $selectedHourForButtons,
+                            showingUnselectableHint: $showingUnselectableHint
                         )
                         .environmentObject(userState)
                         
-                        // 能量状态选择器
-                        if showingBatchSelector, let start = batchStartHour, let end = batchEndHour, let energyLevel = selectedEnergyLevel {
-                            EnergyLevelSelector(
-                                selectedEnergyLevel: $selectedEnergyLevel,
-                                hour: nil,
-                                isBatchMode: true,
-                                startHour: start,
-                                endHour: end
-                            )
-                        } else if let hour = selectedHour {
-                            EnergyLevelSelector(
-                                selectedEnergyLevel: $selectedEnergyLevel,
-                                hour: hour,
-                                isBatchMode: false,
-                                startHour: nil,
-                                endHour: nil
-                            )
+                        
+                        // 其他有规划的日期（只读显示）
+                        let plannedDates = userState.getPlannedDates().filter { 
+                            !Calendar.current.isDate($0, inSameDayAs: selectedDate) 
                         }
                         
-                        // 保存按钮
-                        if showingBatchSelector, let start = batchStartHour, let end = batchEndHour, let energyLevel = selectedEnergyLevel {
-                            SaveEnergyPlanButton(
-                                date: selectedDate,
-                                hour: nil,
-                                energyLevel: energyLevel,
-                                isBatchMode: true,
-                                startHour: start,
-                                endHour: end
-                            )
-                            .environmentObject(userState)
-                        } else if let hour = selectedHour, let energyLevel = selectedEnergyLevel {
-                            SaveEnergyPlanButton(
-                                date: selectedDate,
-                                hour: hour,
-                                energyLevel: energyLevel,
-                                isBatchMode: false,
-                                startHour: nil,
-                                endHour: nil
-                            )
-                            .environmentObject(userState)
+                        if !plannedDates.isEmpty {
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                                HStack {
+                                    Text("其他规划日期")
+                                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                    
+                                    Spacer()
+                                    
+                                    Text("点击切换编辑")
+                                        .font(.system(size: AppTheme.FontSize.caption))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                        .padding(.horizontal, AppTheme.Spacing.sm)
+                                        .padding(.vertical, 4)
+                                        .background(AppTheme.Colors.bgMain)
+                                        .cornerRadius(AppTheme.Radius.small)
+                                }
+                                .padding(.horizontal, AppTheme.Spacing.lg)
+                                
+                                ForEach(plannedDates, id: \.self) { date in
+                                    ReadOnlyEnergyTimelineView(
+                                        date: date,
+                                        onDateSelected: { selectedDate in
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                self.selectedDate = selectedDate
+                                                // 重置选择状态
+                                                self.selectedHour = nil
+                                                self.selectedEnergyLevel = nil
+                                                self.batchStartHour = nil
+                                                self.batchEndHour = nil
+                                                self.showingBatchSelector = false
+                                                self.showingEnergyButtons = false
+                                                self.selectedHourForButtons = nil
+                                            }
+                                        }
+                                    )
+                                    .environmentObject(userState)
+                                }
+                            }
+                        } else {
+                            // 当没有其他规划日期时，显示提示信息
+                            VStack(spacing: AppTheme.Spacing.md) {
+                                Image(systemName: "calendar.badge.plus")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
+                                
+                                Text("暂无其他规划日期")
+                                    .font(.system(size: AppTheme.FontSize.body))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                
+                                Text("使用右上角的日期选择器添加新的规划")
+                                    .font(.system(size: AppTheme.FontSize.caption))
+                                    .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.7))
+                                    .multilineTextAlignment(.center)
+                            }
+                            .padding(.vertical, AppTheme.Spacing.xl)
+                            .frame(maxWidth: .infinity)
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.lg)
@@ -120,23 +149,42 @@ struct EnergyPlanningView: View {
             
             // 悬浮日历
             if showingCalendar {
-                VStack {
-                    Spacer()
-                    FloatingCalendarView(
-                        selectedDate: $selectedDate,
-                        energyPlans: userState.energyPlans,
-                        showingCalendar: $showingCalendar
+                // 背景遮罩层，点击可隐藏日历
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showingCalendar = false
+                        }
+                    }
+                    .overlay(
+                        VStack {
+                            Spacer()
+                            FloatingCalendarView(
+                                selectedDate: $selectedDate,
+                                energyPlans: userState.energyPlans,
+                                showingCalendar: $showingCalendar
+                            )
+                            .padding(.horizontal, AppTheme.Spacing.lg)
+                            .padding(.bottom, AppTheme.Spacing.xl)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     )
-                    .padding(.horizontal, AppTheme.Spacing.lg)
-                    .padding(.bottom, AppTheme.Spacing.xl)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .navigationBarHidden(true)
         .sheet(isPresented: $showingHistory) {
             HistoricalEnergyTimelinesView()
                 .environmentObject(userState)
+        }
+        .onTapGesture {
+            // 点击背景区域取消操作
+            if showingEnergyButtons {
+                showingEnergyButtons = false
+                batchStartHour = nil
+                batchEndHour = nil
+                selectedHourForButtons = nil
+            }
         }
     }
 }
@@ -184,8 +232,9 @@ struct EnergyTimelineView: View {
     @Binding var batchEndHour: Int?
     @Binding var showingBatchSelector: Bool
     @Binding var showingCalendar: Bool
-    @State private var showingEnergyButtons = false
-    @State private var selectedHourForButtons: Int? = nil
+    @Binding var showingEnergyButtons: Bool
+    @Binding var selectedHourForButtons: Int?
+    @Binding var showingUnselectableHint: Bool
     
     private let hours = Array(6...22) // 6点到22点
     
@@ -244,7 +293,7 @@ struct EnergyTimelineView: View {
                                     .overlay(
                                         // 过去时间的灰色覆盖层
                                         Rectangle()
-                                            .fill(Color.gray.opacity(0.4))
+                                            .fill(Color.black.opacity(0.6))
                                             .frame(width: geometry.size.width / CGFloat(hours.count), height: 20)
                                             .cornerRadius(2)
                                             .opacity(isHourSelectable(hour) ? 0 : 1)
@@ -280,6 +329,7 @@ struct EnergyTimelineView: View {
             
             // 选择状态提示
             if let start = batchStartHour, let end = batchEndHour {
+                // 时间段选择提示
                 HStack {
                     Text("已选择：\(start):00 - \(end):00")
                         .font(.system(size: AppTheme.FontSize.caption))
@@ -292,6 +342,30 @@ struct EnergyTimelineView: View {
                         batchEndHour = nil
                         selectedHour = nil
                         selectedEnergyLevel = nil
+                        showingBatchSelector = false
+                        selectedHourForButtons = nil
+                        showingEnergyButtons = false
+                    }
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(AppTheme.Colors.primary)
+                }
+            } else if let hour = selectedHour {
+                // 单个时间段选择提示
+                HStack {
+                    Text("已选择：\(hour):00")
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    Spacer()
+                    
+                    Button("取消选择") {
+                        selectedHour = nil
+                        selectedEnergyLevel = nil
+                        showingEnergyButtons = false
+                        selectedHourForButtons = nil
+                        batchStartHour = nil
+                        batchEndHour = nil
+                        showingBatchSelector = false
                     }
                     .font(.system(size: AppTheme.FontSize.caption))
                     .foregroundColor(AppTheme.Colors.primary)
@@ -303,22 +377,29 @@ struct EnergyTimelineView: View {
         .cornerRadius(AppTheme.Radius.large)
         .shadow(color: AppTheme.Shadows.card, radius: 6, x: 0, y: 3)
         .overlay(
-            // 悬浮能量状态按钮
+            // 能量状态按钮 - 固定在时间轴下方
             Group {
                 if showingEnergyButtons, let hour = selectedHourForButtons {
-                    FloatingEnergyButtons(
-                        hour: hour,
-                        selectedEnergyLevel: $selectedEnergyLevel,
-                        showingButtons: $showingEnergyButtons
-                    )
-                    .offset(x: getButtonOffset(for: hour), y: -60)
-                }
-            }
-        )
-        .overlay(
-            // 时间段选择时的状态按钮
-            Group {
-                if let start = batchStartHour, let end = batchEndHour, !showingEnergyButtons {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            FloatingEnergyButtons(
+                                hour: hour,
+                                selectedEnergyLevel: $selectedEnergyLevel,
+                                showingButtons: $showingEnergyButtons,
+                                selectedDate: $selectedDate,
+                                selectedHour: $selectedHour,
+                                batchStartHour: $batchStartHour,
+                                batchEndHour: $batchEndHour,
+                                showingBatchSelector: $showingBatchSelector,
+                                selectedHourForButtons: $selectedHourForButtons
+                            )
+                            Spacer()
+                        }
+                        .padding(.bottom, 80)
+                    }
+                } else if let start = batchStartHour, let end = batchEndHour, !showingEnergyButtons {
                     VStack {
                         Spacer()
                         HStack {
@@ -326,11 +407,30 @@ struct EnergyTimelineView: View {
                             BatchEnergyButtons(
                                 startHour: start,
                                 endHour: end,
-                                selectedEnergyLevel: $selectedEnergyLevel
+                                selectedEnergyLevel: $selectedEnergyLevel,
+                                selectedDate: $selectedDate,
+                                batchStartHour: $batchStartHour,
+                                batchEndHour: $batchEndHour
                             )
                             Spacer()
                         }
-                        .padding(.bottom, 20)
+                        .padding(.bottom, 80)
+                    }
+                }
+            }
+        )
+        .overlay(
+            // 不可选择提示
+            Group {
+                if showingUnselectableHint {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            UnselectableHintView()
+                            Spacer()
+                        }
+                        .padding(.bottom, 100)
                     }
                 }
             }
@@ -365,7 +465,8 @@ struct EnergyTimelineView: View {
     private func isHourSelectable(_ hour: Int) -> Bool {
         if isToday(selectedDate) {
             let currentHour = getCurrentHour()
-            return hour > currentHour
+            // 允许选择当前小时及之后的时间
+            return hour >= currentHour
         }
         return true // 非今天可以选择任意时间
     }
@@ -388,34 +489,56 @@ struct EnergyTimelineView: View {
     
     // 处理小时点击
     private func handleHourTap(hour: Int) {
+        print("点击了小时: \(hour), 是否可选择: \(isHourSelectable(hour))")
+        
         if !isHourSelectable(hour) {
+            print("小时 \(hour) 不可选择")
+            // 显示不可选择提示
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showingUnselectableHint = true
+            }
+            // 1.5秒后自动隐藏提示
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showingUnselectableHint = false
+                }
+            }
             return
         }
         
         if batchStartHour == nil {
             // 第一次点击，设置开始时间并显示悬浮按钮
+            print("第一次点击，设置开始时间: \(hour)")
             batchStartHour = hour
+            selectedHour = hour
             selectedHourForButtons = hour
             showingEnergyButtons = true
         } else if batchEndHour == nil {
             if hour > batchStartHour! {
                 // 第二次点击，设置结束时间，显示时间段选择按钮
+                print("第二次点击，设置结束时间: \(hour)")
                 batchEndHour = hour
                 showingEnergyButtons = false
             } else {
                 // 如果点击的时间早于开始时间，重新设置开始时间
+                print("重新设置开始时间: \(hour)")
                 batchStartHour = hour
+                selectedHour = hour
                 batchEndHour = nil
                 selectedHourForButtons = hour
                 showingEnergyButtons = true
             }
         } else {
             // 重新开始选择
+            print("重新开始选择: \(hour)")
             batchStartHour = hour
+            selectedHour = hour
             batchEndHour = nil
             selectedHourForButtons = hour
             showingEnergyButtons = true
         }
+        
+        print("当前状态 - batchStartHour: \(batchStartHour ?? -1), batchEndHour: \(batchEndHour ?? -1), showingEnergyButtons: \(showingEnergyButtons)")
     }
     
     // 格式化日期
@@ -425,21 +548,6 @@ struct EnergyTimelineView: View {
         return formatter.string(from: date)
     }
     
-    // 获取按钮偏移量
-    private func getButtonOffset(for hour: Int) -> CGFloat {
-        let hourIndex = hour - 6
-        let segmentWidth = UIScreen.main.bounds.width - (AppTheme.Spacing.lg * 2) - (AppTheme.Spacing.lg * 2)
-        let segmentWidthPerHour = segmentWidth / CGFloat(hours.count)
-        let baseOffset = segmentWidthPerHour * CGFloat(hourIndex) + segmentWidthPerHour / 2 - 30
-        
-        // 确保按钮不会被屏幕边缘挡住
-        let screenWidth = UIScreen.main.bounds.width
-        let buttonWidth: CGFloat = 120 // 三个按钮的总宽度
-        let minOffset: CGFloat = 20
-        let maxOffset = screenWidth - buttonWidth - 20
-        
-        return max(minOffset, min(maxOffset, baseOffset))
-    }
 }
 
 // MARK: - 能量状态选择器
@@ -462,8 +570,10 @@ struct EnergyLevelSelector: View {
                     .foregroundColor(AppTheme.Colors.primary)
             }
             
+            // 固定高度的按钮容器
             HStack(spacing: AppTheme.Spacing.md) {
-                ForEach(EnergyLevel.allCases, id: \.self) { level in
+                // 三个能量状态选项
+                ForEach(EnergyLevel.allCases.filter { $0 != .unplanned }, id: \.self) { level in
                     Button(action: {
                         selectedEnergyLevel = level
                     }) {
@@ -489,7 +599,34 @@ struct EnergyLevelSelector: View {
                             .frame(width: 60, height: 60)
                     )
                 }
+                
+                // 取消规划选项
+                Button(action: {
+                    selectedEnergyLevel = .unplanned
+                }) {
+                    VStack(spacing: AppTheme.Spacing.sm) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 60, height: 60)
+                            
+                            Text("⚪")
+                                .font(.system(size: 24))
+                        }
+                        
+                        Text("取消规划")
+                            .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.text)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .overlay(
+                    Circle()
+                        .stroke(selectedEnergyLevel == .unplanned ? Color.gray : Color.clear, lineWidth: 3)
+                        .frame(width: 60, height: 60)
+                )
             }
+            .frame(height: 100) // 固定高度，确保一致性
         }
         .padding(AppTheme.Spacing.lg)
         .background(AppTheme.Colors.cardBg)
@@ -542,8 +679,26 @@ struct SaveEnergyPlanButton: View {
                 plan.hour >= start && plan.hour <= end
             }
             
-            // 批量添加新规划
-            for hour in start...end {
+            // 如果不是取消规划，则添加新规划
+            if energyLevel != .unplanned {
+                for hour in start...end {
+                    let newPlan = EnergyPlan(
+                        date: targetDate,
+                        hour: hour,
+                        energyLevel: energyLevel,
+                        createdAt: Date()
+                    )
+                    userState.energyPlans.append(newPlan)
+                }
+            }
+        } else if let hour = hour {
+            // 单个保存：移除同一天同一小时的旧规划
+            userState.energyPlans.removeAll { plan in
+                calendar.isDate(plan.date, inSameDayAs: targetDate) && plan.hour == hour
+            }
+            
+            // 如果不是取消规划，则添加新规划
+            if energyLevel != .unplanned {
                 let newPlan = EnergyPlan(
                     date: targetDate,
                     hour: hour,
@@ -552,20 +707,6 @@ struct SaveEnergyPlanButton: View {
                 )
                 userState.energyPlans.append(newPlan)
             }
-        } else if let hour = hour {
-            // 单个保存：移除同一天同一小时的旧规划
-            userState.energyPlans.removeAll { plan in
-                calendar.isDate(plan.date, inSameDayAs: targetDate) && plan.hour == hour
-            }
-            
-            // 添加新规划
-            let newPlan = EnergyPlan(
-                date: targetDate,
-                hour: hour,
-                energyLevel: energyLevel,
-                createdAt: Date()
-            )
-            userState.energyPlans.append(newPlan)
         }
         
         // 按日期和小时排序
@@ -707,27 +848,38 @@ struct CalendarView: View {
     }
 }
 
-// MARK: - 历史能量规划时间轴视图
+// MARK: - 历史能量记录时间轴视图
 struct HistoricalEnergyTimelinesView: View {
     @EnvironmentObject var userState: UserState
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-            Text("历史能量规划")
+            Text("历史能量记录")
                 .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
                 .foregroundColor(AppTheme.Colors.primary)
             
-            if groupedEnergyPlans.isEmpty {
-                Text("暂无历史规划")
-                    .font(.system(size: AppTheme.FontSize.body))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, AppTheme.Spacing.xl)
+            if groupedEnergyRecords.isEmpty {
+                VStack(spacing: AppTheme.Spacing.md) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 48))
+                        .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
+                    
+                    Text("暂无历史记录")
+                        .font(.system(size: AppTheme.FontSize.body))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    Text("开始记录您的能量状态，建立个人能量档案")
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, AppTheme.Spacing.xl)
             } else {
-                ForEach(groupedEnergyPlans.keys.sorted(by: >), id: \.self) { date in
+                ForEach(groupedEnergyRecords.keys.sorted(by: >), id: \.self) { date in
                     HistoricalEnergyTimelineCard(
                         date: date,
-                        energyPlans: groupedEnergyPlans[date] ?? []
+                        energyRecords: groupedEnergyRecords[date] ?? []
                     )
                     .environmentObject(userState)
                 }
@@ -735,19 +887,24 @@ struct HistoricalEnergyTimelinesView: View {
         }
     }
     
-    private var groupedEnergyPlans: [Date: [EnergyPlan]] {
+    private var groupedEnergyRecords: [Date: [ActualEnergyRecord]] {
         let calendar = Calendar.current
-        var grouped: [Date: [EnergyPlan]] = [:]
+        let today = calendar.startOfDay(for: Date())
+        var grouped: [Date: [ActualEnergyRecord]] = [:]
         
-        for plan in userState.energyPlans {
-            let date = calendar.startOfDay(for: plan.date)
-            if grouped[date] == nil {
-                grouped[date] = []
+        // 只获取今天之前的实际能量记录
+        for record in userState.actualEnergyRecords {
+            let date = calendar.startOfDay(for: record.date)
+            // 只包含今天之前的日期
+            if date < today {
+                if grouped[date] == nil {
+                    grouped[date] = []
+                }
+                grouped[date]?.append(record)
             }
-            grouped[date]?.append(plan)
         }
         
-        // 按小时排序每个日期的规划
+        // 按小时排序每个日期的记录
         for date in grouped.keys {
             grouped[date]?.sort { $0.hour < $1.hour }
         }
@@ -756,11 +913,11 @@ struct HistoricalEnergyTimelinesView: View {
     }
 }
 
-// MARK: - 历史能量规划时间轴卡片
+// MARK: - 历史能量记录时间轴卡片
 struct HistoricalEnergyTimelineCard: View {
     @EnvironmentObject var userState: UserState
     let date: Date
-    let energyPlans: [EnergyPlan]
+    let energyRecords: [ActualEnergyRecord]
     
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -823,19 +980,25 @@ struct HistoricalEnergyTimelineCard: View {
     }
     
     private func getEnergyColor(for hour: Int) -> Color {
-        let finalLevel = userState.getFinalEnergyLevel(for: date, hour: hour)
-        return finalLevel.color
+        // 查找该小时的实际能量记录
+        if let record = energyRecords.first(where: { $0.hour == hour }) {
+            return record.energyLevel.color
+        }
+        // 如果没有记录，显示为灰色（未记录）
+        return Color.gray.opacity(0.2)
     }
     
     private func getEnergyStats() -> (high: Int, medium: Int, low: Int) {
         var high = 0, medium = 0, low = 0
         
-        for hour in hours {
-            let level = userState.getFinalEnergyLevel(for: date, hour: hour)
-            switch level {
+        for record in energyRecords {
+            switch record.energyLevel {
             case .high: high += 1
             case .medium: medium += 1
             case .low: low += 1
+            case .unplanned: 
+                // 待规划状态不计入统计
+                break
             }
         }
         
@@ -843,17 +1006,49 @@ struct HistoricalEnergyTimelineCard: View {
     }
 }
 
+// MARK: - 不可选择提示视图
+struct UnselectableHintView: View {
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 16))
+                .foregroundColor(.orange)
+            
+            Text("不可选择此时间段")
+                .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                .foregroundColor(AppTheme.Colors.text)
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.vertical, AppTheme.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                .fill(.ultraThinMaterial)
+                .shadow(color: AppTheme.Shadows.card, radius: 6, x: 0, y: 3)
+        )
+    }
+}
+
 // MARK: - 悬浮能量状态按钮
 struct FloatingEnergyButtons: View {
+    @EnvironmentObject var userState: UserState
     let hour: Int
     @Binding var selectedEnergyLevel: EnergyLevel?
     @Binding var showingButtons: Bool
+    @Binding var selectedDate: Date
+    @Binding var selectedHour: Int?
+    @Binding var batchStartHour: Int?
+    @Binding var batchEndHour: Int?
+    @Binding var showingBatchSelector: Bool
+    @Binding var selectedHourForButtons: Int?
     
     var body: some View {
         HStack(spacing: AppTheme.Spacing.sm) {
-            ForEach(EnergyLevel.allCases, id: \.self) { level in
+            // 三个能量状态按钮
+            ForEach(EnergyLevel.allCases.filter { $0 != .unplanned }, id: \.self) { level in
                 Button(action: {
                     selectedEnergyLevel = level
+                    saveEnergyPlan(hour: hour, energyLevel: level)
+                    clearSelectionState()
                     showingButtons = false
                 }) {
                     ZStack {
@@ -868,6 +1063,25 @@ struct FloatingEnergyButtons: View {
                 }
                 .buttonStyle(PlainButtonStyle())
             }
+            
+            // 取消规划按钮
+            Button(action: {
+                selectedEnergyLevel = .unplanned
+                saveEnergyPlan(hour: hour, energyLevel: .unplanned)
+                clearSelectionState()
+                showingButtons = false
+            }) {
+                ZStack {
+                    Circle()
+                        .fill(Color.gray)
+                        .frame(width: 40, height: 40)
+                    
+                    Text("⚪")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
         }
         .padding(AppTheme.Spacing.sm)
         .background(
@@ -876,28 +1090,74 @@ struct FloatingEnergyButtons: View {
                 .shadow(color: AppTheme.Shadows.card, radius: 8, x: 0, y: 4)
         )
         .onTapGesture {
-            // 点击背景区域关闭按钮
+            // 点击背景区域取消选择并关闭按钮
+            clearSelectionState()
             showingButtons = false
         }
+    }
+    
+    private func saveEnergyPlan(hour: Int, energyLevel: EnergyLevel) {
+        let calendar = Calendar.current
+        let targetDate = calendar.startOfDay(for: selectedDate)
+        
+        // 移除同一天同一小时的旧规划
+        userState.energyPlans.removeAll { plan in
+            calendar.isDate(plan.date, inSameDayAs: targetDate) && plan.hour == hour
+        }
+        
+        // 如果不是取消规划，则添加新规划
+        if energyLevel != .unplanned {
+            let newPlan = EnergyPlan(
+                date: targetDate,
+                hour: hour,
+                energyLevel: energyLevel,
+                createdAt: Date()
+            )
+            userState.energyPlans.append(newPlan)
+        }
+        
+        // 按日期和小时排序
+        userState.energyPlans.sort { plan1, plan2 in
+            if plan1.date != plan2.date {
+                return plan1.date < plan2.date
+            }
+            return plan1.hour < plan2.hour
+        }
+    }
+    
+    // 清除选择状态
+    private func clearSelectionState() {
+        selectedHour = nil
+        batchStartHour = nil
+        batchEndHour = nil
+        showingBatchSelector = false
+        selectedEnergyLevel = nil
+        selectedHourForButtons = nil
+        showingButtons = false
     }
 }
 
 // MARK: - 批量能量状态按钮
 struct BatchEnergyButtons: View {
+    @EnvironmentObject var userState: UserState
     let startHour: Int
     let endHour: Int
     @Binding var selectedEnergyLevel: EnergyLevel?
+    @Binding var selectedDate: Date
+    @Binding var batchStartHour: Int?
+    @Binding var batchEndHour: Int?
     
     var body: some View {
         VStack(spacing: AppTheme.Spacing.sm) {
-            Text("\(startHour):00 - \(endHour):00")
-                .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-            
+            // 固定高度的按钮容器
             HStack(spacing: AppTheme.Spacing.sm) {
-                ForEach(EnergyLevel.allCases, id: \.self) { level in
+                // 三个能量状态按钮
+                ForEach(EnergyLevel.allCases.filter { $0 != .unplanned }, id: \.self) { level in
                     Button(action: {
                         selectedEnergyLevel = level
+                        saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: level)
+                        batchStartHour = nil
+                        batchEndHour = nil
                     }) {
                         ZStack {
                             Circle()
@@ -911,6 +1171,25 @@ struct BatchEnergyButtons: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
+                
+                // 取消规划按钮
+                Button(action: {
+                    selectedEnergyLevel = .unplanned
+                    saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: .unplanned)
+                    batchStartHour = nil
+                    batchEndHour = nil
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.gray)
+                            .frame(width: 40, height: 40)
+                        
+                        Text("⚪")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(AppTheme.Spacing.sm)
@@ -919,6 +1198,38 @@ struct BatchEnergyButtons: View {
                 .fill(.ultraThinMaterial)
                 .shadow(color: AppTheme.Shadows.card, radius: 8, x: 0, y: 4)
         )
+    }
+    
+    private func saveBatchEnergyPlan(startHour: Int, endHour: Int, energyLevel: EnergyLevel) {
+        let calendar = Calendar.current
+        let targetDate = calendar.startOfDay(for: selectedDate)
+        
+        // 移除指定时间范围内的旧规划
+        userState.energyPlans.removeAll { plan in
+            calendar.isDate(plan.date, inSameDayAs: targetDate) && 
+            plan.hour >= startHour && plan.hour <= endHour
+        }
+        
+        // 如果不是取消规划，则批量添加新规划
+        if energyLevel != .unplanned {
+            for hour in startHour...endHour {
+                let newPlan = EnergyPlan(
+                    date: targetDate,
+                    hour: hour,
+                    energyLevel: energyLevel,
+                    createdAt: Date()
+                )
+                userState.energyPlans.append(newPlan)
+            }
+        }
+        
+        // 按日期和小时排序
+        userState.energyPlans.sort { plan1, plan2 in
+            if plan1.date != plan2.date {
+                return plan1.date < plan2.date
+            }
+            return plan1.hour < plan2.hour
+        }
     }
 }
 
@@ -1061,6 +1372,101 @@ struct FloatingCalendarView: View {
         return energyPlans.contains { plan in
             calendar.isDate(plan.date, inSameDayAs: date)
         }
+    }
+}
+
+// MARK: - 只读能量时间轴视图
+struct ReadOnlyEnergyTimelineView: View {
+    @EnvironmentObject var userState: UserState
+    let date: Date
+    let onDateSelected: (Date) -> Void
+    
+    private let hours = Array(6...22) // 6点到22点
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            // 日期标题
+            HStack {
+                Text(formatDate(date))
+                    .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                
+                Spacer()
+                
+                // 规划统计
+                let stats = getEnergyStats()
+                Text("高\(stats.high) 中\(stats.medium) 低\(stats.low)")
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .padding(.horizontal, AppTheme.Spacing.sm)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.Colors.bgMain)
+                    .cornerRadius(AppTheme.Radius.small)
+            }
+            
+            // 时间标签
+            HStack {
+                ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
+                    Text("\(hour):00")
+                        .font(.system(size: AppTheme.FontSize.caption2))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            
+            // 能量条
+            GeometryReader { geometry in
+                HStack(spacing: 0.5) {
+                    ForEach(hours, id: \.self) { hour in
+                        Rectangle()
+                            .fill(getEnergyColor(for: hour))
+                            .frame(width: geometry.size.width / CGFloat(hours.count), height: 16)
+                            .cornerRadius(1)
+                    }
+                }
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(2)
+            }
+            .frame(height: 16)
+        }
+        .padding(AppTheme.Spacing.lg)
+        .background(AppTheme.Colors.cardBg)
+        .cornerRadius(AppTheme.Radius.large)
+        .shadow(color: AppTheme.Shadows.card, radius: 6, x: 0, y: 3)
+        .onTapGesture {
+            onDateSelected(date)
+        }
+    }
+    
+    private func getEnergyColor(for hour: Int) -> Color {
+        // 获取该日期的能量预规划
+        let finalLevel = userState.getFinalEnergyLevel(for: date, hour: hour)
+        return finalLevel.color
+    }
+    
+    private func getEnergyStats() -> (high: Int, medium: Int, low: Int) {
+        var high = 0, medium = 0, low = 0
+        
+        for hour in hours {
+            let level = userState.getFinalEnergyLevel(for: date, hour: hour)
+            switch level {
+            case .high: high += 1
+            case .medium: medium += 1
+            case .low: low += 1
+            case .unplanned: 
+                // 待规划状态不计入统计
+                break
+            }
+        }
+        
+        return (high, medium, low)
+    }
+    
+    // 格式化日期
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年M月d日"
+        return formatter.string(from: date)
     }
 }
 

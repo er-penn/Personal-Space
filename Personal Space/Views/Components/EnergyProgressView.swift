@@ -119,6 +119,7 @@ struct EnergyProgressView: View {
         var highCount = 0
         var mediumCount = 0
         var lowCount = 0
+        var unplannedCount = 0
         
         for hour in hours {
             let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour)
@@ -129,10 +130,16 @@ struct EnergyProgressView: View {
                 mediumCount += 1
             case .low:
                 lowCount += 1
+            case .unplanned:
+                unplannedCount += 1
             }
         }
         
-        return "高能量\(highCount)小时，中能量\(mediumCount)小时，低能量\(lowCount)小时"
+        if unplannedCount > 0 {
+            return "高能量\(highCount)小时，中能量\(mediumCount)小时，低能量\(lowCount)小时，待规划\(unplannedCount)小时"
+        } else {
+            return "高能量\(highCount)小时，中能量\(mediumCount)小时，低能量\(lowCount)小时"
+        }
     }
     
     private func startTimer() {

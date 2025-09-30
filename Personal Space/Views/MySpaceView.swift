@@ -730,6 +730,8 @@ struct BatteryIconView: View {
             return 2  // 半满：2格
         case .low:
             return 1  // 低电量：1格
+        case .unplanned:
+            return 0  // 待规划：0格
         }
     }
 }
