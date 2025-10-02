@@ -114,21 +114,8 @@ struct OurSpaceView: View {
             
             // 伴侣能量规划进度条（如果有预规划）
             if hasPartnerEnergyPlan() {
-                VStack(spacing: 4) {
-                    // 时间标签
-                    HStack {
-                        ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                            Text("\(hour):00")
-                                .font(.system(size: 8))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    
-                    // 进度条
-                    PartnerEnergyProgressView()
-                        .frame(height: 8)
-                }
+                PartnerEnergyProgressView()
+                    .frame(height: 20)
             }
         }
         .padding(AppTheme.Spacing.lg)
@@ -692,15 +679,21 @@ struct PartnerEnergyProgressView: View {
     
     var body: some View {
         VStack(spacing: 4) {
-            // 小时标签（每4小时显示一次）
-            HStack {
-                ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                    Text("\(hour):00")
-                        .font(.system(size: 8))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .frame(maxWidth: .infinity)
+            // 小时标签（每4小时显示一次）- 使用GeometryReader精确定位
+            GeometryReader { geometry in
+                ZStack {
+                    ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
+                        Text("\(hour):00")
+                            .font(.system(size: 8))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .position(
+                                x: getTimeLabelPosition(for: hour, in: geometry.size.width),
+                                y: 6 // 时间标签的垂直位置
+                            )
+                    }
                 }
             }
+            .frame(height: 12)
             
             // 进度条 - 按小时显示
             GeometryReader { geometry in
@@ -751,6 +744,13 @@ struct PartnerEnergyProgressView: View {
         let hourIndex = max(0, min(currentHour - 6, hours.count - 1))
         let segmentWidth = width / CGFloat(hours.count)
         return segmentWidth * CGFloat(hourIndex) + segmentWidth / 2
+    }
+    
+    // 计算时间标签的位置（居中对齐到对应时间块）
+    private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
+        let hourIndex = hour - 6 // 6点对应索引0
+        let blockWidth = totalWidth / CGFloat(hours.count)
+        return blockWidth * CGFloat(hourIndex) + blockWidth / 2
     }
     
     private func startTimer() {
