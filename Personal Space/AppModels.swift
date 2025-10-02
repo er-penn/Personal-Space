@@ -18,9 +18,9 @@ enum EnergyLevel: String, CaseIterable, Codable {
     
     var description: String {
         switch self {
-        case .high: return "满血复活，状态拉满"
-        case .medium: return "血条还行，但别催我"
-        case .low: return "血槽空了，莫挨老子"
+        case .high: return "满血复活\n状态拉满"
+        case .medium: return "血条还行\n但别催我"
+        case .low: return "血槽空了\n莫挨老子"
         case .unplanned: return "待规划"
         }
     }
