@@ -264,15 +264,21 @@ struct EnergyTimelineView: View {
                 .buttonStyle(PlainButtonStyle())
             }
             
-            // 时间标签
-            HStack {
-                ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                    Text("\(hour):00")
-                        .font(.system(size: AppTheme.FontSize.caption2))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .frame(maxWidth: .infinity)
+            // 时间标签 - 使用GeometryReader精确定位
+            GeometryReader { geometry in
+                ZStack {
+                    ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
+                        Text("\(hour):00")
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .position(
+                                x: getTimeLabelPosition(for: hour, in: geometry.size.width),
+                                y: 10 // 时间标签的垂直位置
+                            )
+                    }
                 }
             }
+            .frame(height: 20)
             
             // 能量条
             GeometryReader { geometry in
@@ -463,6 +469,13 @@ struct EnergyTimelineView: View {
         let hourIndex = max(0, min(currentHour - 6, hours.count - 1))
         let segmentWidth = width / CGFloat(hours.count)
         return segmentWidth * CGFloat(hourIndex) + segmentWidth / 2
+    }
+    
+    // 计算时间标签的位置（居中对齐到对应时间块）
+    private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
+        let hourIndex = hour - 6 // 6点对应索引0
+        let blockWidth = totalWidth / CGFloat(hours.count)
+        return blockWidth * CGFloat(hourIndex) + blockWidth / 2
     }
     
     // 检查小时是否可选择（不能选择过去的时间）
@@ -952,15 +965,21 @@ struct HistoricalEnergyTimelineCard: View {
                     .cornerRadius(AppTheme.Radius.small)
             }
             
-            // 时间标签
-            HStack {
-                ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                    Text("\(hour):00")
-                        .font(.system(size: AppTheme.FontSize.caption2))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .frame(maxWidth: .infinity)
+            // 时间标签 - 使用GeometryReader精确定位
+            GeometryReader { geometry in
+                ZStack {
+                    ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
+                        Text("\(hour):00")
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .position(
+                                x: getTimeLabelPosition(for: hour, in: geometry.size.width),
+                                y: 10 // 时间标签的垂直位置
+                            )
+                    }
                 }
             }
+            .frame(height: 20)
             
             // 能量条
             GeometryReader { geometry in
@@ -1442,15 +1461,21 @@ struct ReadOnlyEnergyTimelineView: View {
                     .cornerRadius(AppTheme.Radius.small)
             }
             
-            // 时间标签
-            HStack {
-                ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                    Text("\(hour):00")
-                        .font(.system(size: AppTheme.FontSize.caption2))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .frame(maxWidth: .infinity)
+            // 时间标签 - 使用GeometryReader精确定位
+            GeometryReader { geometry in
+                ZStack {
+                    ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
+                        Text("\(hour):00")
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .position(
+                                x: getTimeLabelPosition(for: hour, in: geometry.size.width),
+                                y: 10 // 时间标签的垂直位置
+                            )
+                    }
                 }
             }
+            .frame(height: 20)
             
             // 能量条
             GeometryReader { geometry in
@@ -1498,6 +1523,13 @@ struct ReadOnlyEnergyTimelineView: View {
         }
         
         return (high, medium, low)
+    }
+    
+    // 计算时间标签的位置（居中对齐到对应时间块）
+    private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
+        let hourIndex = hour - 6 // 6点对应索引0
+        let blockWidth = totalWidth / CGFloat(hours.count)
+        return blockWidth * CGFloat(hourIndex) + blockWidth / 2
     }
     
     // 格式化日期
