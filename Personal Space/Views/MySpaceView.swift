@@ -823,6 +823,81 @@ struct MomentDetailCard: View {
             userState.isEnergyBoostActive = false
         }
     }
+    
+    // MARK: - 手势处理方法
+    private func showGestureHints() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showingGestureHints = true
+            batteryScale = 1.1
+        }
+        
+        // 3秒后自动隐藏提示
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            hideGestureHints()
+        }
+    }
+    
+    private func hideGestureHints() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            showingGestureHints = false
+            batteryScale = 1.0
+            batteryTilt = 0.0
+            highlightedDirection = nil
+        }
+    }
+    
+    private func updateGestureFeedback(translation: CGSize) {
+        let threshold: CGFloat = 20
+        
+        // 根据滑动方向更新高亮状态
+        if abs(translation.height) > abs(translation.width) {
+            // 垂直滑动
+            if translation.height < -threshold {
+                highlightedDirection = "up"
+                batteryTilt = -5.0
+            } else if translation.height > threshold {
+                highlightedDirection = "down"
+                batteryTilt = 5.0
+            } else {
+                highlightedDirection = nil
+                batteryTilt = 0.0
+            }
+        } else {
+            // 水平滑动
+            if translation.width < -threshold {
+                highlightedDirection = "left"
+                batteryTilt = -3.0
+            } else if translation.width > threshold {
+                highlightedDirection = "right"
+                batteryTilt = 3.0
+            } else {
+                highlightedDirection = nil
+                batteryTilt = 0.0
+            }
+        }
+    }
+    
+    private func handleGestureEnd(translation: CGSize) {
+        let threshold: CGFloat = 30
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            if abs(translation.height) > threshold {
+                if translation.height < 0 {
+                    // 向上滑动 - 高能量
+                    switchToEnergyLevel(.high)
+                } else {
+                    // 向下滑动 - 低能量
+                    switchToEnergyLevel(.low)
+                }
+            } else if abs(translation.width) > threshold {
+                // 左右滑动 - 中能量
+                switchToEnergyLevel(.medium)
+            }
+            
+            // 隐藏提示
+            hideGestureHints()
+        }
+    }
 }
 
 // MARK: - 电池图标视图
