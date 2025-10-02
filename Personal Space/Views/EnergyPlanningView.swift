@@ -337,7 +337,7 @@ struct EnergyTimelineView: View {
             if let start = batchStartHour, let end = batchEndHour {
                 // 时间段选择提示
                 HStack {
-                    Text("已选择：\(start):00 - \(end):00")
+                    Text("已选择：\(start):00 - \(end+1):00")
                         .font(.system(size: AppTheme.FontSize.caption))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                     
@@ -358,7 +358,7 @@ struct EnergyTimelineView: View {
             } else if let hour = selectedHour {
                 // 单个时间段选择提示
                 HStack {
-                    Text("已选择：\(hour):00")
+                    Text("已选择：\(hour):00-\(hour+1):00")
                         .font(.system(size: AppTheme.FontSize.caption))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                     
@@ -535,6 +535,7 @@ struct EnergyTimelineView: View {
                 // 第二次点击，设置结束时间，显示时间段选择按钮
                 print("第二次点击，设置结束时间: \(hour)")
                 batchEndHour = hour
+                showingBatchSelector = true
                 showingEnergyButtons = false
             } else {
                 // 如果点击的时间早于开始时间，重新设置开始时间
@@ -578,11 +579,11 @@ struct EnergyLevelSelector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             if isBatchMode, let start = startHour, let end = endHour {
-                Text("选择 \(start):00 - \(end):00 的能量状态")
+                Text("选择 \(start):00 - \(end+1):00 的能量状态")
                     .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.primary)
             } else if let hour = hour {
-                Text("选择 \(hour):00 的能量状态")
+                Text("选择 \(hour):00-\(hour+1):00 的能量状态")
                     .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.primary)
             }
@@ -1026,6 +1027,13 @@ struct HistoricalEnergyTimelineCard: View {
         }
         
         return (high, medium, low)
+    }
+    
+    // 计算时间标签的位置（居中对齐到对应时间块）
+    private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
+        let hourIndex = hour - 6 // 6点对应索引0
+        let blockWidth = totalWidth / CGFloat(hours.count)
+        return blockWidth * CGFloat(hourIndex) + blockWidth / 2
     }
 }
 
