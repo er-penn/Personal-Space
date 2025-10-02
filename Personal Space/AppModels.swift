@@ -105,8 +105,8 @@ class UserState: ObservableObject {
             return plan.energyLevel
         }
         
-        // 4. 每日能量状态签到 (最低优先级)
-        return energyLevel
+        // 4. 如果没有规划，返回未规划状态
+        return .unplanned
     }
     
     // MARK: - 能量规划相关方法
