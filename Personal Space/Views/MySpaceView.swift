@@ -242,15 +242,10 @@ struct MySpaceView: View {
                             
                             // TA状态 - 不可点击，仅显示
                             VStack(spacing: 4) {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.blue.opacity(0.1))
-                                        .frame(width: 50, height: 50)
-                                    
-                                    // 小电池图标
-                                    BatteryIconView(energyLevel: partnerState.energyLevel)
-                                        .scaleEffect(0.6) // 缩小到60%
-                                }
+                                // 小电池图标 - 无背景圆形
+                                BatteryIconView(energyLevel: partnerState.energyLevel)
+                                    .scaleEffect(0.6) // 缩小到60%
+                                
                                 Text("TA")
                                     .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
                                     .foregroundColor(AppTheme.Colors.textSecondary)
