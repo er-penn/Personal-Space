@@ -32,7 +32,7 @@ struct EnergyProgressView: View {
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
                 
-                Text("今日计划：\(getEnergyPlanSummary())")
+                getEnergyPlanSummaryView()
                     .font(.system(size: AppTheme.FontSize.body))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             
@@ -113,6 +113,71 @@ struct EnergyProgressView: View {
         let hourIndex = max(0, min(currentHour - 6, hours.count - 1))
         let segmentWidth = width / CGFloat(hours.count)
         return segmentWidth * CGFloat(hourIndex) + segmentWidth / 2
+    }
+    
+    private func getEnergyPlanSummaryView() -> some View {
+        var highCount = 0
+        var mediumCount = 0
+        var lowCount = 0
+        var unplannedCount = 0
+        
+        for hour in hours {
+            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour)
+            switch finalLevel {
+            case .high:
+                highCount += 1
+            case .medium:
+                mediumCount += 1
+            case .low:
+                lowCount += 1
+            case .unplanned:
+                unplannedCount += 1
+            }
+        }
+        
+        return HStack(spacing: 4) {
+            Text("今日计划：")
+            
+            if highCount > 0 {
+                HStack(spacing: 2) {
+                    Rectangle()
+                        .fill(EnergyLevel.high.color)
+                        .frame(width: 8, height: 8)
+                        .cornerRadius(1)
+                    Text("\(highCount)小时")
+                }
+            }
+            
+            if mediumCount > 0 {
+                HStack(spacing: 2) {
+                    Rectangle()
+                        .fill(EnergyLevel.medium.color)
+                        .frame(width: 8, height: 8)
+                        .cornerRadius(1)
+                    Text("\(mediumCount)小时")
+                }
+            }
+            
+            if lowCount > 0 {
+                HStack(spacing: 2) {
+                    Rectangle()
+                        .fill(EnergyLevel.low.color)
+                        .frame(width: 8, height: 8)
+                        .cornerRadius(1)
+                    Text("\(lowCount)小时")
+                }
+            }
+            
+            if unplannedCount > 0 {
+                HStack(spacing: 2) {
+                    Rectangle()
+                        .fill(EnergyLevel.unplanned.color)
+                        .frame(width: 8, height: 8)
+                        .cornerRadius(1)
+                    Text("\(unplannedCount)小时")
+                }
+            }
+        }
     }
     
     private func getEnergyPlanSummary() -> String {
