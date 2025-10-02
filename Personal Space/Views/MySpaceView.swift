@@ -13,6 +13,10 @@ struct MySpaceView: View {
     @State private var showingFABMenu = false
     @State private var showingMoodSlider = false
     @State private var currentMood: Double = 5.0
+    @State private var showingGestureHints = false
+    @State private var batteryScale: CGFloat = 1.0
+    @State private var batteryTilt: Double = 0.0
+    @State private var highlightedDirection: String? = nil
     // 移除 showingMomentDetail 状态，改用 NavigationLink
     
     private let functionCards = [
@@ -97,19 +101,74 @@ struct MySpaceView: View {
                             // 电池图标
                             BatteryIconView(energyLevel: userState.displayEnergyLevel)
                         }
+                        .scaleEffect(batteryScale)
+                        .rotationEffect(.degrees(batteryTilt))
+                        
+                        // 手势引导提示
+                        if showingGestureHints {
+                            VStack(spacing: 4) {
+                                HStack(spacing: 20) {
+                                    // 左箭头 - 中能量
+                                    VStack(spacing: 2) {
+                                        Image(systemName: "arrow.left")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(highlightedDirection == "left" ? .blue : .gray.opacity(0.6))
+                                        Text("中能量")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(highlightedDirection == "left" ? .blue : .gray.opacity(0.6))
+                                    }
+                                    
+                                    // 上箭头 - 高能量
+                                    VStack(spacing: 2) {
+                                        Image(systemName: "arrow.up")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(highlightedDirection == "up" ? .green : .gray.opacity(0.6))
+                                        Text("高能量")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(highlightedDirection == "up" ? .green : .gray.opacity(0.6))
+                                    }
+                                    
+                                    // 右箭头 - 中能量
+                                    VStack(spacing: 2) {
+                                        Image(systemName: "arrow.right")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(highlightedDirection == "right" ? .blue : .gray.opacity(0.6))
+                                        Text("中能量")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(highlightedDirection == "right" ? .blue : .gray.opacity(0.6))
+                                    }
+                                }
+                                
+                                // 下箭头 - 低能量
+                                VStack(spacing: 2) {
+                                    Image(systemName: "arrow.down")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(highlightedDirection == "down" ? .red : .gray.opacity(0.6))
+                                    Text("低能量")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(highlightedDirection == "down" ? .red : .gray.opacity(0.6))
+                                }
+                            }
+                            .padding(.top, 8)
+                            .transition(.opacity.combined(with: .scale))
+                        }
                         
                         Text(userState.displayEnergyLevel.description)
                             .font(.system(size: AppTheme.FontSize.subheadline, weight: .semibold))
                             .foregroundColor(userState.displayEnergyLevel.color)
                     }
                     .onLongPressGesture {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            let currentIndex = EnergyLevel.allCases.firstIndex(of: userState.energyLevel) ?? 0
-                            let nextIndex = (currentIndex + 1) % EnergyLevel.allCases.count
-                            userState.energyLevel = EnergyLevel.allCases[nextIndex]
-                            userState.isEnergyBoostActive = false
-                        }
+                        showGestureHints()
                     }
+                    .simultaneousGesture(
+                        DragGesture()
+                            .onChanged { value in
+                                updateGestureFeedback(translation: value.translation)
+                            }
+                            .onEnded { value in
+                                handleGestureEnd(translation: value.translation)
+                            }
+                    )
                     
                     Spacer()
                     
@@ -681,6 +740,88 @@ struct MomentDetailCard: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM月dd日 HH:mm"
         return formatter.string(from: date)
+    }
+    
+    // MARK: - 手势处理方法
+    private func showGestureHints() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showingGestureHints = true
+            batteryScale = 1.1
+        }
+        
+        // 3秒后自动隐藏提示
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            hideGestureHints()
+        }
+    }
+    
+    private func hideGestureHints() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            showingGestureHints = false
+            batteryScale = 1.0
+            batteryTilt = 0.0
+            highlightedDirection = nil
+        }
+    }
+    
+    private func updateGestureFeedback(translation: CGSize) {
+        let threshold: CGFloat = 20
+        
+        // 根据滑动方向更新高亮状态
+        if abs(translation.height) > abs(translation.width) {
+            // 垂直滑动
+            if translation.height < -threshold {
+                highlightedDirection = "up"
+                batteryTilt = -5.0
+            } else if translation.height > threshold {
+                highlightedDirection = "down"
+                batteryTilt = 5.0
+            } else {
+                highlightedDirection = nil
+                batteryTilt = 0.0
+            }
+        } else {
+            // 水平滑动
+            if translation.width < -threshold {
+                highlightedDirection = "left"
+                batteryTilt = -3.0
+            } else if translation.width > threshold {
+                highlightedDirection = "right"
+                batteryTilt = 3.0
+            } else {
+                highlightedDirection = nil
+                batteryTilt = 0.0
+            }
+        }
+    }
+    
+    private func handleGestureEnd(translation: CGSize) {
+        let threshold: CGFloat = 30
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            if abs(translation.height) > threshold {
+                if translation.height < 0 {
+                    // 向上滑动 - 高能量
+                    switchToEnergyLevel(.high)
+                } else {
+                    // 向下滑动 - 低能量
+                    switchToEnergyLevel(.low)
+                }
+            } else if abs(translation.width) > threshold {
+                // 左右滑动 - 中能量
+                switchToEnergyLevel(.medium)
+            }
+            
+            // 隐藏提示
+            hideGestureHints()
+        }
+    }
+    
+    private func switchToEnergyLevel(_ level: EnergyLevel) {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            userState.energyLevel = level
+            userState.isEnergyBoostActive = false
+        }
     }
 }
 
