@@ -1032,6 +1032,58 @@ struct UnselectableHintView: View {
     }
 }
 
+// MARK: - 小型电池图标组件
+struct SmallBatteryIconView: View {
+    let energyLevel: EnergyLevel
+    
+    var body: some View {
+        ZStack {
+            // 电池外框
+            RoundedRectangle(cornerRadius: 3)
+                .stroke(energyLevel.color, lineWidth: 2)
+                .frame(width: 25, height: 14)
+            
+            // 电池正极
+            RoundedRectangle(cornerRadius: 2)
+                .fill(energyLevel.color)
+                .frame(width: 3, height: 8)
+                .offset(x: 14)
+            
+            // 电池电量
+            HStack(spacing: 1) {
+                ForEach(0..<getBatterySegments(), id: \.self) { _ in
+                    Rectangle()
+                        .fill(energyLevel.color)
+                        .frame(width: 4, height: 10)
+                        .cornerRadius(1)
+                }
+            }
+            .offset(x: -2)
+            
+            // 省电模式图标（黄色时显示）
+            if energyLevel == .medium {
+                Image(systemName: "leaf.fill")
+                    .font(.system(size: 6))
+                    .foregroundColor(.green)
+                    .offset(x: 11, y: -6)
+            }
+        }
+    }
+    
+    private func getBatterySegments() -> Int {
+        switch energyLevel {
+        case .high:
+            return 4  // 满电：4格
+        case .medium:
+            return 2  // 半满：2格
+        case .low:
+            return 1  // 低电量：1格
+        case .unplanned:
+            return 0  // 待规划：0格
+        }
+    }
+}
+
 // MARK: - 悬浮能量状态按钮
 struct FloatingEnergyButtons: View {
     @EnvironmentObject var userState: UserState
@@ -1046,7 +1098,7 @@ struct FloatingEnergyButtons: View {
     @Binding var selectedHourForButtons: Int?
     
     var body: some View {
-        HStack(spacing: AppTheme.Spacing.sm) {
+        HStack(spacing: 10) {
             // 三个能量状态按钮
             ForEach(EnergyLevel.allCases.filter { $0 != .unplanned }, id: \.self) { level in
                 Button(action: {
@@ -1055,8 +1107,7 @@ struct FloatingEnergyButtons: View {
                     clearSelectionState()
                     showingButtons = false
                 }) {
-                    BatteryIconView(energyLevel: level)
-                        .scaleEffect(0.4) // 28/70 = 0.4，将70像素缩放到28像素
+                    SmallBatteryIconView(energyLevel: level)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -1068,12 +1119,13 @@ struct FloatingEnergyButtons: View {
                 clearSelectionState()
                 showingButtons = false
             }) {
-                BatteryIconView(energyLevel: .unplanned)
-                    .scaleEffect(0.4) // 28/70 = 0.4，将70像素缩放到28像素
+                SmallBatteryIconView(energyLevel: .unplanned)
             }
             .buttonStyle(PlainButtonStyle())
         }
-        .padding(AppTheme.Spacing.sm)
+        .frame(width: 140, height: 24) // 电池高度14 + 10 = 24
+        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.large)
                 .fill(.ultraThinMaterial)
@@ -1142,35 +1194,32 @@ struct BatchEnergyButtons: View {
     @Binding var showingButtons: Bool
     
     var body: some View {
-        VStack(spacing: AppTheme.Spacing.sm) {
-            // 固定高度的按钮容器
-            HStack(spacing: AppTheme.Spacing.sm) {
-                // 三个能量状态按钮
-                ForEach(EnergyLevel.allCases.filter { $0 != .unplanned }, id: \.self) { level in
-                    Button(action: {
-                        selectedEnergyLevel = level
-                        saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: level)
-                        clearSelectionState()
-                    }) {
-                        BatteryIconView(energyLevel: level)
-                            .scaleEffect(0.4) // 28/70 = 0.4，将70像素缩放到28像素
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-                
-                // 取消规划按钮
+        HStack(spacing: 10) {
+            // 三个能量状态按钮
+            ForEach(EnergyLevel.allCases.filter { $0 != .unplanned }, id: \.self) { level in
                 Button(action: {
-                    selectedEnergyLevel = .unplanned
-                    saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: .unplanned)
+                    selectedEnergyLevel = level
+                    saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: level)
                     clearSelectionState()
                 }) {
-                    BatteryIconView(energyLevel: .unplanned)
-                        .scaleEffect(0.4) // 28/70 = 0.4，将70像素缩放到28像素
+                    SmallBatteryIconView(energyLevel: level)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
+            
+            // 取消规划按钮
+            Button(action: {
+                selectedEnergyLevel = .unplanned
+                saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: .unplanned)
+                clearSelectionState()
+            }) {
+                SmallBatteryIconView(energyLevel: .unplanned)
+            }
+            .buttonStyle(PlainButtonStyle())
         }
-        .padding(AppTheme.Spacing.sm)
+        .frame(width: 140, height: 24) // 电池高度14 + 10 = 24
+        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.large)
                 .fill(.ultraThinMaterial)
