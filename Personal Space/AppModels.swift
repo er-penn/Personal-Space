@@ -83,7 +83,7 @@ class UserState: ObservableObject {
     }
     
     // 获取指定日期和小时的最终能量状态（考虑优先级）
-    func getFinalEnergyLevel(for date: Date, hour: Int) -> EnergyLevel {
+    func getFinalEnergyLevel(for date: Date, hour: Int, showUnplanned: Bool = true) -> EnergyLevel {
         let calendar = Calendar.current
         let targetDate = calendar.startOfDay(for: date)
         
@@ -105,8 +105,13 @@ class UserState: ObservableObject {
             return plan.energyLevel
         }
         
-        // 4. 如果没有规划，返回未规划状态
-        return .unplanned
+        // 4. 如果没有规划，根据showUnplanned参数决定是否返回待规划状态
+        if showUnplanned {
+            return .unplanned
+        } else {
+            // 如果不显示待规划，默认返回中能量
+            return .medium
+        }
     }
     
     // MARK: - 能量规划相关方法

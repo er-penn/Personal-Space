@@ -17,7 +17,18 @@ struct MySpaceView: View {
     @State private var batteryScale: CGFloat = 1.0
     @State private var batteryTilt: Double = 0.0
     @State private var highlightedDirection: String? = nil
+    @State private var hasSwitchedFromUnplanned = false
     // 移除 showingMomentDetail 状态，改用 NavigationLink
+    
+    init() {
+        // 每天第一次打开app时重置状态
+        let today = Calendar.current.startOfDay(for: Date())
+        let lastResetDate = UserDefaults.standard.object(forKey: "lastResetDate") as? Date ?? Date.distantPast
+        if !Calendar.current.isDate(lastResetDate, inSameDayAs: today) {
+            UserDefaults.standard.set(today, forKey: "lastResetDate")
+            // 这里不需要设置hasSwitchedFromUnplanned，因为@State会在每次视图创建时重置
+        }
+    }
     
     private let functionCards = [
         FunctionCard(title: "知行合一", icon: "target", color: .green, content: "今日目标：冥想15分钟 ✓", action: { }),
@@ -103,7 +114,7 @@ struct MySpaceView: View {
                                 .frame(width: 80, height: 80)
                             
                             // 电池图标
-                            BatteryIconView(energyLevel: userState.displayEnergyLevel)
+                            BatteryIconView(energyLevel: hasSwitchedFromUnplanned ? userState.displayEnergyLevel : (userState.displayEnergyLevel == .unplanned ? .unplanned : userState.displayEnergyLevel))
                                 .scaleEffect(0.7)
                             
                             // 手势引导提示 - 围绕电池图标
@@ -190,14 +201,32 @@ struct MySpaceView: View {
                         .offset(x: showingGestureHints ? 0 : -27, y: showingGestureHints ? 0 : 10) // 静态时向左下移动
                         
                         if !showingGestureHints {
-                            Text(userState.displayEnergyLevel.description)
+                            let displayLevel = hasSwitchedFromUnplanned ? userState.displayEnergyLevel : (userState.displayEnergyLevel == .unplanned ? .unplanned : userState.displayEnergyLevel)
+                            Text(displayLevel.description)
                                 .font(.system(size: AppTheme.FontSize.subheadline, weight: .semibold))
-                                .foregroundColor(userState.displayEnergyLevel.color)
+                                .foregroundColor(displayLevel.color)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(nil)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .offset(x: -27, y: 10) // 向右上移动，与电池图标中心对齐
                                 .transition(.opacity.combined(with: .scale))
+                        }
+                    }
+                    .onTapGesture {
+                        // 短按：循环切换能量状态（高→中→低）
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            switch userState.energyLevel {
+                            case .high:
+                                userState.energyLevel = .medium
+                            case .medium:
+                                userState.energyLevel = .low
+                            case .low:
+                                userState.energyLevel = .high
+                            case .unplanned:
+                                userState.energyLevel = .high
+                            }
+                            userState.isEnergyBoostActive = false
+                            hasSwitchedFromUnplanned = true
                         }
                     }
                     .onLongPressGesture {
@@ -219,7 +248,7 @@ struct MySpaceView: View {
                     VStack(spacing: AppTheme.Spacing.md) {
                         // 第一行：平复和TA
                         HStack(spacing: AppTheme.Spacing.lg) {
-                            // 平复按钮 - 可点击
+                            // 平复按钮 - 可点击，向右偏移与快充按钮对齐
                             VStack(spacing: 4) {
                                 Button(action: {
                                     // 焦虑平复功能
@@ -239,6 +268,7 @@ struct MySpaceView: View {
                                     .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
                                     .foregroundColor(AppTheme.Colors.textSecondary)
                             }
+                            .offset(x: 8) // 向右偏移，与快充按钮对齐
                             
                             // TA状态 - 不可点击，仅显示
                             VStack(spacing: 4) {
@@ -252,41 +282,83 @@ struct MySpaceView: View {
                             }
                         }
                         
-                        // 第二行：低电量快速切换按钮
-                        VStack(spacing: 4) {
-                            Button(action: {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    userState.energyLevel = .low
-                                    userState.isEnergyBoostActive = false
+                        // 第二行：快充模式 + 低电量模式
+                        HStack(spacing: AppTheme.Spacing.lg) {
+                            // 快充模式按钮
+                            VStack(spacing: 4) {
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        userState.energyLevel = .high
+                                        userState.isEnergyBoostActive = false
+                                        hasSwitchedFromUnplanned = true
+                                    }
+                                }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(
+                                                userState.energyLevel == .high 
+                                                    ? Color.green.opacity(0.1) 
+                                                    : Color.green.opacity(0.15)
+                                            )
+                                            .frame(width: 50, height: 50)
+                                        
+                                        Image(systemName: "bolt.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(
+                                                userState.energyLevel == .high 
+                                                    ? .green.opacity(0.3) 
+                                                    : .green
+                                            )
+                                    }
                                 }
-                            }) {
-                                ZStack {
-                                    Circle()
-                                        .fill(
-                                            userState.energyLevel == .low 
-                                                ? Color.red.opacity(0.1) 
-                                                : Color.red.opacity(0.15)
-                                        )
-                                        .frame(width: 50, height: 50)
-                                    
-                                    Image(systemName: "battery.25")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(
-                                            userState.energyLevel == .low 
-                                                ? .red.opacity(0.3) 
-                                                : .red
-                                        )
-                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .disabled(userState.energyLevel == .high)
+                                Text("快充")
+                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                    .foregroundColor(
+                                        userState.energyLevel == .high 
+                                            ? AppTheme.Colors.textSecondary.opacity(0.3) 
+                                            : AppTheme.Colors.textSecondary
+                                    )
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .disabled(userState.energyLevel == .low)
-                            Text("低电量模式")
-                                .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                .foregroundColor(
-                                    userState.energyLevel == .low 
-                                        ? AppTheme.Colors.textSecondary.opacity(0.3) 
-                                        : AppTheme.Colors.textSecondary
-                                )
+                            
+                            // 低电量模式按钮
+                            VStack(spacing: 4) {
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        userState.energyLevel = .low
+                                        userState.isEnergyBoostActive = false
+                                        hasSwitchedFromUnplanned = true
+                                    }
+                                }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(
+                                                userState.energyLevel == .low 
+                                                    ? Color.red.opacity(0.1) 
+                                                    : Color.red.opacity(0.15)
+                                            )
+                                            .frame(width: 50, height: 50)
+                                        
+                                        Image(systemName: "battery.25")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(
+                                                userState.energyLevel == .low 
+                                                    ? .red.opacity(0.3) 
+                                                    : .red
+                                            )
+                                    }
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .disabled(userState.energyLevel == .low)
+                                Text("低电量模式")
+                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                    .foregroundColor(
+                                        userState.energyLevel == .low 
+                                            ? AppTheme.Colors.textSecondary.opacity(0.3) 
+                                            : AppTheme.Colors.textSecondary
+                                    )
+                            }
                         }
                     }
                 }
@@ -432,6 +504,7 @@ struct MySpaceView: View {
         withAnimation(.easeInOut(duration: 0.3)) {
             userState.energyLevel = level
             userState.isEnergyBoostActive = false
+            hasSwitchedFromUnplanned = true
         }
     }
 }
