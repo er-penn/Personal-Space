@@ -871,37 +871,49 @@ struct HistoricalEnergyTimelinesView: View {
     @EnvironmentObject var userState: UserState
     
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-            Text("历史能量记录")
-                .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.primary)
-            
-            if groupedEnergyRecords.isEmpty {
-                VStack(spacing: AppTheme.Spacing.md) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 48))
-                        .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
-                    
-                    Text("暂无历史记录")
-                        .font(.system(size: AppTheme.FontSize.body))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                    
-                    Text("开始记录您的能量状态，建立个人能量档案")
-                        .font(.system(size: AppTheme.FontSize.caption))
-                        .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, AppTheme.Spacing.xl)
-            } else {
-                ForEach(groupedEnergyRecords.keys.sorted(by: >), id: \.self) { date in
-                    HistoricalEnergyTimelineCard(
-                        date: date,
-                        energyRecords: groupedEnergyRecords[date] ?? []
-                    )
-                    .environmentObject(userState)
+        NavigationView {
+            ZStack {
+                AppGradient.background
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+                        Text("历史能量记录")
+                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        
+                        if groupedEnergyRecords.isEmpty {
+                            VStack(spacing: AppTheme.Spacing.md) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
+                                
+                                Text("暂无历史记录")
+                                    .font(.system(size: AppTheme.FontSize.body))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                
+                                Text("开始记录您的能量状态，建立个人能量档案")
+                                    .font(.system(size: AppTheme.FontSize.caption))
+                                    .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.7))
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, AppTheme.Spacing.xl)
+                        } else {
+                            ForEach(groupedEnergyRecords.keys.sorted(by: >), id: \.self) { date in
+                                HistoricalEnergyTimelineCard(
+                                    date: date,
+                                    energyRecords: groupedEnergyRecords[date] ?? []
+                                )
+                                .environmentObject(userState)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.lg)
+                    .padding(.top, AppTheme.Spacing.lg)
                 }
             }
+            .navigationBarHidden(true)
         }
     }
     
