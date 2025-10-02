@@ -410,7 +410,11 @@ struct EnergyTimelineView: View {
                                 selectedEnergyLevel: $selectedEnergyLevel,
                                 selectedDate: $selectedDate,
                                 batchStartHour: $batchStartHour,
-                                batchEndHour: $batchEndHour
+                                batchEndHour: $batchEndHour,
+                                selectedHour: $selectedHour,
+                                showingBatchSelector: $showingBatchSelector,
+                                selectedHourForButtons: $selectedHourForButtons,
+                                showingButtons: $showingEnergyButtons
                             )
                             Spacer()
                         }
@@ -1051,15 +1055,8 @@ struct FloatingEnergyButtons: View {
                     clearSelectionState()
                     showingButtons = false
                 }) {
-                    ZStack {
-                        Circle()
-                            .fill(level.color)
-                            .frame(width: 40, height: 40)
-                        
-                        Text(level.rawValue)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                    }
+                    BatteryIconView(energyLevel: level)
+                        .scaleEffect(0.4) // 28/70 = 0.4，将70像素缩放到28像素
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -1071,15 +1068,8 @@ struct FloatingEnergyButtons: View {
                 clearSelectionState()
                 showingButtons = false
             }) {
-                ZStack {
-                    Circle()
-                        .fill(Color.gray)
-                        .frame(width: 40, height: 40)
-                    
-                    Text("⚪")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                }
+                BatteryIconView(energyLevel: .unplanned)
+                    .scaleEffect(0.4) // 28/70 = 0.4，将70像素缩放到28像素
             }
             .buttonStyle(PlainButtonStyle())
         }
@@ -1146,6 +1136,10 @@ struct BatchEnergyButtons: View {
     @Binding var selectedDate: Date
     @Binding var batchStartHour: Int?
     @Binding var batchEndHour: Int?
+    @Binding var selectedHour: Int?
+    @Binding var showingBatchSelector: Bool
+    @Binding var selectedHourForButtons: Int?
+    @Binding var showingButtons: Bool
     
     var body: some View {
         VStack(spacing: AppTheme.Spacing.sm) {
@@ -1156,18 +1150,10 @@ struct BatchEnergyButtons: View {
                     Button(action: {
                         selectedEnergyLevel = level
                         saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: level)
-                        batchStartHour = nil
-                        batchEndHour = nil
+                        clearSelectionState()
                     }) {
-                        ZStack {
-                            Circle()
-                                .fill(level.color)
-                                .frame(width: 40, height: 40)
-                            
-                            Text(level.rawValue)
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
-                        }
+                        BatteryIconView(energyLevel: level)
+                            .scaleEffect(0.4) // 28/70 = 0.4，将70像素缩放到28像素
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -1176,18 +1162,10 @@ struct BatchEnergyButtons: View {
                 Button(action: {
                     selectedEnergyLevel = .unplanned
                     saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: .unplanned)
-                    batchStartHour = nil
-                    batchEndHour = nil
+                    clearSelectionState()
                 }) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.gray)
-                            .frame(width: 40, height: 40)
-                        
-                        Text("⚪")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                    }
+                    BatteryIconView(energyLevel: .unplanned)
+                        .scaleEffect(0.4) // 28/70 = 0.4，将70像素缩放到28像素
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -1230,6 +1208,17 @@ struct BatchEnergyButtons: View {
             }
             return plan1.hour < plan2.hour
         }
+    }
+    
+    // 清除选择状态
+    private func clearSelectionState() {
+        selectedHour = nil
+        batchStartHour = nil
+        batchEndHour = nil
+        showingBatchSelector = false
+        selectedEnergyLevel = nil
+        selectedHourForButtons = nil
+        showingButtons = false
     }
 }
 
