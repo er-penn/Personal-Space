@@ -81,7 +81,11 @@ struct MySpaceView: View {
             VStack(spacing: AppTheme.Spacing.lg) {
                 // 顶部：能量状态 + 快速操作
                 HStack(spacing: AppTheme.Spacing.lg) {
-                    // 左侧：能量状态（电池图标设计）
+                    // 左侧空白区域
+                    Spacer()
+                        .frame(width: 40)
+                    
+                    // 能量状态（电池图标设计）
                     VStack(spacing: AppTheme.Spacing.sm) {
                         ZStack {
                             // 背景圆形渐变
@@ -96,62 +100,94 @@ struct MySpaceView: View {
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .frame(width: 120, height: 120)
+                                .frame(width: 80, height: 80)
                             
                             // 电池图标
                             BatteryIconView(energyLevel: userState.displayEnergyLevel)
+                                .scaleEffect(0.7)
+                            
+                            // 手势引导提示 - 围绕电池图标
+                            if showingGestureHints {
+                                // 上箭头 - 高能量
+                                VStack {
+                                    VStack(spacing: 2) {
+                                        SmallBatteryIconView(energyLevel: .high)
+                                            .scaleEffect(0.5)
+                                        Image(systemName: "arrowtriangle.up.fill")
+                                            .font(.system(size: 6, weight: .bold))
+                                            .foregroundColor(highlightedDirection == "up" ? .green : .gray.opacity(0.6))
+                                    }
+                                    .padding(4)
+                                    .background(
+                                        Circle()
+                                            .fill(highlightedDirection == "up" ? Color.green.opacity(0.15) : Color.gray.opacity(0.1))
+                                    )
+                                    Spacer()
+                                }
+                                .frame(width: 80, height: 80)
+                                .offset(y: -40)
+                                
+                                // 下箭头 - 低能量
+                                VStack {
+                                    Spacer()
+                                    VStack(spacing: 2) {
+                                        Image(systemName: "arrowtriangle.down.fill")
+                                            .font(.system(size: 6, weight: .bold))
+                                            .foregroundColor(highlightedDirection == "down" ? .red : .gray.opacity(0.6))
+                                        SmallBatteryIconView(energyLevel: .low)
+                                            .scaleEffect(0.5)
+                                    }
+                                    .padding(4)
+                                    .background(
+                                        Circle()
+                                            .fill(highlightedDirection == "down" ? Color.red.opacity(0.15) : Color.gray.opacity(0.1))
+                                    )
+                                }
+                                .frame(width: 80, height: 80)
+                                .offset(y: 40)
+                                
+                                // 左箭头 - 中能量
+                                HStack {
+                                    VStack(spacing: 2) {
+                                        SmallBatteryIconView(energyLevel: .medium)
+                                            .scaleEffect(0.5)
+                                        Image(systemName: "arrowtriangle.left.fill")
+                                            .font(.system(size: 6, weight: .bold))
+                                            .foregroundColor(highlightedDirection == "left" ? .blue : .gray.opacity(0.6))
+                                    }
+                                    .padding(4)
+                                    .background(
+                                        Circle()
+                                            .fill(highlightedDirection == "left" ? Color.blue.opacity(0.15) : Color.gray.opacity(0.1))
+                                    )
+                                    Spacer()
+                                }
+                                .frame(width: 80, height: 80)
+                                .offset(x: -40)
+                                
+                                // 右箭头 - 中能量
+                                HStack {
+                                    Spacer()
+                                    VStack(spacing: 2) {
+                                        SmallBatteryIconView(energyLevel: .medium)
+                                            .scaleEffect(0.5)
+                                        Image(systemName: "arrowtriangle.right.fill")
+                                            .font(.system(size: 6, weight: .bold))
+                                            .foregroundColor(highlightedDirection == "right" ? .blue : .gray.opacity(0.6))
+                                    }
+                                    .padding(4)
+                                    .background(
+                                        Circle()
+                                            .fill(highlightedDirection == "right" ? Color.blue.opacity(0.15) : Color.gray.opacity(0.1))
+                                    )
+                                }
+                                .frame(width: 80, height: 80)
+                                .offset(x: 40)
+                            }
                         }
                         .scaleEffect(batteryScale)
                         .rotationEffect(.degrees(batteryTilt))
-                        
-                        // 手势引导提示
-                        if showingGestureHints {
-                            VStack(spacing: 4) {
-                                HStack(spacing: 20) {
-                                    // 左箭头 - 中能量
-                                    VStack(spacing: 2) {
-                                        Image(systemName: "arrow.left")
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundColor(highlightedDirection == "left" ? .blue : .gray.opacity(0.6))
-                                        Text("中能量")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundColor(highlightedDirection == "left" ? .blue : .gray.opacity(0.6))
-                                    }
-                                    
-                                    // 上箭头 - 高能量
-                                    VStack(spacing: 2) {
-                                        Image(systemName: "arrow.up")
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundColor(highlightedDirection == "up" ? .green : .gray.opacity(0.6))
-                                        Text("高能量")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundColor(highlightedDirection == "up" ? .green : .gray.opacity(0.6))
-                                    }
-                                    
-                                    // 右箭头 - 中能量
-                                    VStack(spacing: 2) {
-                                        Image(systemName: "arrow.right")
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundColor(highlightedDirection == "right" ? .blue : .gray.opacity(0.6))
-                                        Text("中能量")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundColor(highlightedDirection == "right" ? .blue : .gray.opacity(0.6))
-                                    }
-                                }
-                                
-                                // 下箭头 - 低能量
-                                VStack(spacing: 2) {
-                                    Image(systemName: "arrow.down")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(highlightedDirection == "down" ? .red : .gray.opacity(0.6))
-                                    Text("低能量")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(highlightedDirection == "down" ? .red : .gray.opacity(0.6))
-                                }
-                            }
-                            .padding(.top, 8)
-                            .transition(.opacity.combined(with: .scale))
-                        }
+                        .offset(x: showingGestureHints ? 0 : -27, y: showingGestureHints ? 0 : 10) // 静态时向左下移动
                         
                         if !showingGestureHints {
                             Text(userState.displayEnergyLevel.description)
@@ -160,6 +196,7 @@ struct MySpaceView: View {
                                 .multilineTextAlignment(.center)
                                 .lineLimit(nil)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .offset(x: -27, y: 10) // 向右上移动，与电池图标中心对齐
                                 .transition(.opacity.combined(with: .scale))
                         }
                     }
@@ -178,127 +215,43 @@ struct MySpaceView: View {
                     
                     Spacer()
                     
-                    // 右侧：快速操作按钮组 - 上1下3布局
-                    VStack(spacing: AppTheme.Spacing.md) {
-                        // 第一行：TA状态（不可点击）
-                        HStack {
-                            Spacer()
-                            
-                            // TA状态 - 不可点击，仅显示
-                            VStack(spacing: 4) {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.blue.opacity(0.1))
-                                        .frame(width: 50, height: 50)
-                                    
-                                    // 小电池图标
-                                    BatteryIconView(energyLevel: partnerState.energyLevel)
-                                        .scaleEffect(0.6) // 缩小到60%
-                                }
-                                Text("TA")
-                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    // 右侧：快速操作按钮组 - 垂直排列
+                    VStack(spacing: AppTheme.Spacing.lg) {
+                        // TA状态 - 不可点击，仅显示
+                        VStack(spacing: 4) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.1))
+                                    .frame(width: 50, height: 50)
+                                
+                                // 小电池图标
+                                BatteryIconView(energyLevel: partnerState.energyLevel)
+                                    .scaleEffect(0.6) // 缩小到60%
                             }
-                            
-                            Spacer()
+                            Text("TA")
+                                .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
                         }
                         
-                        // 第二行：可点击按钮（平复、专注、快充）
-                        HStack(spacing: AppTheme.Spacing.lg) {
-                            // 平复按钮 - 可点击
-                            VStack(spacing: 4) {
-                                Button(action: {
-                                    // 焦虑平复功能
-                                }) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color.red.opacity(0.15))
-                                            .frame(width: 50, height: 50)
-                                        
-                                        Image(systemName: "cross.case.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(.red)
-                                    }
+                        // 平复按钮 - 可点击
+                        VStack(spacing: 4) {
+                            Button(action: {
+                                // 焦虑平复功能
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.red.opacity(0.15))
+                                        .frame(width: 50, height: 50)
+                                    
+                                    Image(systemName: "cross.case.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.red)
                                 }
-                                .buttonStyle(PlainButtonStyle())
-                                Text("平复")
-                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
                             }
-                            
-                            // 专注模式 - 可点击（根据能量状态）
-                            VStack(spacing: 4) {
-                                Button(action: {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        userState.isFocusModeOn.toggle()
-                                    }
-                                }) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(
-                                                (userState.displayEnergyLevel == .high || userState.displayEnergyLevel == .medium) 
-                                                ? (userState.isFocusModeOn ? Color.blue.opacity(0.2) : Color.blue.opacity(0.1))
-                                                : Color.gray.opacity(0.05)
-                                            )
-                                            .frame(width: 50, height: 50)
-                                        
-                                        Image(systemName: userState.isFocusModeOn ? "moon.fill" : "moon")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(
-                                                (userState.displayEnergyLevel == .high || userState.displayEnergyLevel == .medium)
-                                                ? (userState.isFocusModeOn ? .blue : .blue.opacity(0.7))
-                                                : AppTheme.Colors.textSecondary.opacity(0.3)
-                                            )
-                                    }
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .disabled(userState.displayEnergyLevel == .low)
-                                
-                                Text("专注")
-                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                    .foregroundColor(
-                                        (userState.displayEnergyLevel == .high || userState.displayEnergyLevel == .medium)
-                                        ? AppTheme.Colors.textSecondary
-                                        : AppTheme.Colors.textSecondary.opacity(0.3)
-                                    )
-                            }
-                            
-                            // 快充按钮 - 可点击（根据能量状态）
-                            VStack(spacing: 4) {
-                                Button(action: { 
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        userState.isEnergyBoostActive = true
-                                    }
-                                }) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(
-                                                (userState.displayEnergyLevel == .medium || userState.displayEnergyLevel == .low)
-                                                ? Color.green.opacity(0.15)
-                                                : Color.gray.opacity(0.05)
-                                            )
-                                            .frame(width: 50, height: 50)
-                                        
-                                        Image(systemName: "bolt.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(
-                                                (userState.displayEnergyLevel == .medium || userState.displayEnergyLevel == .low)
-                                                ? .green
-                                                : AppTheme.Colors.textSecondary.opacity(0.3)
-                                            )
-                                    }
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .disabled(userState.displayEnergyLevel == .high)
-                                
-                                Text("快充")
-                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                    .foregroundColor(
-                                        (userState.displayEnergyLevel == .medium || userState.displayEnergyLevel == .low)
-                                        ? AppTheme.Colors.textSecondary
-                                        : AppTheme.Colors.textSecondary.opacity(0.3)
-                                    )
-                            }
+                            .buttonStyle(PlainButtonStyle())
+                            Text("平复")
+                                .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
                         }
                     }
                 }
@@ -881,6 +834,7 @@ struct BatteryIconView: View {
         }
     }
 }
+
 
 #Preview {
     MySpaceView()
