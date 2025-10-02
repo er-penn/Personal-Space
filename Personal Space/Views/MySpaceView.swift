@@ -215,43 +215,83 @@ struct MySpaceView: View {
                     
                     Spacer()
                     
-                    // 右侧：快速操作按钮组 - 垂直排列
-                    VStack(spacing: AppTheme.Spacing.lg) {
-                        // TA状态 - 不可点击，仅显示
-                        VStack(spacing: 4) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.blue.opacity(0.1))
-                                    .frame(width: 50, height: 50)
-                                
-                                // 小电池图标
-                                BatteryIconView(energyLevel: partnerState.energyLevel)
-                                    .scaleEffect(0.6) // 缩小到60%
+                    // 右侧：快速操作按钮组 - 2x2网格布局
+                    VStack(spacing: AppTheme.Spacing.md) {
+                        // 第一行：平复和TA
+                        HStack(spacing: AppTheme.Spacing.lg) {
+                            // 平复按钮 - 可点击
+                            VStack(spacing: 4) {
+                                Button(action: {
+                                    // 焦虑平复功能
+                                }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.red.opacity(0.15))
+                                            .frame(width: 50, height: 50)
+                                        
+                                        Image(systemName: "cross.case.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(.red)
+                                    }
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                Text("平复")
+                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
                             }
-                            Text("TA")
-                                .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            
+                            // TA状态 - 不可点击，仅显示
+                            VStack(spacing: 4) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.blue.opacity(0.1))
+                                        .frame(width: 50, height: 50)
+                                    
+                                    // 小电池图标
+                                    BatteryIconView(energyLevel: partnerState.energyLevel)
+                                        .scaleEffect(0.6) // 缩小到60%
+                                }
+                                Text("TA")
+                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
                         }
                         
-                        // 平复按钮 - 可点击
+                        // 第二行：低电量快速切换按钮
                         VStack(spacing: 4) {
                             Button(action: {
-                                // 焦虑平复功能
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    userState.energyLevel = .low
+                                    userState.isEnergyBoostActive = false
+                                }
                             }) {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.red.opacity(0.15))
+                                        .fill(
+                                            userState.energyLevel == .low 
+                                                ? Color.red.opacity(0.1) 
+                                                : Color.red.opacity(0.15)
+                                        )
                                         .frame(width: 50, height: 50)
                                     
-                                    Image(systemName: "cross.case.fill")
+                                    Image(systemName: "battery.25")
                                         .font(.system(size: 20))
-                                        .foregroundColor(.red)
+                                        .foregroundColor(
+                                            userState.energyLevel == .low 
+                                                ? .red.opacity(0.3) 
+                                                : .red
+                                        )
                                 }
                             }
                             .buttonStyle(PlainButtonStyle())
-                            Text("平复")
+                            .disabled(userState.energyLevel == .low)
+                            Text("低电量模式")
                                 .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .foregroundColor(
+                                    userState.energyLevel == .low 
+                                        ? AppTheme.Colors.textSecondary.opacity(0.3) 
+                                        : AppTheme.Colors.textSecondary
+                                )
                         }
                     }
                 }
