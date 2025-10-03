@@ -77,7 +77,7 @@ struct MinuteLevelEnergyBlock: View {
 struct TimePickerView: View {
     @Binding var selectedHour: Int
     @Binding var selectedMinute: Int
-    let isLeft: Bool
+    @Binding var isLeft: Bool
     let minHour: Int
     let minMinute: Int
     let maxHour: Int
@@ -107,6 +107,9 @@ struct TimePickerView: View {
             Text("选择\(isLeft ? "左" : "右")指针时间")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.primary)
+                .onAppear {
+                    print("TimePickerView: isLeft=\(isLeft), 标题=选择\(isLeft ? "左" : "右")指针时间")
+                }
             
             // 时间选择器
             HStack(spacing: 20) {
@@ -212,7 +215,9 @@ struct EnergyPlanningView: View {
     
     // MARK: - 指针相关方法
     private func onPointerTap(isLeft: Bool) {
+        print("onPointerTap: isLeft=\(isLeft)")
         isLeftPointerSelected = isLeft
+        print("设置后 isLeftPointerSelected=\(isLeftPointerSelected)")
         if isLeft {
             timePickerHour = leftPointerHour ?? 0
             timePickerMinute = leftPointerMinute ?? 0
@@ -431,7 +436,7 @@ struct EnergyPlanningView: View {
         return TimePickerView(
             selectedHour: $timePickerHour,
             selectedMinute: $timePickerMinute,
-            isLeft: isLeftPointerSelected,
+            isLeft: $isLeftPointerSelected,
             minHour: isLeftPointerSelected ? minStartTime.0 : minEndTime.0,
             minMinute: isLeftPointerSelected ? minStartTime.1 : minEndTime.1,
             maxHour: isLeftPointerSelected ? maxStartTime.0 : maxEndTime.0,
