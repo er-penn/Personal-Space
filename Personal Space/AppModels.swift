@@ -76,6 +76,34 @@ class UserState: ObservableObject {
             energyPlans.append(EnergyPlan(date: dayAfterTomorrow, hour: 16, energyLevel: .low))
             energyPlans.append(EnergyPlan(date: dayAfterTomorrow, hour: 19, energyLevel: .high))
         }
+        
+        // 为10月4日添加分钟级测试数据（假设今天是10月3日）
+        let october4 = calendar.date(from: DateComponents(year: 2025, month: 10, day: 4)) ?? today
+        if calendar.isDate(october4, inSameDayAs: today) || october4 > today {
+            // 为12:00-13:00这个小时块添加分钟级颜色分割
+            // 0-20分钟：高能量（绿色）
+            for minute in 0..<20 {
+                energyPlans.append(EnergyPlan(date: october4, hour: 12, minute: minute, energyLevel: .high))
+            }
+            // 20-40分钟：中能量（黄色）
+            for minute in 20..<40 {
+                energyPlans.append(EnergyPlan(date: october4, hour: 12, minute: minute, energyLevel: .medium))
+            }
+            // 40-60分钟：低能量（红色）
+            for minute in 40..<60 {
+                energyPlans.append(EnergyPlan(date: october4, hour: 12, minute: minute, energyLevel: .low))
+            }
+            
+            // 为14:00-15:00这个小时块添加另一种分钟级颜色分割
+            // 0-30分钟：高能量（绿色）
+            for minute in 0..<30 {
+                energyPlans.append(EnergyPlan(date: october4, hour: 14, minute: minute, energyLevel: .high))
+            }
+            // 30-60分钟：中能量（黄色）
+            for minute in 30..<60 {
+                energyPlans.append(EnergyPlan(date: october4, hour: 14, minute: minute, energyLevel: .medium))
+            }
+        }
     }
     
     var displayEnergyLevel: EnergyLevel {

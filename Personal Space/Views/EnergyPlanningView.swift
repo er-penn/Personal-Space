@@ -2078,10 +2078,13 @@ struct ReadOnlyEnergyTimelineView: View {
             GeometryReader { geometry in
                 HStack(spacing: 0.5) {
                     ForEach(hours, id: \.self) { hour in
-                        Rectangle()
-                            .fill(getEnergyColor(for: hour))
-                            .frame(width: geometry.size.width / CGFloat(hours.count), height: 16)
-                            .cornerRadius(1)
+                        MinuteLevelEnergyBlock(
+                            hour: hour,
+                            width: geometry.size.width / CGFloat(hours.count),
+                            height: 16,
+                            userState: userState,
+                            selectedDate: date
+                        )
                     }
                 }
                 .background(Color.gray.opacity(0.2))
