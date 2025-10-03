@@ -713,15 +713,19 @@ struct EnergyTimelineView: View {
             }
             .frame(height: 20)
             
-            // 当前时间指示器文本（仅今天显示）
-            if isToday(selectedDate) {
-                HStack {
-                    Spacer()
+            // 当前时间指示器文本（今天显示时间，其他日期显示空白占位）
+            HStack {
+                Spacer()
+                if isToday(selectedDate) {
                     Text("当前：\(getCurrentHour()):00")
                         .font(.system(size: AppTheme.FontSize.caption))
                         .foregroundColor(AppTheme.Colors.textSecondary)
-                    Spacer()
+                } else {
+                    Text("")
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                 }
+                Spacer()
             }
             
             // 选择状态提示
@@ -1923,7 +1927,7 @@ extension FloatingEnergyButtons {
                 var currentHour = leftHour
                 var currentMinute = leftMinute
                 
-                while currentHour < rightHour || (currentHour == rightHour && currentMinute <= rightMinute) {
+                while currentHour < rightHour || (currentHour == rightHour && currentMinute < rightMinute) {
                     let newPlan = EnergyPlan(
                         date: targetDate,
                         hour: currentHour,
