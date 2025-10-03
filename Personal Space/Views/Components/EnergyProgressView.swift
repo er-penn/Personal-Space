@@ -13,7 +13,7 @@ struct EnergyProgressView: View {
     @State private var timer: Timer?
     @State private var showingEnergyPlanning = false
     
-    private let hours = Array(6...22) // 6点到22点
+    private let hours = Array(7...23) // 7点到23点
     
     var body: some View {
         Button(action: {
@@ -37,17 +37,26 @@ struct EnergyProgressView: View {
                     .foregroundColor(AppTheme.Colors.textSecondary)
             
                 VStack(spacing: AppTheme.Spacing.sm) {
-                    // 小时标签（每4小时显示一次）- 使用GeometryReader精确定位
+                    // 时间标签和竖标 - 使用GeometryReader精确定位
                     GeometryReader { geometry in
                         ZStack {
-                            ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                                Text("\(hour):00")
-                                    .font(.system(size: AppTheme.FontSize.caption))
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                    .position(
-                                        x: getTimeLabelPosition(for: hour, in: geometry.size.width),
-                                        y: 10 // 时间标签的垂直位置
-                                    )
+                            // 时间标签：7点、10点、14点、18点、22点
+                            ForEach([7, 10, 14, 18, 22], id: \.self) { hour in
+                                VStack(spacing: 0) {
+                                    // 时间标签
+                                    Text("\(hour):00")
+                                        .font(.system(size: AppTheme.FontSize.caption))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                    
+                                    // 竖标：从标签延伸到能量块左边缘
+                                    Rectangle()
+                                        .fill(AppTheme.Colors.textSecondary.opacity(0.3))
+                                        .frame(width: 1, height: 8)
+                                }
+                                .position(
+                                    x: getTimeLabelPosition(for: hour, in: geometry.size.width),
+                                    y: 10 // 时间标签的垂直位置
+                                )
                             }
                         }
                     }
@@ -78,7 +87,7 @@ struct EnergyProgressView: View {
                     // 当前时间指示器文本
                     HStack {
                         Spacer()
-                        Text("当前：\(getCurrentHour()):00")
+                        Text("当前：\(getCurrentTimeString())")
                             .font(.system(size: AppTheme.FontSize.caption))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                         Spacer()
@@ -116,16 +125,25 @@ struct EnergyProgressView: View {
     
     private func getCurrentTimeOffset(width: CGFloat) -> CGFloat {
         let currentHour = getCurrentHour()
-        let hourIndex = max(0, min(currentHour - 6, hours.count - 1))
+        let hourIndex = max(0, min(currentHour - 7, hours.count - 1))
         let segmentWidth = width / CGFloat(hours.count)
         return segmentWidth * CGFloat(hourIndex) + segmentWidth / 2
     }
     
-    // 计算时间标签的位置（居中对齐到对应时间块）
+    // 计算时间标签的位置（左边缘对齐到对应时间块）
     private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
-        let hourIndex = hour - 6 // 6点对应索引0
+        let hourIndex = hour - 7 // 7点对应索引0
         let blockWidth = totalWidth / CGFloat(hours.count)
-        return blockWidth * CGFloat(hourIndex) + blockWidth / 2
+        let spacing: CGFloat = 1 // 块之间的间距
+        return blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
+    }
+    
+    // 获取当前时间的精确字符串（小时:分钟）
+    private func getCurrentTimeString() -> String {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: currentTime)
+        let minute = calendar.component(.minute, from: currentTime)
+        return String(format: "%02d:%02d", hour, minute)
     }
     
     private func getEnergyPlanSummaryView() -> some View {

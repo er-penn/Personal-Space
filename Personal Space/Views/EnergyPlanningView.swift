@@ -211,7 +211,7 @@ struct EnergyPlanningView: View {
     @State private var timePickerHour = 0
     @State private var timePickerMinute = 0
     
-    private let hours = Array(6...22) // 6点到22点
+    private let hours = Array(7...23) // 7点到23点
     
     // MARK: - 指针相关方法
     private func onPointerTap(isLeft: Bool) {
@@ -314,22 +314,22 @@ struct EnergyPlanningView: View {
         let currentHour = calendar.component(.hour, from: now)
         let currentMinute = calendar.component(.minute, from: now)
         
-        // 如果是今天，左指针的左极限为6点或者当前时间+5分钟（取较大的一方）
+        // 如果是今天，左指针的左极限为7点或者当前时间+5分钟（取较大的一方）
         if calendar.isDateInToday(selectedDate) {
             let currentTimePlus5 = currentMinute + 5
             let currentTimePlus5Hour = currentTimePlus5 >= 60 ? currentHour + 1 : currentHour
             let currentTimePlus5Minute = currentTimePlus5 >= 60 ? currentTimePlus5 - 60 : currentTimePlus5
             
-            // 比较6:00和当前时间+5分钟，取较大的一方
-            if currentTimePlus5Hour > 6 || (currentTimePlus5Hour == 6 && currentTimePlus5Minute > 0) {
+            // 比较7:00和当前时间+5分钟，取较大的一方
+            if currentTimePlus5Hour > 7 || (currentTimePlus5Hour == 7 && currentTimePlus5Minute > 0) {
                 return (currentTimePlus5Hour, currentTimePlus5Minute)
             } else {
-                return (6, 0)
+                return (7, 0)
             }
         }
         
-        // 如果是未来日期，左指针的左极限为6点
-        return (6, 0)
+        // 如果是未来日期，左指针的左极限为7点
+        return (7, 0)
     }
     
     // 获取左指针的最大允许时间
@@ -364,8 +364,8 @@ struct EnergyPlanningView: View {
     
     // 获取右指针的最大允许时间
     private func getMaxAllowedEndTime() -> (hour: Int, minute: Int) {
-        // 右指针的右极限为23点整
-        return (23, 0)
+        // 右指针的右极限为24点整
+        return (24, 0)
     }
     
     private func isHourSelectable(_ hour: Int) -> Bool {
@@ -381,18 +381,18 @@ struct EnergyPlanningView: View {
                 return false
             }
             
-            // 特殊检查：如果当前时间大于22:50，不允许选择22:00-23:00的块
-            // 因为左指针的最小允许时间（当前时间+5分钟）会超过23:00
-            if currentHour == 22 && currentMinute > 50 {
-                // 如果当前时间大于22:50，不允许选择22:00-23:00的块
-                if hour == 22 {
+            // 特殊检查：如果当前时间大于23:50，不允许选择23:00-24:00的块
+            // 因为左指针的最小允许时间（当前时间+5分钟）会超过24:00
+            if currentHour == 23 && currentMinute > 50 {
+                // 如果当前时间大于23:50，不允许选择23:00-24:00的块
+                if hour == 23 {
                     return false
                 }
             }
             
-            // 如果当前时间大于22:55，不允许选择任何23:00的块
-            if currentHour == 22 && currentMinute > 55 {
-                if hour >= 22 {
+            // 如果当前时间大于23:55，不允许选择任何24:00的块
+            if currentHour == 23 && currentMinute > 55 {
+                if hour >= 23 {
                     return false
                 }
             }
@@ -690,7 +690,7 @@ struct EnergyTimelineView: View {
     @Binding var timePickerMinute: Int
     @Binding var showingTimePicker: Bool
     
-    private let hours = Array(6...22) // 6点到22点
+    private let hours = Array(7...23) // 7点到23点
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
@@ -718,17 +718,26 @@ struct EnergyTimelineView: View {
                 .buttonStyle(PlainButtonStyle())
             }
             
-            // 时间标签 - 使用GeometryReader精确定位
+            // 时间标签和竖标 - 使用GeometryReader精确定位
             GeometryReader { geometry in
                 ZStack {
-                    ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                        Text("\(hour):00")
-                            .font(.system(size: AppTheme.FontSize.caption2))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .position(
-                                x: getTimeLabelPosition(for: hour, in: geometry.size.width),
-                                y: 10 // 时间标签的垂直位置
-                            )
+                    // 时间标签：7点、10点、14点、18点、22点
+                    ForEach([7, 10, 14, 18, 22], id: \.self) { hour in
+                        VStack(spacing: 0) {
+                            // 时间标签
+                            Text("\(hour):00")
+                                .font(.system(size: AppTheme.FontSize.caption2))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            
+                            // 竖标：从标签延伸到能量块左边缘
+                            Rectangle()
+                                .fill(AppTheme.Colors.textSecondary.opacity(0.3))
+                                .frame(width: 1, height: 8)
+                        }
+                        .position(
+                            x: getTimeLabelPosition(for: hour, in: geometry.size.width),
+                            y: 10 // 时间标签的垂直位置
+                        )
                     }
                 }
             }
@@ -956,21 +965,22 @@ struct EnergyTimelineView: View {
     
     private func getCurrentTimeOffset(width: CGFloat) -> CGFloat {
         let currentHour = getCurrentHour()
-        let hourIndex = max(0, min(currentHour - 6, hours.count - 1))
+        let hourIndex = max(0, min(currentHour - 7, hours.count - 1))
         let segmentWidth = width / CGFloat(hours.count)
         return segmentWidth * CGFloat(hourIndex) + segmentWidth / 2
     }
     
     // 计算时间标签的位置（居中对齐到对应时间块）
     private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
-        let hourIndex = hour - 6 // 6点对应索引0
+        let hourIndex = hour - 7 // 7点对应索引0
         let blockWidth = totalWidth / CGFloat(hours.count)
-        return blockWidth * CGFloat(hourIndex) + blockWidth / 2
+        let spacing: CGFloat = 0.5 // 块之间的间距
+        return blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
     }
     
     // 计算指针的位置（支持分钟级精度）
     private func getPointerOffset(hour: Int, minute: Int, width: CGFloat) -> CGFloat {
-        let hourIndex = hour - 6 // 6点对应索引0
+        let hourIndex = hour - 7 // 7点对应索引0
         let blockWidth = width / CGFloat(hours.count)
         let spacing: CGFloat = 0.5 // 块之间的间距
         
@@ -1003,18 +1013,18 @@ struct EnergyTimelineView: View {
                 return false
             }
             
-            // 特殊检查：如果当前时间大于22:50，不允许选择22:00-23:00的块
-            // 因为左指针的最小允许时间（当前时间+5分钟）会超过23:00
-            if currentHour == 22 && currentMinute > 50 {
-                // 如果当前时间大于22:50，不允许选择22:00-23:00的块
-                if hour == 22 {
+            // 特殊检查：如果当前时间大于23:50，不允许选择23:00-24:00的块
+            // 因为左指针的最小允许时间（当前时间+5分钟）会超过24:00
+            if currentHour == 23 && currentMinute > 50 {
+                // 如果当前时间大于23:50，不允许选择23:00-24:00的块
+                if hour == 23 {
                     return false
                 }
             }
             
-            // 如果当前时间大于22:55，不允许选择任何23:00的块
-            if currentHour == 22 && currentMinute > 55 {
-                if hour >= 22 {
+            // 如果当前时间大于23:55，不允许选择任何24:00的块
+            if currentHour == 23 && currentMinute > 55 {
+                if hour >= 23 {
                     return false
                 }
             }
@@ -1034,22 +1044,22 @@ struct EnergyTimelineView: View {
         let currentHour = calendar.component(.hour, from: now)
         let currentMinute = calendar.component(.minute, from: now)
         
-        // 如果是今天，左指针的左极限为6点或者当前时间+5分钟（取较大的一方）
+        // 如果是今天，左指针的左极限为7点或者当前时间+5分钟（取较大的一方）
         if calendar.isDateInToday(selectedDate) {
             let currentTimePlus5 = currentMinute + 5
             let currentTimePlus5Hour = currentTimePlus5 >= 60 ? currentHour + 1 : currentHour
             let currentTimePlus5Minute = currentTimePlus5 >= 60 ? currentTimePlus5 - 60 : currentTimePlus5
             
-            // 比较6:00和当前时间+5分钟，取较大的一方
-            if currentTimePlus5Hour > 6 || (currentTimePlus5Hour == 6 && currentTimePlus5Minute > 0) {
+            // 比较7:00和当前时间+5分钟，取较大的一方
+            if currentTimePlus5Hour > 7 || (currentTimePlus5Hour == 7 && currentTimePlus5Minute > 0) {
                 return (currentTimePlus5Hour, currentTimePlus5Minute)
             } else {
-                return (6, 0)
+                return (7, 0)
             }
         }
         
-        // 如果是未来日期，左指针的左极限为6点
-        return (6, 0)
+        // 如果是未来日期，左指针的左极限为7点
+        return (7, 0)
     }
     
     // 获取左指针的最大允许时间
@@ -1084,8 +1094,8 @@ struct EnergyTimelineView: View {
     
     // 获取右指针的最大允许时间
     private func getMaxAllowedEndTime() -> (hour: Int, minute: Int) {
-        // 右指针的右极限为23点整
-        return (23, 0)
+        // 右指针的右极限为24点整
+        return (24, 0)
     }
     
     // 获取选择边框颜色
@@ -1504,7 +1514,7 @@ struct HistoricalEnergyTimelineCard: View {
         return formatter
     }()
     
-    private let hours = Array(6...22) // 6点到22点
+    private let hours = Array(7...23) // 7点到23点
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
@@ -1527,17 +1537,26 @@ struct HistoricalEnergyTimelineCard: View {
                     .cornerRadius(AppTheme.Radius.small)
             }
             
-            // 时间标签 - 使用GeometryReader精确定位
+            // 时间标签和竖标 - 使用GeometryReader精确定位
             GeometryReader { geometry in
                 ZStack {
-                    ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                        Text("\(hour):00")
-                            .font(.system(size: AppTheme.FontSize.caption2))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .position(
-                                x: getTimeLabelPosition(for: hour, in: geometry.size.width),
-                                y: 10 // 时间标签的垂直位置
-                            )
+                    // 时间标签：7点、10点、14点、18点、22点
+                    ForEach([7, 10, 14, 18, 22], id: \.self) { hour in
+                        VStack(spacing: 0) {
+                            // 时间标签
+                            Text("\(hour):00")
+                                .font(.system(size: AppTheme.FontSize.caption2))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            
+                            // 竖标：从标签延伸到能量块左边缘
+                            Rectangle()
+                                .fill(AppTheme.Colors.textSecondary.opacity(0.3))
+                                .frame(width: 1, height: 8)
+                        }
+                        .position(
+                            x: getTimeLabelPosition(for: hour, in: geometry.size.width),
+                            y: 10 // 时间标签的垂直位置
+                        )
                     }
                 }
             }
@@ -1592,9 +1611,10 @@ struct HistoricalEnergyTimelineCard: View {
     
     // 计算时间标签的位置（居中对齐到对应时间块）
     private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
-        let hourIndex = hour - 6 // 6点对应索引0
+        let hourIndex = hour - 7 // 7点对应索引0
         let blockWidth = totalWidth / CGFloat(hours.count)
-        return blockWidth * CGFloat(hourIndex) + blockWidth / 2
+        let spacing: CGFloat = 0.5 // 块之间的间距
+        return blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
     }
 }
 
@@ -2040,7 +2060,7 @@ struct ReadOnlyEnergyTimelineView: View {
     let date: Date
     let onDateSelected: (Date) -> Void
     
-    private let hours = Array(6...22) // 6点到22点
+    private let hours = Array(7...23) // 7点到23点
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
@@ -2063,17 +2083,26 @@ struct ReadOnlyEnergyTimelineView: View {
                     .cornerRadius(AppTheme.Radius.small)
             }
             
-            // 时间标签 - 使用GeometryReader精确定位
+            // 时间标签和竖标 - 使用GeometryReader精确定位
             GeometryReader { geometry in
                 ZStack {
-                    ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                        Text("\(hour):00")
-                            .font(.system(size: AppTheme.FontSize.caption2))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .position(
-                                x: getTimeLabelPosition(for: hour, in: geometry.size.width),
-                                y: 10 // 时间标签的垂直位置
-                            )
+                    // 时间标签：7点、10点、14点、18点、22点
+                    ForEach([7, 10, 14, 18, 22], id: \.self) { hour in
+                        VStack(spacing: 0) {
+                            // 时间标签
+                            Text("\(hour):00")
+                                .font(.system(size: AppTheme.FontSize.caption2))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            
+                            // 竖标：从标签延伸到能量块左边缘
+                            Rectangle()
+                                .fill(AppTheme.Colors.textSecondary.opacity(0.3))
+                                .frame(width: 1, height: 8)
+                        }
+                        .position(
+                            x: getTimeLabelPosition(for: hour, in: geometry.size.width),
+                            y: 10 // 时间标签的垂直位置
+                        )
                     }
                 }
             }
@@ -2132,9 +2161,10 @@ struct ReadOnlyEnergyTimelineView: View {
     
     // 计算时间标签的位置（居中对齐到对应时间块）
     private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
-        let hourIndex = hour - 6 // 6点对应索引0
+        let hourIndex = hour - 7 // 7点对应索引0
         let blockWidth = totalWidth / CGFloat(hours.count)
-        return blockWidth * CGFloat(hourIndex) + blockWidth / 2
+        let spacing: CGFloat = 0.5 // 块之间的间距
+        return blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
     }
     
     // 格式化日期
@@ -2400,18 +2430,18 @@ struct EnergyHourButton: View {
                 return false
             }
             
-            // 特殊检查：如果当前时间大于22:50，不允许选择22:00-23:00的块
-            // 因为左指针的最小允许时间（当前时间+5分钟）会超过23:00
-            if currentHour == 22 && currentMinute > 50 {
-                // 如果当前时间大于22:50，不允许选择22:00-23:00的块
-                if hour == 22 {
+            // 特殊检查：如果当前时间大于23:50，不允许选择23:00-24:00的块
+            // 因为左指针的最小允许时间（当前时间+5分钟）会超过24:00
+            if currentHour == 23 && currentMinute > 50 {
+                // 如果当前时间大于23:50，不允许选择23:00-24:00的块
+                if hour == 23 {
                     return false
                 }
             }
             
-            // 如果当前时间大于22:55，不允许选择任何23:00的块
-            if currentHour == 22 && currentMinute > 55 {
-                if hour >= 22 {
+            // 如果当前时间大于23:55，不允许选择任何24:00的块
+            if currentHour == 23 && currentMinute > 55 {
+                if hour >= 23 {
                     return false
                 }
             }
