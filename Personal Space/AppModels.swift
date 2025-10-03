@@ -114,6 +114,44 @@ class UserState: ObservableObject {
         }
     }
     
+    // 分钟级查询方法
+    func getFinalEnergyLevel(for date: Date, hour: Int, minute: Int, showUnplanned: Bool = true) -> EnergyLevel {
+        let calendar = Calendar.current
+        let targetDate = calendar.startOfDay(for: date)
+        
+        // 优先级从高到低检查
+        // 1. 专注模式 (最高优先级)
+        if isFocusModeOn {
+            return .high
+        }
+        
+        // 2. 能量快充 (高优先级)
+        if isEnergyBoostActive {
+            return .high
+        }
+        
+        // 3. 能量预规划 (中优先级) - 精确匹配分钟
+        if let plan = energyPlans.first(where: { 
+            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour && $0.minute == minute
+        }) {
+            return plan.energyLevel
+        }
+        
+        // 4. 如果没有精确匹配，查找该小时内的任意规划
+        if let plan = energyPlans.first(where: { 
+            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour 
+        }) {
+            return plan.energyLevel
+        }
+        
+        // 5. 默认状态
+        if showUnplanned {
+            return .unplanned
+        } else {
+            return .medium
+        }
+    }
+    
     // MARK: - 能量规划相关方法
     
     // 获取有规划的日期
@@ -354,6 +392,7 @@ struct EnergyPlan: Identifiable, Codable {
     let id: UUID
     let date: Date // 规划日期
     let hour: Int // 小时 (0-23)
+    let minute: Int // 分钟 (0-59)，支持分钟级精度
     let energyLevel: EnergyLevel // 规划的能量状态
     let createdAt: Date // 创建时间
     
@@ -361,6 +400,17 @@ struct EnergyPlan: Identifiable, Codable {
         self.id = UUID()
         self.date = date
         self.hour = hour
+        self.minute = 0 // 默认整点
+        self.energyLevel = energyLevel
+        self.createdAt = createdAt
+    }
+    
+    // 分钟级初始化器
+    init(date: Date, hour: Int, minute: Int, energyLevel: EnergyLevel, createdAt: Date = Date()) {
+        self.id = UUID()
+        self.date = date
+        self.hour = hour
+        self.minute = minute
         self.energyLevel = energyLevel
         self.createdAt = createdAt
     }
