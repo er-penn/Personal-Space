@@ -260,30 +260,39 @@ struct EnergyPlanningView: View {
             return
         }
         
-        if batchStartHour == nil {
-            // 第一次选择 - 单个块
+        // 判断当前状态
+        let isCurrentlySingleBlock = (selectedHour != nil && batchStartHour == nil && batchEndHour == nil)
+        let isCurrentlyMultiBlock = (batchStartHour != nil && batchEndHour != nil)
+        
+        if isCurrentlySingleBlock {
+            // 当前是单个块模式，点击不同块进入多块模式
+            if hour != selectedHour {
+                // 选择不同的块，进入多块模式
+                if hour > selectedHour! {
+                    batchStartHour = selectedHour
+                    batchEndHour = hour + 1
+                } else {
+                    batchStartHour = hour
+                    batchEndHour = selectedHour! + 1
+                }
+                selectedHour = nil
+                selectedHourForButtons = nil
+                showingEnergyButtons = false
+                setupPointers(startHour: batchStartHour!, endHour: batchEndHour!)
+            } else {
+                // 点击相同块，保持单个块模式
+                print("点击了相同的块，保持当前状态")
+            }
+        } else if isCurrentlyMultiBlock {
+            // 当前是多块模式，点击任何块都进入单个块模式
             selectedHour = hour
-            batchStartHour = hour
+            batchStartHour = nil
             batchEndHour = nil
             selectedHourForButtons = hour
             showingEnergyButtons = true
             setupPointers(startHour: hour, endHour: hour + 1)
-        } else if batchEndHour == nil {
-            // 第二次选择，确定范围
-            if hour > batchStartHour! {
-                // 选择第一个块和第二个块，只包含这两个块
-                batchEndHour = hour + 1
-            } else {
-                // 选择第二个块和第一个块，调整顺序
-                batchEndHour = batchStartHour! + 1
-                batchStartHour = hour
-            }
-            selectedHour = nil
-            selectedHourForButtons = nil
-            showingEnergyButtons = false
-            setupPointers(startHour: batchStartHour!, endHour: batchEndHour!)
         } else {
-            // 重新选择 - 单个块
+            // 初始状态，第一次选择 - 单个块
             selectedHour = hour
             batchStartHour = nil
             batchEndHour = nil
