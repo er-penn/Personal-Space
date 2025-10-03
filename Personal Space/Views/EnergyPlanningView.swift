@@ -318,19 +318,19 @@ struct EnergyPlanningView: View {
     private func setupPointers(startHour: Int, endHour: Int) {
         let minTime = getMinAllowedStartTime()
         
-        // 设置左指针
+        // 设置左指针 - 应该卡在选中范围的开始块的左边界
         if startHour > minTime.hour || (startHour == minTime.hour && 0 >= minTime.minute) {
             leftPointerHour = startHour
-            leftPointerMinute = 0
+            leftPointerMinute = 0  // 卡在块的左边界
         } else {
             leftPointerHour = minTime.hour
             leftPointerMinute = minTime.minute
         }
         
-        // 设置右指针 - 应该在选中范围的结束时间
-        // 右指针应该显示在选中范围的最后一个块的末尾
-        rightPointerHour = endHour - 1
-        rightPointerMinute = 59
+        // 设置右指针 - 应该卡在选中范围的结束块的右边界
+        // 右指针应该显示在选中范围的最后一个块的右边界（即下一个块的左边界）
+        rightPointerHour = endHour
+        rightPointerMinute = 0  // 卡在下一个块的左边界
         
         showingPointers = true
         print("设置指针: 左指针=\(leftPointerHour ?? 0):\(leftPointerMinute ?? 0), 右指针=\(rightPointerHour ?? 0):\(rightPointerMinute ?? 0)")
@@ -866,9 +866,20 @@ struct EnergyTimelineView: View {
     private func getPointerOffset(hour: Int, minute: Int, width: CGFloat) -> CGFloat {
         let hourIndex = hour - 6 // 6点对应索引0
         let blockWidth = width / CGFloat(hours.count)
+        let spacing: CGFloat = 0.5 // 块之间的间距
+        
+        // 计算指针应该位于的时间块边界位置
+        // 考虑块之间的间距
+        let blockStartOffset = blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
+        
+        // 如果分钟为0，指针位于块的左边界
+        // 如果分钟不为0，指针位于块内的相应位置
         let minuteOffset = (CGFloat(minute) / 60.0) * blockWidth
-        // 指针应该位于时间块的边界上，而不是块内
-        return blockWidth * CGFloat(hourIndex) + minuteOffset
+        
+        let totalOffset = blockStartOffset + minuteOffset
+        
+        // 确保指针精确对齐到像素边界
+        return round(totalOffset)
     }
     
     
