@@ -87,6 +87,20 @@ struct TimePickerView: View {
     
     @Environment(\.presentationMode) var presentationMode
     
+    // 计算分钟范围
+    private func getMinuteRange() -> [Int] {
+        if selectedHour == minHour {
+            // 如果选择的是最小小时，分钟范围从minMinute到59
+            return Array(minMinute..<60)
+        } else if selectedHour == maxHour {
+            // 如果选择的是最大小时，分钟范围从0到maxMinute
+            return Array(0...maxMinute)
+        } else {
+            // 其他情况，分钟范围是0到59
+            return Array(0..<60)
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 20) {
             // 标题
@@ -103,7 +117,7 @@ struct TimePickerView: View {
                         .foregroundColor(.secondary)
                     
                     Picker("小时", selection: $selectedHour) {
-                        ForEach(0..<24, id: \.self) { hour in
+                        ForEach(minHour...maxHour, id: \.self) { hour in
                             Text(String(format: "%02d", hour))
                                 .tag(hour)
                         }
@@ -119,7 +133,7 @@ struct TimePickerView: View {
                         .foregroundColor(.secondary)
                     
                     Picker("分钟", selection: $selectedMinute) {
-                        ForEach(0..<60, id: \.self) { minute in
+                        ForEach(getMinuteRange(), id: \.self) { minute in
                             Text(String(format: "%02d", minute))
                                 .tag(minute)
                         }
@@ -279,36 +293,97 @@ struct EnergyPlanningView: View {
         }
     }
     
+    // 获取左指针的最小允许时间
     private func getMinAllowedStartTime() -> (hour: Int, minute: Int) {
         let now = Date()
         let calendar = Calendar.current
         let currentHour = calendar.component(.hour, from: now)
         let currentMinute = calendar.component(.minute, from: now)
         
-        // 如果当前时间在选中的时间范围内，左指针不能早于当前时间+3分钟
-        if let startHour = batchStartHour, let endHour = batchEndHour {
-            if currentHour >= startHour && currentHour < endHour {
-                let minMinute = currentMinute + 3
-                if minMinute >= 60 {
-                    return (currentHour + 1, minMinute - 60)
-                } else {
-                    return (currentHour, minMinute)
-                }
+        // 如果是今天，左指针的左极限为6点或者当前时间+5分钟（取较大的一方）
+        if calendar.isDateInToday(selectedDate) {
+            let currentTimePlus5 = currentMinute + 5
+            let currentTimePlus5Hour = currentTimePlus5 >= 60 ? currentHour + 1 : currentHour
+            let currentTimePlus5Minute = currentTimePlus5 >= 60 ? currentTimePlus5 - 60 : currentTimePlus5
+            
+            // 比较6:00和当前时间+5分钟，取较大的一方
+            if currentTimePlus5Hour > 6 || (currentTimePlus5Hour == 6 && currentTimePlus5Minute > 0) {
+                return (currentTimePlus5Hour, currentTimePlus5Minute)
+            } else {
+                return (6, 0)
             }
         }
         
-        // 默认返回选中范围的开始时间
-        return (batchStartHour ?? 6, 0)
+        // 如果是未来日期，左指针的左极限为6点
+        return (6, 0)
+    }
+    
+    // 获取左指针的最大允许时间
+    private func getMaxAllowedStartTime() -> (hour: Int, minute: Int) {
+        guard let rightHour = rightPointerHour, let rightMinute = rightPointerMinute else {
+            return (23, 0)
+        }
+        
+        // 左指针的右极限为右指针的时间-5分钟
+        let leftMaxMinute = rightMinute - 5
+        if leftMaxMinute < 0 {
+            return (rightHour - 1, leftMaxMinute + 60)
+        } else {
+            return (rightHour, leftMaxMinute)
+        }
+    }
+    
+    // 获取右指针的最小允许时间
+    private func getMinAllowedEndTime() -> (hour: Int, minute: Int) {
+        guard let leftHour = leftPointerHour, let leftMinute = leftPointerMinute else {
+            return (6, 0)
+        }
+        
+        // 右指针的左极限为左指针的时间+5分钟
+        let rightMinMinute = leftMinute + 5
+        if rightMinMinute >= 60 {
+            return (leftHour + 1, rightMinMinute - 60)
+        } else {
+            return (leftHour, rightMinMinute)
+        }
+    }
+    
+    // 获取右指针的最大允许时间
+    private func getMaxAllowedEndTime() -> (hour: Int, minute: Int) {
+        // 右指针的右极限为23点整
+        return (23, 0)
     }
     
     private func isHourSelectable(_ hour: Int) -> Bool {
         let now = Date()
         let calendar = Calendar.current
         let currentHour = calendar.component(.hour, from: now)
+        let currentMinute = calendar.component(.minute, from: now)
         
         // 如果是今天，不能选择过去的时间
         if calendar.isDateInToday(selectedDate) {
-            return hour >= currentHour
+            // 基本检查：不能选择过去的时间
+            if hour < currentHour {
+                return false
+            }
+            
+            // 特殊检查：如果当前时间大于22:50，不允许选择22:00-23:00的块
+            // 因为左指针的最小允许时间（当前时间+5分钟）会超过23:00
+            if currentHour == 22 && currentMinute > 50 {
+                // 如果当前时间大于22:50，不允许选择22:00-23:00的块
+                if hour == 22 {
+                    return false
+                }
+            }
+            
+            // 如果当前时间大于22:55，不允许选择任何23:00的块
+            if currentHour == 22 && currentMinute > 55 {
+                if hour >= 22 {
+                    return false
+                }
+            }
+            
+            return true
         }
         
         // 未来日期可以选择任何时间
@@ -339,20 +414,19 @@ struct EnergyPlanningView: View {
     
     // 方法：创建时间选择器视图
     private func createTimePickerView() -> some View {
-        let minTime = getMinAllowedStartTime()
-        let leftHour = leftPointerHour ?? 0
-        let leftMinute = leftPointerMinute ?? 0
-        let rightHour = rightPointerHour ?? 23
-        let rightMinute = rightPointerMinute ?? 59
+        let minStartTime = getMinAllowedStartTime()
+        let maxStartTime = getMaxAllowedStartTime()
+        let minEndTime = getMinAllowedEndTime()
+        let maxEndTime = getMaxAllowedEndTime()
         
         return TimePickerView(
             selectedHour: $timePickerHour,
             selectedMinute: $timePickerMinute,
             isLeft: isLeftPointerSelected,
-            minHour: isLeftPointerSelected ? minTime.0 : leftHour,
-            minMinute: isLeftPointerSelected ? minTime.1 : leftMinute,
-            maxHour: isLeftPointerSelected ? rightHour : 23,
-            maxMinute: isLeftPointerSelected ? rightMinute : 59,
+            minHour: isLeftPointerSelected ? minStartTime.0 : minEndTime.0,
+            minMinute: isLeftPointerSelected ? minStartTime.1 : minEndTime.1,
+            maxHour: isLeftPointerSelected ? maxStartTime.0 : maxEndTime.0,
+            maxMinute: isLeftPointerSelected ? maxStartTime.1 : maxEndTime.1,
             onConfirm: onTimePickerConfirm,
             onCancel: {
                 showingTimePicker = false
@@ -727,7 +801,8 @@ struct EnergyTimelineView: View {
             HStack {
                 Spacer()
                 if isToday(selectedDate) {
-                    Text("当前：\(getCurrentHour()):00")
+                    let currentTime = getCurrentTime()
+                    Text("当前：\(String(format: "%02d:%02d", currentTime.hour, currentTime.minute))")
                         .font(.system(size: AppTheme.FontSize.caption))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 } else {
@@ -748,11 +823,20 @@ struct EnergyTimelineView: View {
                         Text("已选择：\(String(format: "%02d:%02d", leftHour, leftMinute)) - \(String(format: "%02d:%02d", rightHour, rightMinute))")
                             .font(.system(size: AppTheme.FontSize.caption))
                             .foregroundColor(AppTheme.Colors.textSecondary)
+                            .onAppear {
+                                print("显示指针精确位置: \(leftHour):\(leftMinute) - \(rightHour):\(rightMinute)")
+                            }
                     } else {
                         // 显示小时级选择
                         Text("已选择：\(start):00 - \(end):00")
                             .font(.system(size: AppTheme.FontSize.caption))
                             .foregroundColor(AppTheme.Colors.textSecondary)
+                            .onAppear {
+                                print("显示小时级选择: \(start):00 - \(end):00")
+                                print("showingPointers: \(showingPointers)")
+                                print("leftPointerHour: \(leftPointerHour ?? -1), leftPointerMinute: \(leftPointerMinute ?? -1)")
+                                print("rightPointerHour: \(rightPointerHour ?? -1), rightPointerMinute: \(rightPointerMinute ?? -1)")
+                            }
                     }
                     
                     Spacer()
@@ -848,6 +932,14 @@ struct EnergyTimelineView: View {
         Calendar.current.component(.hour, from: Date())
     }
     
+    private func getCurrentTime() -> (hour: Int, minute: Int) {
+        let now = Date()
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
+        return (hour, minute)
+    }
+    
     private func getCurrentTimeOffset(width: CGFloat) -> CGFloat {
         let currentHour = getCurrentHour()
         let hourIndex = max(0, min(currentHour - 6, hours.count - 1))
@@ -888,10 +980,32 @@ struct EnergyTimelineView: View {
         let now = Date()
         let calendar = Calendar.current
         let currentHour = calendar.component(.hour, from: now)
+        let currentMinute = calendar.component(.minute, from: now)
         
         // 如果是今天，不能选择过去的时间
         if calendar.isDateInToday(selectedDate) {
-            return hour >= currentHour
+            // 基本检查：不能选择过去的时间
+            if hour < currentHour {
+                return false
+            }
+            
+            // 特殊检查：如果当前时间大于22:50，不允许选择22:00-23:00的块
+            // 因为左指针的最小允许时间（当前时间+5分钟）会超过23:00
+            if currentHour == 22 && currentMinute > 50 {
+                // 如果当前时间大于22:50，不允许选择22:00-23:00的块
+                if hour == 22 {
+                    return false
+                }
+            }
+            
+            // 如果当前时间大于22:55，不允许选择任何23:00的块
+            if currentHour == 22 && currentMinute > 55 {
+                if hour >= 22 {
+                    return false
+                }
+            }
+            
+            return true
         }
         
         // 未来日期可以选择任何时间
@@ -899,26 +1013,65 @@ struct EnergyTimelineView: View {
     }
     
     // 获取最小允许开始时间
+    // 获取左指针的最小允许时间
     private func getMinAllowedStartTime() -> (hour: Int, minute: Int) {
         let now = Date()
         let calendar = Calendar.current
         let currentHour = calendar.component(.hour, from: now)
         let currentMinute = calendar.component(.minute, from: now)
         
-        // 如果当前时间在选中的时间范围内，左指针不能早于当前时间+3分钟
-        if let startHour = batchStartHour, let endHour = batchEndHour {
-            if currentHour >= startHour && currentHour < endHour {
-                let minMinute = currentMinute + 3
-                if minMinute >= 60 {
-                    return (currentHour + 1, minMinute - 60)
-                } else {
-                    return (currentHour, minMinute)
-                }
+        // 如果是今天，左指针的左极限为6点或者当前时间+5分钟（取较大的一方）
+        if calendar.isDateInToday(selectedDate) {
+            let currentTimePlus5 = currentMinute + 5
+            let currentTimePlus5Hour = currentTimePlus5 >= 60 ? currentHour + 1 : currentHour
+            let currentTimePlus5Minute = currentTimePlus5 >= 60 ? currentTimePlus5 - 60 : currentTimePlus5
+            
+            // 比较6:00和当前时间+5分钟，取较大的一方
+            if currentTimePlus5Hour > 6 || (currentTimePlus5Hour == 6 && currentTimePlus5Minute > 0) {
+                return (currentTimePlus5Hour, currentTimePlus5Minute)
+            } else {
+                return (6, 0)
             }
         }
         
-        // 默认返回选中范围的开始时间
-        return (batchStartHour ?? 6, 0)
+        // 如果是未来日期，左指针的左极限为6点
+        return (6, 0)
+    }
+    
+    // 获取左指针的最大允许时间
+    private func getMaxAllowedStartTime() -> (hour: Int, minute: Int) {
+        guard let rightHour = rightPointerHour, let rightMinute = rightPointerMinute else {
+            return (23, 0)
+        }
+        
+        // 左指针的右极限为右指针的时间-5分钟
+        let leftMaxMinute = rightMinute - 5
+        if leftMaxMinute < 0 {
+            return (rightHour - 1, leftMaxMinute + 60)
+        } else {
+            return (rightHour, leftMaxMinute)
+        }
+    }
+    
+    // 获取右指针的最小允许时间
+    private func getMinAllowedEndTime() -> (hour: Int, minute: Int) {
+        guard let leftHour = leftPointerHour, let leftMinute = leftPointerMinute else {
+            return (6, 0)
+        }
+        
+        // 右指针的左极限为左指针的时间+5分钟
+        let rightMinMinute = leftMinute + 5
+        if rightMinMinute >= 60 {
+            return (leftHour + 1, rightMinMinute - 60)
+        } else {
+            return (leftHour, rightMinMinute)
+        }
+    }
+    
+    // 获取右指针的最大允许时间
+    private func getMaxAllowedEndTime() -> (hour: Int, minute: Int) {
+        // 右指针的右极限为23点整
+        return (23, 0)
     }
     
     // 获取选择边框颜色
@@ -2221,10 +2374,32 @@ struct EnergyHourButton: View {
         let now = Date()
         let calendar = Calendar.current
         let currentHour = calendar.component(.hour, from: now)
+        let currentMinute = calendar.component(.minute, from: now)
         
         // 如果是今天，不能选择过去的时间
         if calendar.isDateInToday(selectedDate) {
-            return hour >= currentHour
+            // 基本检查：不能选择过去的时间
+            if hour < currentHour {
+                return false
+            }
+            
+            // 特殊检查：如果当前时间大于22:50，不允许选择22:00-23:00的块
+            // 因为左指针的最小允许时间（当前时间+5分钟）会超过23:00
+            if currentHour == 22 && currentMinute > 50 {
+                // 如果当前时间大于22:50，不允许选择22:00-23:00的块
+                if hour == 22 {
+                    return false
+                }
+            }
+            
+            // 如果当前时间大于22:55，不允许选择任何23:00的块
+            if currentHour == 22 && currentMinute > 55 {
+                if hour >= 22 {
+                    return false
+                }
+            }
+            
+            return true
         }
         
         // 未来日期可以选择任何时间
