@@ -210,12 +210,18 @@ struct EnergyPlanningView: View {
     }
     
     private func onTimePickerConfirm(hour: Int, minute: Int) {
+        print("=== onTimePickerConfirm ===")
+        print("isLeftPointerSelected: \(isLeftPointerSelected)")
+        print("设置指针: \(hour):\(minute)")
+        
         if isLeftPointerSelected {
             leftPointerHour = hour
             leftPointerMinute = minute
+            print("左指针更新为: \(hour):\(minute)")
         } else {
             rightPointerHour = hour
             rightPointerMinute = minute
+            print("右指针更新为: \(hour):\(minute)")
         }
         showingTimePicker = false
     }
@@ -243,7 +249,7 @@ struct EnergyPlanningView: View {
         if batchStartHour == nil {
             // 第一次选择 - 单个块
             selectedHour = hour
-            batchStartHour = nil
+            batchStartHour = hour
             batchEndHour = nil
             selectedHourForButtons = hour
             showingEnergyButtons = true
@@ -251,8 +257,10 @@ struct EnergyPlanningView: View {
         } else if batchEndHour == nil {
             // 第二次选择，确定范围
             if hour > batchStartHour! {
+                // 选择第一个块和第二个块，只包含这两个块
                 batchEndHour = hour + 1
             } else {
+                // 选择第二个块和第一个块，调整顺序
                 batchEndHour = batchStartHour! + 1
                 batchStartHour = hour
             }
@@ -319,12 +327,14 @@ struct EnergyPlanningView: View {
             leftPointerMinute = minTime.minute
         }
         
-        // 设置右指针 - 应该在选中块的右边界
-        rightPointerHour = endHour
-        rightPointerMinute = 0
+        // 设置右指针 - 应该在选中范围的结束时间
+        // 右指针应该显示在选中范围的最后一个块的末尾
+        rightPointerHour = endHour - 1
+        rightPointerMinute = 59
         
         showingPointers = true
         print("设置指针: 左指针=\(leftPointerHour ?? 0):\(leftPointerMinute ?? 0), 右指针=\(rightPointerHour ?? 0):\(rightPointerMinute ?? 0)")
+        print("实际选择范围: \(startHour):00 - \(endHour):00 (影响 \(endHour - startHour) 个块)")
     }
     
     // 方法：创建时间选择器视图
@@ -732,9 +742,18 @@ struct EnergyTimelineView: View {
             if let start = batchStartHour, let end = batchEndHour {
                 // 时间段选择提示
                 HStack {
-                    Text("已选择：\(start):00 - \(end+1):00")
-                        .font(.system(size: AppTheme.FontSize.caption))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    if showingPointers, let leftHour = leftPointerHour, let leftMinute = leftPointerMinute,
+                       let rightHour = rightPointerHour, let rightMinute = rightPointerMinute {
+                        // 显示指针的精确位置
+                        Text("已选择：\(String(format: "%02d:%02d", leftHour, leftMinute)) - \(String(format: "%02d:%02d", rightHour, rightMinute))")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    } else {
+                        // 显示小时级选择
+                        Text("已选择：\(start):00 - \(end):00")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
                     
                     Spacer()
                     
@@ -746,6 +765,13 @@ struct EnergyTimelineView: View {
                         showingBatchSelector = false
                         selectedHourForButtons = nil
                         showingEnergyButtons = false
+                        
+                        // 隐藏指针
+                        leftPointerHour = nil
+                        leftPointerMinute = nil
+                        rightPointerHour = nil
+                        rightPointerMinute = nil
+                        showingPointers = false
                     }
                     .font(.system(size: AppTheme.FontSize.caption))
                     .foregroundColor(AppTheme.Colors.primary)
@@ -767,6 +793,13 @@ struct EnergyTimelineView: View {
                         batchStartHour = nil
                         batchEndHour = nil
                         showingBatchSelector = false
+                        
+                        // 隐藏指针
+                        leftPointerHour = nil
+                        leftPointerMinute = nil
+                        rightPointerHour = nil
+                        rightPointerMinute = nil
+                        showingPointers = false
                     }
                     .font(.system(size: AppTheme.FontSize.caption))
                     .foregroundColor(AppTheme.Colors.primary)
@@ -1484,6 +1517,11 @@ struct FloatingEnergyButtons: View {
             // 三个能量状态按钮
             ForEach(EnergyLevel.allCases.filter { $0 != .unplanned }, id: \.self) { level in
                 Button(action: {
+                    print("=== 电池按钮被点击 ===")
+                    print("点击的能量级别: \(level)")
+                    print("当前状态: showingPointers=\(showingPointers)")
+                    print("当前状态: leftPointerHour=\(leftPointerHour ?? -1), rightPointerHour=\(rightPointerHour ?? -1)")
+                    
                     selectedEnergyLevel = level
                     saveMinuteLevelPlan(energyLevel: level)
                     clearSelectionState()
@@ -1514,6 +1552,9 @@ struct FloatingEnergyButtons: View {
                 .shadow(color: AppTheme.Shadows.card, radius: 8, x: 0, y: 4)
         )
         .position(x: 220, y: 160) // 绝对定位，在"已选择"文字右边，"取消选择"按钮左边
+        .onAppear {
+            print("FloatingEnergyButtons显示: hour=\(hour), showingPointers=\(showingPointers)")
+        }
         .onTapGesture {
             // 点击背景区域取消选择并关闭按钮
             clearSelectionState()
@@ -1559,6 +1600,13 @@ struct FloatingEnergyButtons: View {
         selectedEnergyLevel = nil
         selectedHourForButtons = nil
         showingButtons = false
+        
+        // 隐藏指针
+        leftPointerHour = nil
+        leftPointerMinute = nil
+        rightPointerHour = nil
+        rightPointerMinute = nil
+        showingPointers = false
     }
 }
 
@@ -1575,6 +1623,11 @@ struct BatchEnergyButtons: View {
     @Binding var showingBatchSelector: Bool
     @Binding var selectedHourForButtons: Int?
     @Binding var showingButtons: Bool
+    @Binding var leftPointerHour: Int?
+    @Binding var leftPointerMinute: Int?
+    @Binding var rightPointerHour: Int?
+    @Binding var rightPointerMinute: Int?
+    @Binding var showingPointers: Bool
     
     var body: some View {
         HStack(spacing: 10) {
@@ -1651,6 +1704,13 @@ struct BatchEnergyButtons: View {
         selectedEnergyLevel = nil
         selectedHourForButtons = nil
         showingButtons = false
+        
+        // 隐藏指针
+        leftPointerHour = nil
+        leftPointerMinute = nil
+        rightPointerHour = nil
+        rightPointerMinute = nil
+        showingPointers = false
     }
 }
 
@@ -1907,27 +1967,61 @@ struct ReadOnlyEnergyTimelineView: View {
 // MARK: - 分钟级规划保存方法
 extension FloatingEnergyButtons {
     func saveMinuteLevelPlan(energyLevel: EnergyLevel) {
+        print("=== saveMinuteLevelPlan 方法被调用 ===")
         let calendar = Calendar.current
         let targetDate = calendar.startOfDay(for: selectedDate)
         
+        print("=== saveMinuteLevelPlan 开始 ===")
+        print("showingPointers: \(showingPointers)")
+        print("leftPointerHour: \(leftPointerHour ?? -1), leftPointerMinute: \(leftPointerMinute ?? -1)")
+        print("rightPointerHour: \(rightPointerHour ?? -1), rightPointerMinute: \(rightPointerMinute ?? -1)")
+        print("energyLevel: \(energyLevel)")
+        
         // 如果有指针，使用分钟级规划
-        if showingPointers, let leftHour = leftPointerHour, let leftMinute = leftPointerMinute,
-           let rightHour = rightPointerHour, let rightMinute = rightPointerMinute {
+        print("检查条件: showingPointers=\(showingPointers)")
+        print("检查条件: leftPointerHour=\(leftPointerHour ?? -1), leftPointerMinute=\(leftPointerMinute ?? -1)")
+        print("检查条件: rightPointerHour=\(rightPointerHour ?? -1), rightPointerMinute=\(rightPointerMinute ?? -1)")
+        
+        if showingPointers, let startHour = batchStartHour, let endHour = batchEndHour {
+            print("进入分钟级保存分支")
+            print("使用batchStartHour=\(startHour), batchEndHour=\(endHour)")
             
+            // 计算实际选择的小时数
+            let actualEndHour = endHour - 1  // 实际结束小时
+            print("实际影响范围: \(startHour):00 - \(actualEndHour):59")
+            
+            print("开始移除旧规划...")
+            print("移除条件: 日期=\(targetDate), 左边界=\(startHour):00, 右边界=\(actualEndHour):59")
+            
+            let removedCount = userState.energyPlans.count
             // 移除指定时间范围内的旧规划
             userState.energyPlans.removeAll { plan in
-                calendar.isDate(plan.date, inSameDayAs: targetDate) && 
-                ((plan.hour > leftHour) || (plan.hour == leftHour && plan.minute >= leftMinute)) &&
-                ((plan.hour < rightHour) || (plan.hour == rightHour && plan.minute <= rightMinute))
+                let shouldRemove = calendar.isDate(plan.date, inSameDayAs: targetDate) && 
+                plan.hour >= startHour && plan.hour <= actualEndHour
+                
+                if shouldRemove {
+                    print("移除规划: \(plan.hour):\(plan.minute) - \(plan.energyLevel)")
+                }
+                return shouldRemove
             }
+            print("移除了 \(removedCount - userState.energyPlans.count) 个旧规划")
             
             // 如果不是取消规划，则添加分钟级规划
             if energyLevel != .unplanned {
-                // 按分钟级创建规划
-                var currentHour = leftHour
-                var currentMinute = leftMinute
+                print("开始创建分钟级规划...")
+                print("循环条件: currentHour <= \(actualEndHour)")
                 
-                while currentHour < rightHour || (currentHour == rightHour && currentMinute < rightMinute) {
+                // 按分钟级创建规划
+                var currentHour = startHour
+                var currentMinute = 0
+                var planCount = 0
+                
+                while currentHour <= actualEndHour {
+                    // 检查是否超出范围
+                    if currentHour > actualEndHour {
+                        break
+                    }
+                    
                     let newPlan = EnergyPlan(
                         date: targetDate,
                         hour: currentHour,
@@ -1936,17 +2030,29 @@ extension FloatingEnergyButtons {
                         createdAt: Date()
                     )
                     userState.energyPlans.append(newPlan)
+                    planCount += 1
+                    
+                    print("创建规划: \(String(format: "%02d:%02d", currentHour, currentMinute)) - \(energyLevel)")
                     
                     // 增加1分钟
                     currentMinute += 1
                     if currentMinute >= 60 {
                         currentMinute = 0
                         currentHour += 1
+                        print("分钟重置，小时增加到: \(currentHour)")
                     }
+                    
+                    // 检查循环条件
+                    print("循环条件检查: currentHour=\(currentHour), actualEndHour=\(actualEndHour)")
+                    print("继续循环: \(currentHour <= actualEndHour)")
                 }
+                
+                print("总共创建了 \(planCount) 个规划")
             }
         } else {
             // 没有指针，使用原来的小时级规划
+            print("进入小时级保存分支")
+            print("调用saveEnergyPlan: hour=\(hour), energyLevel=\(energyLevel)")
             saveEnergyPlan(hour: hour, energyLevel: energyLevel)
         }
         
@@ -2016,9 +2122,15 @@ struct EnergyTimelineOverlay: View {
                     selectedHour: $selectedHour,
                     showingBatchSelector: $showingBatchSelector,
                     selectedHourForButtons: $selectedHourForButtons,
-                    showingButtons: $showingButtons
+                    showingButtons: $showingButtons,
+                    leftPointerHour: $leftPointerHour,
+                    leftPointerMinute: $leftPointerMinute,
+                    rightPointerHour: $rightPointerHour,
+                    rightPointerMinute: $rightPointerMinute,
+                    showingPointers: $showingPointers
                 )
                 .allowsHitTesting(true)
+                .position(x: 220, y: 160) // 
                 .zIndex(1000) // 确保在最上层
             }
             
@@ -2028,6 +2140,24 @@ struct EnergyTimelineOverlay: View {
                     .zIndex(1000) // 确保在最上层
             }
         }
+    }
+    
+    // 清除选择状态（包括隐藏指针）
+    private func clearSelectionState() {
+        selectedHour = nil
+        batchStartHour = nil
+        batchEndHour = nil
+        showingBatchSelector = false
+        selectedEnergyLevel = nil
+        selectedHourForButtons = nil
+        showingButtons = false
+        
+        // 隐藏指针
+        leftPointerHour = nil
+        leftPointerMinute = nil
+        rightPointerHour = nil
+        rightPointerMinute = nil
+        showingPointers = false
     }
 }
 
@@ -2047,21 +2177,14 @@ struct EnergyHourButton: View {
     
     var body: some View {
         Button(action: onTap) {
-            // 分钟级颜色分割显示
-            if showingPointers {
-                MinuteLevelEnergyBlock(
-                    hour: hour,
-                    width: width,
-                    height: height,
-                    userState: userState,
-                    selectedDate: selectedDate
-                )
-            } else {
-                Rectangle()
-                    .fill(getEnergyColor(for: hour))
-                    .frame(width: width, height: height)
-                    .cornerRadius(2)
-            }
+            // 始终使用分钟级颜色分割显示
+            MinuteLevelEnergyBlock(
+                hour: hour,
+                width: width,
+                height: height,
+                userState: userState,
+                selectedDate: selectedDate
+            )
         }
         .overlay(
             Rectangle()
