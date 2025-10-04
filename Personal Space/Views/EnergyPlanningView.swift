@@ -817,9 +817,6 @@ struct EnergyTimelineView: View {
                             .fill(AppTheme.Colors.text)
                             .frame(width: 2, height: 20)
                             .offset(x: getCurrentTimeOffset(width: geometry.size.width))
-                            .onAppear {
-                                print("显示当前时间指示器，selectedDate: \(selectedDate), isToday: \(isToday(selectedDate))")
-                            }
                     }
                     
                     // 指针显示
@@ -1035,8 +1032,6 @@ struct EnergyTimelineView: View {
         
         // 计算在当前小时内的分钟偏移
         let minuteOffset = CGFloat(currentTime.minute) / 60.0 * segmentWidth
-        
-        print("当前时间: \(currentTime.hour):\(currentTime.minute), 小时索引: \(hourIndex), 段宽度: \(segmentWidth), 分钟偏移: \(minuteOffset), 最终位置: \(segmentWidth * CGFloat(hourIndex) + minuteOffset)")
         
         return segmentWidth * CGFloat(hourIndex) + minuteOffset
     }
