@@ -210,6 +210,10 @@ struct EnergyPlanningView: View {
     @State private var isLeftPointerSelected = false
     @State private var timePickerHour = 0
     @State private var timePickerMinute = 0
+    @State private var timePickerMinHour = 7
+    @State private var timePickerMinMinute = 0
+    @State private var timePickerMaxHour = 23
+    @State private var timePickerMaxMinute = 59
     
     private let hours = Array(7...23) // 7点到23点
     
@@ -218,6 +222,7 @@ struct EnergyPlanningView: View {
         print("onPointerTap: isLeft=\(isLeft)")
         isLeftPointerSelected = isLeft
         print("设置后 isLeftPointerSelected=\(isLeftPointerSelected)")
+        
         if isLeft {
             timePickerHour = leftPointerHour ?? 0
             timePickerMinute = leftPointerMinute ?? 0
@@ -226,8 +231,27 @@ struct EnergyPlanningView: View {
             timePickerMinute = rightPointerMinute ?? 0
         }
         
-        // 立即显示时间选择器，不等待状态更新
-        print("准备显示时间选择器: isLeftPointerSelected=\(isLeftPointerSelected)")
+        // 立即计算并设置限制参数
+        let minStartTime = getMinAllowedStartTime()
+        let maxStartTime = getMaxAllowedStartTime()
+        let minEndTime = getMinAllowedEndTime()
+        let maxEndTime = getMaxAllowedEndTime()
+        
+        if isLeft {
+            timePickerMinHour = minStartTime.0
+            timePickerMinMinute = minStartTime.1
+            timePickerMaxHour = maxStartTime.0
+            timePickerMaxMinute = maxStartTime.1
+        } else {
+            timePickerMinHour = minEndTime.0
+            timePickerMinMinute = minEndTime.1
+            timePickerMaxHour = maxEndTime.0
+            timePickerMaxMinute = maxEndTime.1
+        }
+        
+        print("立即设置限制参数: min=\(timePickerMinHour):\(timePickerMinMinute), max=\(timePickerMaxHour):\(timePickerMaxMinute)")
+        
+        // 立即显示时间选择器
         showingTimePicker = true
     }
     
@@ -452,38 +476,18 @@ struct EnergyPlanningView: View {
     
     // 方法：创建时间选择器视图
     private func createTimePickerView() -> some View {
-        // 强制重新计算限制时间，确保获取最新状态
-        let minStartTime = getMinAllowedStartTime()
-        let maxStartTime = getMaxAllowedStartTime()
-        let minEndTime = getMinAllowedEndTime()
-        let maxEndTime = getMaxAllowedEndTime()
-        
         print("=== createTimePickerView ===")
         print("isLeftPointerSelected: \(isLeftPointerSelected)")
-        print("leftPointer: \(leftPointerHour ?? -1):\(leftPointerMinute ?? -1)")
-        print("rightPointer: \(rightPointerHour ?? -1):\(rightPointerMinute ?? -1)")
-        print("minStartTime: \(minStartTime.0):\(minStartTime.1)")
-        print("maxStartTime: \(maxStartTime.0):\(maxStartTime.1)")
-        print("minEndTime: \(minEndTime.0):\(minEndTime.1)")
-        print("maxEndTime: \(maxEndTime.0):\(maxEndTime.1)")
-        
-        // 直接使用isLeftPointerSelected的当前值，不依赖状态更新
-        let isLeft = isLeftPointerSelected
-        let finalMinHour = isLeft ? minStartTime.0 : minEndTime.0
-        let finalMinMinute = isLeft ? minStartTime.1 : minEndTime.1
-        let finalMaxHour = isLeft ? maxStartTime.0 : maxEndTime.0
-        let finalMaxMinute = isLeft ? maxStartTime.1 : maxEndTime.1
-        
-        print("最终限制: isLeft=\(isLeft), min=\(finalMinHour):\(finalMinMinute), max=\(finalMaxHour):\(finalMaxMinute)")
+        print("使用预计算的限制参数: min=\(timePickerMinHour):\(timePickerMinMinute), max=\(timePickerMaxHour):\(timePickerMaxMinute)")
         
         return TimePickerView(
             selectedHour: $timePickerHour,
             selectedMinute: $timePickerMinute,
             isLeft: $isLeftPointerSelected,
-            minHour: finalMinHour,
-            minMinute: finalMinMinute,
-            maxHour: finalMaxHour,
-            maxMinute: finalMaxMinute,
+            minHour: timePickerMinHour,
+            minMinute: timePickerMinMinute,
+            maxHour: timePickerMaxHour,
+            maxMinute: timePickerMaxMinute,
             onConfirm: onTimePickerConfirm,
             onCancel: {
                 showingTimePicker = false
