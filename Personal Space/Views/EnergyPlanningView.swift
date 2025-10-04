@@ -811,13 +811,6 @@ struct EnergyTimelineView: View {
                     .background(Color.gray.opacity(0.2))
                     .cornerRadius(4)
                     
-                    // 当前时间指示器（仅今天显示）
-                    if isToday(selectedDate) && geometry.size.width > 0 {
-                        Rectangle()
-                            .fill(AppTheme.Colors.text)
-                            .frame(width: 2, height: 20)
-                            .offset(x: getCurrentTimeOffset(width: geometry.size.width))
-                    }
                     
                     // 指针显示
                     if showingPointers {
