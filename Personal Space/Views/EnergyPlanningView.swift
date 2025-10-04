@@ -330,10 +330,8 @@ struct EnergyPlanningView: View {
             batchEndHour = nil
             selectedHourForButtons = hour
             showingEnergyButtons = true
-            // 只有在没有显示指针时才重新设置指针，避免覆盖用户调整的精确时间
-            if !showingPointers {
-                setupPointers(startHour: hour, endHour: hour + 1)
-            }
+            // 从多块模式切换到单块模式时，强制重新设置指针位置
+            setupPointers(startHour: hour, endHour: hour + 1)
         } else {
             // 初始状态，第一次选择 - 单个块
             selectedHour = hour
