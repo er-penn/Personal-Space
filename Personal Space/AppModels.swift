@@ -165,13 +165,6 @@ class UserState: ObservableObject {
             return plan.energyLevel
         }
         
-        // 4. 如果没有精确匹配，查找该小时内的任意规划
-        if let plan = energyPlans.first(where: { 
-            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour 
-        }) {
-            return plan.energyLevel
-        }
-        
         // 5. 默认状态
         if showUnplanned {
             return .unplanned
