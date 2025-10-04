@@ -361,6 +361,7 @@ struct EnergyPlanningView: View {
     // 获取右指针的最小允许时间
     private func getMinAllowedEndTime() -> (hour: Int, minute: Int) {
         guard let leftHour = leftPointerHour, let leftMinute = leftPointerMinute else {
+            print("getMinAllowedEndTime: 无左指针，返回7:00")
             return (7, 0)
         }
         
@@ -369,10 +370,15 @@ struct EnergyPlanningView: View {
         let rightMinHour = rightMinMinute >= 60 ? leftHour + 1 : leftHour
         let rightMinMinuteAdjusted = rightMinMinute >= 60 ? rightMinMinute - 60 : rightMinMinute
         
+        print("getMinAllowedEndTime: 左指针=\(leftHour):\(leftMinute)")
+        print("getMinAllowedEndTime: 左指针+5分钟=\(rightMinHour):\(rightMinMinuteAdjusted)")
+        
         // 比较7:00和左指针+5分钟，取较大的一方
         if rightMinHour > 7 || (rightMinHour == 7 && rightMinMinuteAdjusted > 0) {
+            print("getMinAllowedEndTime: 返回左指针+5分钟=\(rightMinHour):\(rightMinMinuteAdjusted)")
             return (rightMinHour, rightMinMinuteAdjusted)
         } else {
+            print("getMinAllowedEndTime: 返回7:00")
             return (7, 0)
         }
     }
@@ -447,6 +453,13 @@ struct EnergyPlanningView: View {
         let maxStartTime = getMaxAllowedStartTime()
         let minEndTime = getMinAllowedEndTime()
         let maxEndTime = getMaxAllowedEndTime()
+        
+        print("=== createTimePickerView ===")
+        print("isLeftPointerSelected: \(isLeftPointerSelected)")
+        print("minStartTime: \(minStartTime.0):\(minStartTime.1)")
+        print("maxStartTime: \(maxStartTime.0):\(maxStartTime.1)")
+        print("minEndTime: \(minEndTime.0):\(minEndTime.1)")
+        print("maxEndTime: \(maxEndTime.0):\(maxEndTime.1)")
         
         return TimePickerView(
             selectedHour: $timePickerHour,
@@ -634,7 +647,7 @@ struct EnergyPlanningView: View {
         }
         .onTapGesture {
             // 点击背景区域取消操作
-            if showingEnergyButtons {
+            if showingEnergyButtons && !showingTimePicker {
                 showingEnergyButtons = false
                 batchStartHour = nil
                 batchEndHour = nil
@@ -1112,6 +1125,7 @@ struct EnergyTimelineView: View {
     // 获取右指针的最小允许时间
     private func getMinAllowedEndTime() -> (hour: Int, minute: Int) {
         guard let leftHour = leftPointerHour, let leftMinute = leftPointerMinute else {
+            print("getMinAllowedEndTime: 无左指针，返回7:00")
             return (7, 0)
         }
         
@@ -1120,10 +1134,15 @@ struct EnergyTimelineView: View {
         let rightMinHour = rightMinMinute >= 60 ? leftHour + 1 : leftHour
         let rightMinMinuteAdjusted = rightMinMinute >= 60 ? rightMinMinute - 60 : rightMinMinute
         
+        print("getMinAllowedEndTime: 左指针=\(leftHour):\(leftMinute)")
+        print("getMinAllowedEndTime: 左指针+5分钟=\(rightMinHour):\(rightMinMinuteAdjusted)")
+        
         // 比较7:00和左指针+5分钟，取较大的一方
         if rightMinHour > 7 || (rightMinHour == 7 && rightMinMinuteAdjusted > 0) {
+            print("getMinAllowedEndTime: 返回左指针+5分钟=\(rightMinHour):\(rightMinMinuteAdjusted)")
             return (rightMinHour, rightMinMinuteAdjusted)
         } else {
+            print("getMinAllowedEndTime: 返回7:00")
             return (7, 0)
         }
     }
