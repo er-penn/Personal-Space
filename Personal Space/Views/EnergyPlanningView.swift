@@ -350,7 +350,7 @@ struct EnergyPlanningView: View {
     // 获取右指针的最小允许时间
     private func getMinAllowedEndTime() -> (hour: Int, minute: Int) {
         guard let leftHour = leftPointerHour, let leftMinute = leftPointerMinute else {
-            return (6, 0)
+            return (7, 0)
         }
         
         // 右指针的左极限为左指针的时间+5分钟
@@ -1080,7 +1080,7 @@ struct EnergyTimelineView: View {
     // 获取右指针的最小允许时间
     private func getMinAllowedEndTime() -> (hour: Int, minute: Int) {
         guard let leftHour = leftPointerHour, let leftMinute = leftPointerMinute else {
-            return (6, 0)
+            return (7, 0)
         }
         
         // 右指针的左极限为左指针的时间+5分钟
