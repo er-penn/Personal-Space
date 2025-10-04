@@ -1792,10 +1792,15 @@ struct FloatingEnergyButtons: View {
                     print("=== 电池按钮被点击 ===")
                     print("点击的能量级别: \(level)")
                     print("当前状态: showingPointers=\(showingPointers)")
-                    print("当前状态: leftPointerHour=\(leftPointerHour ?? -1), rightPointerHour=\(rightPointerHour ?? -1)")
+                    print("当前状态: leftPointerHour=\(leftPointerHour ?? -1), leftPointerMinute=\(leftPointerMinute ?? -1)")
+                    print("当前状态: rightPointerHour=\(rightPointerHour ?? -1), rightPointerMinute=\(rightPointerMinute ?? -1)")
+                    print("当前状态: hour=\(hour)")
+                    print("即将调用saveMinuteLevelPlan")
                     
                     selectedEnergyLevel = level
                     saveMinuteLevelPlan(energyLevel: level)
+                    
+                    print("saveMinuteLevelPlan调用完成")
                     clearSelectionState()
                     showingButtons = false
                 }) {
