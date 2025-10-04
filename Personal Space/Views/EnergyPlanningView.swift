@@ -2465,7 +2465,7 @@ struct EnergyTimelineOverlay: View {
                         showingPointers: $showingPointers
                     )
                     .allowsHitTesting(true)
-                    .position(x: 220, y: 160) // 
+                    .position(x: 185, y: 90) //
                     .zIndex(1000) // 确保在最上层
                 } else {
                     // 没有指针时，使用BatchEnergyButtons
