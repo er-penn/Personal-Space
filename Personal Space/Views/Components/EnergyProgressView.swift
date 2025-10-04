@@ -123,6 +123,13 @@ struct EnergyProgressView: View {
         return Calendar.current.component(.hour, from: currentTime)
     }
     
+    private func getCurrentTime() -> (hour: Int, minute: Int) {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: currentTime)
+        let minute = calendar.component(.minute, from: currentTime)
+        return (hour, minute)
+    }
+    
     private func getCurrentTimeOffset(width: CGFloat) -> CGFloat {
         let currentTime = getCurrentTime()
         let hourIndex = max(0, min(currentTime.hour - 7, hours.count - 1))
