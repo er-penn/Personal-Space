@@ -35,6 +35,26 @@ enum EnergyLevel: String, CaseIterable, Codable {
     }
 }
 
+// MARK: - 临时状态类型枚举
+enum TemporaryStateType: String, CaseIterable, Codable {
+    case fastCharge = "快充模式"
+    case lowPower = "低电量模式"
+    
+    var energyLevel: EnergyLevel {
+        switch self {
+        case .fastCharge: return .high
+        case .lowPower: return .low
+        }
+    }
+    
+    var buttonColor: Color {
+        switch self {
+        case .fastCharge: return .green
+        case .lowPower: return .red
+        }
+    }
+}
+
 // MARK: - 用户状态模型
 class UserState: ObservableObject {
     @Published var energyLevel: EnergyLevel = .high
@@ -43,6 +63,15 @@ class UserState: ObservableObject {
     @Published var moodRecords: [MoodRecord] = [] // 心情记录
     @Published var energyPlans: [EnergyPlan] = [] // 能量预规划
     @Published var actualEnergyRecords: [ActualEnergyRecord] = [] // 实际能量记录
+    
+    // MARK: - 临时状态相关属性
+    @Published var isTemporaryStateActive: Bool = false // 是否处于临时状态
+    @Published var temporaryStateType: TemporaryStateType? = nil // 临时状态类型
+    @Published var originalEnergyLevel: EnergyLevel? = nil // 原始能量状态（用于恢复）
+    @Published var temporaryStateStartTime: Date? = nil // 临时状态开始时间
+    @Published var temporaryStateDuration: TimeInterval = 0 // 临时状态持续时间（秒）
+    @Published var temporaryStateEndTime: Date? = nil // 临时状态结束时间
+    @Published var isShowingTemporaryStateOverlay: Bool = false // 是否显示临时状态遮罩
     
     init() {
         // 添加一些示例能量规划数据
@@ -107,6 +136,10 @@ class UserState: ObservableObject {
     }
     
     var displayEnergyLevel: EnergyLevel {
+        // 优先级：临时状态 > 能量快充 > 专注模式 > 基础状态
+        if isTemporaryStateActive, let tempType = temporaryStateType {
+            return tempType.energyLevel
+        }
         return isEnergyBoostActive ? .high : energyLevel
     }
     
@@ -115,19 +148,30 @@ class UserState: ObservableObject {
     func getFinalEnergyLevel(for date: Date, hour: Int, minute: Int, showUnplanned: Bool = true) -> EnergyLevel {
         let calendar = Calendar.current
         let targetDate = calendar.startOfDay(for: date)
+        let currentTime = Date()
+        let targetTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) ?? date
         
         // 优先级从高到低检查
-        // 1. 专注模式 (最高优先级)
+        // 1. 临时状态 (最高优先级) - 只对当前时间到结束时间有效
+        if isTemporaryStateActive, 
+           let tempType = temporaryStateType,
+           let startTime = temporaryStateStartTime,
+           let endTime = temporaryStateEndTime,
+           targetTime >= startTime && targetTime <= endTime {
+            return tempType.energyLevel
+        }
+        
+        // 2. 专注模式 (高优先级)
         if isFocusModeOn {
             return .high
         }
         
-        // 2. 能量快充 (高优先级)
+        // 3. 能量快充 (高优先级)
         if isEnergyBoostActive {
             return .high
         }
         
-        // 3. 能量预规划 (中优先级) - 精确匹配分钟
+        // 4. 能量预规划 (中优先级) - 精确匹配分钟
         if let plan = energyPlans.first(where: { 
             calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour && $0.minute == minute
         }) {
@@ -253,6 +297,88 @@ class UserState: ObservableObject {
             )
             actualEnergyRecords.append(record)
         }
+    }
+    
+    // MARK: - 临时状态相关方法
+    
+    /// 启动临时状态
+    /// - Parameters:
+    ///   - type: 临时状态类型（快充模式或低电量模式）
+    ///   - duration: 持续时间（秒）
+    func startTemporaryState(type: TemporaryStateType, duration: TimeInterval) {
+        let currentTime = Date()
+        let endTime = currentTime.addingTimeInterval(duration)
+        
+        // 保存原始状态
+        originalEnergyLevel = energyLevel
+        
+        // 设置临时状态
+        isTemporaryStateActive = true
+        temporaryStateType = type
+        temporaryStateStartTime = currentTime
+        temporaryStateDuration = duration
+        temporaryStateEndTime = endTime
+        isShowingTemporaryStateOverlay = true
+        
+        print("启动临时状态: \(type.rawValue), 持续时间: \(duration/60)分钟, 结束时间: \(endTime)")
+    }
+    
+    /// 结束临时状态，恢复到原始状态
+    func endTemporaryState() {
+        guard isTemporaryStateActive else { return }
+        
+        print("结束临时状态: \(temporaryStateType?.rawValue ?? "未知")")
+        
+        // 恢复原始状态
+        if let original = originalEnergyLevel {
+            energyLevel = original
+        }
+        
+        // 清除临时状态
+        isTemporaryStateActive = false
+        temporaryStateType = nil
+        originalEnergyLevel = nil
+        temporaryStateStartTime = nil
+        temporaryStateDuration = 0
+        temporaryStateEndTime = nil
+        isShowingTemporaryStateOverlay = false
+    }
+    
+    /// 检查临时状态是否已过期，如果过期则自动结束
+    func checkTemporaryStateExpiration() {
+        guard isTemporaryStateActive, let endTime = temporaryStateEndTime else { return }
+        
+        if Date() >= endTime {
+            print("临时状态已过期，自动结束")
+            endTemporaryState()
+        }
+    }
+    
+    /// 获取今天剩余时间（秒）
+    func getTodayRemainingTime() -> TimeInterval {
+        let calendar = Calendar.current
+        let now = Date()
+        let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
+        return max(0, endOfDay.timeIntervalSince(now))
+    }
+    
+    /// 获取今天剩余时间（向上取整到15分钟）
+    func getTodayRemainingTimeRoundedTo15Minutes() -> TimeInterval {
+        let remaining = getTodayRemainingTime()
+        let minutes = Int(remaining / 60)
+        let roundedMinutes = ((minutes + 14) / 15) * 15 // 向上取整到15分钟
+        return TimeInterval(roundedMinutes * 60)
+    }
+    
+    /// 获取临时状态剩余时间（秒）
+    func getTemporaryStateRemainingTime() -> TimeInterval {
+        guard isTemporaryStateActive, let endTime = temporaryStateEndTime else { return 0 }
+        return max(0, endTime.timeIntervalSince(Date()))
+    }
+    
+    /// 获取临时状态剩余时间（分钟）
+    func getTemporaryStateRemainingMinutes() -> Int {
+        return Int(getTemporaryStateRemainingTime() / 60)
     }
 }
 
