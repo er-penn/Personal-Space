@@ -2267,22 +2267,43 @@ extension FloatingEnergyButtons {
         print("检查条件: leftPointerHour=\(leftPointerHour ?? -1), leftPointerMinute=\(leftPointerMinute ?? -1)")
         print("检查条件: rightPointerHour=\(rightPointerHour ?? -1), rightPointerMinute=\(rightPointerMinute ?? -1)")
         
-        if showingPointers, let startHour = batchStartHour, let endHour = batchEndHour {
+        if showingPointers, let leftHour = leftPointerHour, let leftMinute = leftPointerMinute,
+           let rightHour = rightPointerHour, let rightMinute = rightPointerMinute {
             print("进入分钟级保存分支")
-            print("使用batchStartHour=\(startHour), batchEndHour=\(endHour)")
+            print("使用指针位置: 左指针=\(leftHour):\(leftMinute), 右指针=\(rightHour):\(rightMinute)")
             
-            // 计算实际选择的小时数
-            let actualEndHour = endHour - 1  // 实际结束小时
-            print("实际影响范围: \(startHour):00 - \(actualEndHour):59")
+            // 计算实际影响范围
+            let startHour = leftHour
+            let startMinute = leftMinute
+            let endHour = rightHour
+            let endMinute = rightMinute
+            
+            print("实际影响范围: \(startHour):\(startMinute) - \(endHour):\(endMinute)")
             
             print("开始移除旧规划...")
-            print("移除条件: 日期=\(targetDate), 左边界=\(startHour):00, 右边界=\(actualEndHour):59")
+            print("移除条件: 日期=\(targetDate), 左边界=\(startHour):\(startMinute), 右边界=\(endHour):\(endMinute)")
             
             let removedCount = userState.energyPlans.count
             // 移除指定时间范围内的旧规划
             userState.energyPlans.removeAll { plan in
-                let shouldRemove = calendar.isDate(plan.date, inSameDayAs: targetDate) && 
-                plan.hour >= startHour && plan.hour <= actualEndHour
+                let isSameDate = calendar.isDate(plan.date, inSameDayAs: targetDate)
+                let isInRange: Bool
+                
+                if startHour == endHour {
+                    // 同一小时内
+                    isInRange = plan.hour == startHour && plan.minute >= startMinute && plan.minute < endMinute
+                } else {
+                    // 跨小时
+                    if plan.hour == startHour {
+                        isInRange = plan.minute >= startMinute
+                    } else if plan.hour == endHour {
+                        isInRange = plan.minute < endMinute
+                    } else {
+                        isInRange = plan.hour > startHour && plan.hour < endHour
+                    }
+                }
+                
+                let shouldRemove = isSameDate && isInRange
                 
                 if shouldRemove {
                     print("移除规划: \(plan.hour):\(plan.minute) - \(plan.energyLevel)")
@@ -2294,19 +2315,14 @@ extension FloatingEnergyButtons {
             // 如果不是取消规划，则添加分钟级规划
             if energyLevel != .unplanned {
                 print("开始创建分钟级规划...")
-                print("循环条件: currentHour <= \(actualEndHour)")
+                print("创建范围: \(startHour):\(startMinute) - \(endHour):\(endMinute)")
                 
                 // 按分钟级创建规划
                 var currentHour = startHour
-                var currentMinute = 0
+                var currentMinute = startMinute
                 var planCount = 0
                 
-                while currentHour <= actualEndHour {
-                    // 检查是否超出范围
-                    if currentHour > actualEndHour {
-                        break
-                    }
-                    
+                while currentHour < endHour || (currentHour == endHour && currentMinute < endMinute) {
                     let newPlan = EnergyPlan(
                         date: targetDate,
                         hour: currentHour,
@@ -2326,10 +2342,6 @@ extension FloatingEnergyButtons {
                         currentHour += 1
                         print("分钟重置，小时增加到: \(currentHour)")
                     }
-                    
-                    // 检查循环条件
-                    print("循环条件检查: currentHour=\(currentHour), actualEndHour=\(actualEndHour)")
-                    print("继续循环: \(currentHour <= actualEndHour)")
                 }
                 
                 print("总共创建了 \(planCount) 个规划")
