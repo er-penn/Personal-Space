@@ -133,12 +133,20 @@ struct EnergyProgressView: View {
     private func getCurrentTimeOffset(width: CGFloat) -> CGFloat {
         let currentTime = getCurrentTime()
         let hourIndex = max(0, min(currentTime.hour - 7, hours.count - 1))
-        let segmentWidth = width / CGFloat(hours.count)
+        let blockWidth = width / CGFloat(hours.count)
+        let spacing: CGFloat = 1 // 块之间的间距，与getTimeLabelPosition保持一致
+        
+        // 计算指针应该位于的时间块边界位置
+        // 考虑块之间的间距
+        let blockStartOffset = blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
         
         // 计算在当前小时内的分钟偏移
-        let minuteOffset = CGFloat(currentTime.minute) / 60.0 * segmentWidth
+        let minuteOffset = (CGFloat(currentTime.minute) / 60.0) * blockWidth
         
-        return segmentWidth * CGFloat(hourIndex) + minuteOffset
+        let totalOffset = blockStartOffset + minuteOffset
+        
+        // 确保指针精确对齐到像素边界
+        return round(totalOffset)
     }
     
     // 计算时间标签的位置（左边缘对齐到对应时间块）
