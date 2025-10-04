@@ -364,12 +364,16 @@ struct EnergyPlanningView: View {
             return (7, 0)
         }
         
-        // 右指针的左极限为左指针的时间+5分钟
+        // 右指针的左极限为max(7:00, 左指针+5分钟)
         let rightMinMinute = leftMinute + 5
-        if rightMinMinute >= 60 {
-            return (leftHour + 1, rightMinMinute - 60)
+        let rightMinHour = rightMinMinute >= 60 ? leftHour + 1 : leftHour
+        let rightMinMinuteAdjusted = rightMinMinute >= 60 ? rightMinMinute - 60 : rightMinMinute
+        
+        // 比较7:00和左指针+5分钟，取较大的一方
+        if rightMinHour > 7 || (rightMinHour == 7 && rightMinMinuteAdjusted > 0) {
+            return (rightMinHour, rightMinMinuteAdjusted)
         } else {
-            return (leftHour, rightMinMinute)
+            return (7, 0)
         }
     }
     
@@ -897,9 +901,26 @@ struct EnergyTimelineView: View {
             } else if let hour = selectedHour {
                 // 单个时间段选择提示
                 HStack {
-                    Text("已选择：\(hour):00-\(hour+1):00")
-                        .font(.system(size: AppTheme.FontSize.caption))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    if showingPointers, let leftHour = leftPointerHour, let leftMinute = leftPointerMinute,
+                       let rightHour = rightPointerHour, let rightMinute = rightPointerMinute {
+                        // 显示指针的精确位置
+                        Text("已选择：\(String(format: "%02d:%02d", leftHour, leftMinute)) - \(String(format: "%02d:%02d", rightHour, rightMinute))")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .onAppear {
+                                print("单块模式显示指针精确位置: \(leftHour):\(leftMinute) - \(rightHour):\(rightMinute)")
+                            }
+                    } else {
+                        // 显示小时级选择
+                        Text("已选择：\(hour):00-\(hour+1):00")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .onAppear {
+                                print("单块模式显示小时级选择: \(hour):00-\(hour+1):00")
+                                print("单块模式showingPointers: \(showingPointers)")
+                                print("单块模式指针: left=\(leftPointerHour ?? -1):\(leftPointerMinute ?? -1), right=\(rightPointerHour ?? -1):\(rightPointerMinute ?? -1)")
+                            }
+                    }
                     
                     Spacer()
                     
@@ -1094,12 +1115,16 @@ struct EnergyTimelineView: View {
             return (7, 0)
         }
         
-        // 右指针的左极限为左指针的时间+5分钟
+        // 右指针的左极限为max(7:00, 左指针+5分钟)
         let rightMinMinute = leftMinute + 5
-        if rightMinMinute >= 60 {
-            return (leftHour + 1, rightMinMinute - 60)
+        let rightMinHour = rightMinMinute >= 60 ? leftHour + 1 : leftHour
+        let rightMinMinuteAdjusted = rightMinMinute >= 60 ? rightMinMinute - 60 : rightMinMinute
+        
+        // 比较7:00和左指针+5分钟，取较大的一方
+        if rightMinHour > 7 || (rightMinHour == 7 && rightMinMinuteAdjusted > 0) {
+            return (rightMinHour, rightMinMinuteAdjusted)
         } else {
-            return (leftHour, rightMinMinute)
+            return (7, 0)
         }
     }
     
