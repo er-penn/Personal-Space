@@ -225,7 +225,12 @@ struct EnergyPlanningView: View {
             timePickerHour = rightPointerHour ?? 0
             timePickerMinute = rightPointerMinute ?? 0
         }
-        showingTimePicker = true
+        
+        // 使用DispatchQueue确保状态更新完成后再显示时间选择器
+        DispatchQueue.main.async {
+            print("准备显示时间选择器: isLeftPointerSelected=\(isLeftPointerSelected)")
+            self.showingTimePicker = true
+        }
     }
     
     private func onTimePickerConfirm(hour: Int, minute: Int) {
@@ -449,6 +454,7 @@ struct EnergyPlanningView: View {
     
     // 方法：创建时间选择器视图
     private func createTimePickerView() -> some View {
+        // 强制重新计算限制时间，确保获取最新状态
         let minStartTime = getMinAllowedStartTime()
         let maxStartTime = getMaxAllowedStartTime()
         let minEndTime = getMinAllowedEndTime()
@@ -456,19 +462,28 @@ struct EnergyPlanningView: View {
         
         print("=== createTimePickerView ===")
         print("isLeftPointerSelected: \(isLeftPointerSelected)")
+        print("leftPointer: \(leftPointerHour ?? -1):\(leftPointerMinute ?? -1)")
+        print("rightPointer: \(rightPointerHour ?? -1):\(rightPointerMinute ?? -1)")
         print("minStartTime: \(minStartTime.0):\(minStartTime.1)")
         print("maxStartTime: \(maxStartTime.0):\(maxStartTime.1)")
         print("minEndTime: \(minEndTime.0):\(minEndTime.1)")
         print("maxEndTime: \(maxEndTime.0):\(maxEndTime.1)")
         
+        let finalMinHour = isLeftPointerSelected ? minStartTime.0 : minEndTime.0
+        let finalMinMinute = isLeftPointerSelected ? minStartTime.1 : minEndTime.1
+        let finalMaxHour = isLeftPointerSelected ? maxStartTime.0 : maxEndTime.0
+        let finalMaxMinute = isLeftPointerSelected ? maxStartTime.1 : maxEndTime.1
+        
+        print("最终限制: min=\(finalMinHour):\(finalMinMinute), max=\(finalMaxHour):\(finalMaxMinute)")
+        
         return TimePickerView(
             selectedHour: $timePickerHour,
             selectedMinute: $timePickerMinute,
             isLeft: $isLeftPointerSelected,
-            minHour: isLeftPointerSelected ? minStartTime.0 : minEndTime.0,
-            minMinute: isLeftPointerSelected ? minStartTime.1 : minEndTime.1,
-            maxHour: isLeftPointerSelected ? maxStartTime.0 : maxEndTime.0,
-            maxMinute: isLeftPointerSelected ? maxStartTime.1 : maxEndTime.1,
+            minHour: finalMinHour,
+            minMinute: finalMinMinute,
+            maxHour: finalMaxHour,
+            maxMinute: finalMaxMinute,
             onConfirm: onTimePickerConfirm,
             onCancel: {
                 showingTimePicker = false
