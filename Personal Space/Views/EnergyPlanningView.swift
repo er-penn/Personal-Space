@@ -232,6 +232,8 @@ struct EnergyPlanningView: View {
         print("=== onTimePickerConfirm ===")
         print("isLeftPointerSelected: \(isLeftPointerSelected)")
         print("设置指针: \(hour):\(minute)")
+        print("更新前状态: showingPointers=\(showingPointers)")
+        print("更新前指针: left=\(leftPointerHour ?? -1):\(leftPointerMinute ?? -1), right=\(rightPointerHour ?? -1):\(rightPointerMinute ?? -1)")
         
         if isLeftPointerSelected {
             leftPointerHour = hour
@@ -242,6 +244,12 @@ struct EnergyPlanningView: View {
             rightPointerMinute = minute
             print("右指针更新为: \(hour):\(minute)")
         }
+        
+        // 确保showingPointers保持为true
+        showingPointers = true
+        print("更新后状态: showingPointers=\(showingPointers)")
+        print("更新后指针: left=\(leftPointerHour ?? -1):\(leftPointerMinute ?? -1), right=\(rightPointerHour ?? -1):\(rightPointerMinute ?? -1)")
+        
         showingTimePicker = false
     }
     
