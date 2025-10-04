@@ -6,6 +6,28 @@
 //
 
 import SwiftUI
+import Combine
+
+// MARK: - 圆角扩展
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
+    }
+}
 
 struct MySpaceView: View {
     @EnvironmentObject var userState: UserState
@@ -19,6 +41,12 @@ struct MySpaceView: View {
     @State private var highlightedDirection: String? = nil
     @State private var hasSwitchedFromUnplanned = false
     // 移除 showingMomentDetail 状态，改用 NavigationLink
+    
+    // MARK: - 临时状态相关状态变量
+    @State private var showingTimePicker = false
+    @State private var selectedTemporaryStateType: TemporaryStateType? = nil
+    @State private var selectedDuration: TimeInterval = 7200 // 默认2小时
+    @State private var showingTemporaryStateOverlay = false
     
     init() {
         // 每天第一次打开app时重置状态
@@ -80,8 +108,69 @@ struct MySpaceView: View {
                     .padding(.trailing, AppTheme.Spacing.xl)
                     .padding(.bottom, AppTheme.Spacing.xl)
                 }
+                
+                // 时间选择器 - 底部弹出
+                if showingTimePicker, let stateType = selectedTemporaryStateType {
+                    ZStack {
+                        // 半透明背景遮罩
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea(.all)
+                            .onTapGesture {
+                                showingTimePicker = false
+                                selectedTemporaryStateType = nil
+                            }
+                        
+                        // 弹窗内容 - 从底部弹出，露出"已选择"部分
+                        VStack {
+                            Spacer()
+                            
+                            TemporaryStateTimePicker(
+                                selectedDuration: $selectedDuration,
+                                isPresented: $showingTimePicker,
+                                maxDuration: userState.getTodayRemainingTimeRoundedTo15Minutes(),
+                                onConfirm: { duration in
+                                    // 启动临时状态
+                                    userState.startTemporaryState(type: stateType, duration: duration)
+                                    showingTemporaryStateOverlay = true
+                                    showingTimePicker = false
+                                },
+                                onCancel: {
+                                    showingTimePicker = false
+                                    selectedTemporaryStateType = nil
+                                }
+                            )
+                            .background(Color(.systemBackground))
+                            .cornerRadius(16, corners: [.topLeft, .topRight])
+                            .shadow(radius: 10)
+                            .padding(.bottom, 0) // 移除底部间距，让弹窗完全贴底
+                        }
+                        .ignoresSafeArea(.all) // 确保覆盖所有安全区域
+                        .zIndex(1000) // 确保在最上层
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .animation(.easeInOut(duration: 0.3), value: showingTimePicker)
+                    }
+                }
+                
+                // 临时状态遮罩
+                if showingTemporaryStateOverlay && userState.isTemporaryStateActive {
+                    TemporaryStateOverlay(
+                        stateType: userState.temporaryStateType ?? .fastCharge,
+                        remainingTime: userState.getTemporaryStateRemainingTime(),
+                        onEnd: {
+                            userState.endTemporaryState()
+                            showingTemporaryStateOverlay = false
+                        }
+                    )
+                }
             }
             .navigationBarHidden(true)
+            .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
+                // 每秒检查临时状态是否过期
+                userState.checkTemporaryStateExpiration()
+                if !userState.isTemporaryStateActive {
+                    showingTemporaryStateOverlay = false
+                }
+            }
         }
     }
     
@@ -285,80 +374,44 @@ struct MySpaceView: View {
                         // 第二行：快充模式 + 低电量模式
                         HStack(spacing: AppTheme.Spacing.lg) {
                             // 快充模式按钮
-                            VStack(spacing: 4) {
-                                Button(action: {
+                            TemporaryStateButton(
+                                stateType: .fastCharge,
+                                isActive: userState.energyLevel == .high,
+                                onShortPress: {
                                     withAnimation(.easeInOut(duration: 0.3)) {
                                         userState.energyLevel = .high
                                         userState.isEnergyBoostActive = false
                                         hasSwitchedFromUnplanned = true
                                     }
-                                }) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(
-                                                userState.energyLevel == .high 
-                                                    ? Color.green.opacity(0.1) 
-                                                    : Color.green.opacity(0.15)
-                                            )
-                                            .frame(width: 50, height: 50)
-                                        
-                                        Image(systemName: "bolt.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(
-                                                userState.energyLevel == .high 
-                                                    ? .green.opacity(0.3) 
-                                                    : .green
-                                            )
-                                    }
+                                },
+                                onLongPress: {
+                                    print("快充按钮长按被触发")
+                                    selectedTemporaryStateType = .fastCharge
+                                    selectedDuration = min(7200, userState.getTodayRemainingTimeRoundedTo15Minutes())
+                                    showingTimePicker = true
+                                    print("showingTimePicker 设置为: \(showingTimePicker)")
                                 }
-                                .buttonStyle(PlainButtonStyle())
-                                .disabled(userState.energyLevel == .high)
-                                Text("快充")
-                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                    .foregroundColor(
-                                        userState.energyLevel == .high 
-                                            ? AppTheme.Colors.textSecondary.opacity(0.3) 
-                                            : AppTheme.Colors.textSecondary
-                                    )
-                            }
+                            )
                             
                             // 低电量模式按钮
-                            VStack(spacing: 4) {
-                                Button(action: {
+                            TemporaryStateButton(
+                                stateType: .lowPower,
+                                isActive: userState.energyLevel == .low,
+                                onShortPress: {
                                     withAnimation(.easeInOut(duration: 0.3)) {
                                         userState.energyLevel = .low
                                         userState.isEnergyBoostActive = false
                                         hasSwitchedFromUnplanned = true
                                     }
-                                }) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(
-                                                userState.energyLevel == .low 
-                                                    ? Color.red.opacity(0.1) 
-                                                    : Color.red.opacity(0.15)
-                                            )
-                                            .frame(width: 50, height: 50)
-                                        
-                                        Image(systemName: "battery.25")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(
-                                                userState.energyLevel == .low 
-                                                    ? .red.opacity(0.3) 
-                                                    : .red
-                                            )
-                                    }
+                                },
+                                onLongPress: {
+                                    print("低电量按钮长按被触发")
+                                    selectedTemporaryStateType = .lowPower
+                                    selectedDuration = min(7200, userState.getTodayRemainingTimeRoundedTo15Minutes())
+                                    showingTimePicker = true
+                                    print("showingTimePicker 设置为: \(showingTimePicker)")
                                 }
-                                .buttonStyle(PlainButtonStyle())
-                                .disabled(userState.energyLevel == .low)
-                                Text("低电量模式")
-                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                    .foregroundColor(
-                                        userState.energyLevel == .low 
-                                            ? AppTheme.Colors.textSecondary.opacity(0.3) 
-                                            : AppTheme.Colors.textSecondary
-                                    )
-                            }
+                            )
                         }
                     }
                 }

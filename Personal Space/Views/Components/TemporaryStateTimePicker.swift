@@ -31,8 +31,7 @@ struct TemporaryStateTimePicker: View {
                 Spacer()
                 
                 Text("设置持续时间")
-                    .font(.headline)
-                    .bold()
+                    .font(.system(size: 17, weight: .semibold))
                 
                 Spacer()
                 
@@ -42,20 +41,19 @@ struct TemporaryStateTimePicker: View {
                     isPresented = false
                 }
                 .foregroundColor(.blue)
-                .bold()
+                .font(.system(size: 17, weight: .semibold))
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
-            .background(Color(.systemBackground))
             
             Divider()
             
             // 时间选择器
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 Text("选择持续时间")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                    .padding(.top, 20)
+                    .padding(.top, 16)
                 
                 // 时间选择轮盘
                 Picker("持续时间", selection: $selectedMinutes) {
@@ -65,34 +63,40 @@ struct TemporaryStateTimePicker: View {
                     }
                 }
                 .pickerStyle(WheelPickerStyle())
-                .frame(height: 200)
+                .frame(height: 120) // 进一步减少高度
                 .onChange(of: selectedMinutes) { newValue in
                     selectedDuration = TimeInterval(newValue * 60)
                 }
                 
-                // 当前选择显示
-                VStack(spacing: 8) {
-                    Text("已选择")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                // 底部区域 - "已选择"部分显示在导航栏上方
+                VStack(spacing: 0) {
+                    // 空白区域，让"已选择"部分显示在导航栏上方
+                    Spacer()
+                        .frame(height: 0)
                     
-                    Text(formatTime(selectedMinutes))
-                        .font(.title2)
-                        .bold()
-                        .foregroundColor(.primary)
+                    // "已选择"部分 - 显示在导航栏上方，一行显示
+                    HStack(spacing: 4) {
+                        Text("已选择")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text(formatTime(selectedMinutes))
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.primary)
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    
+                    // 底部安全区域 - 确保完全覆盖导航栏
+                    Spacer()
+                        .frame(height: 100) // 减少高度，为"已选择"部分留出空间
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 20)
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
-                
-                Spacer()
             }
             .padding(.horizontal, 20)
         }
         .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(radius: 10)
         .onAppear {
             // 初始化选择值，限制在最大时间内
             let maxMinutes = Int(maxDuration / 60)
