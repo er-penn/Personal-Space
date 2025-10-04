@@ -2267,6 +2267,10 @@ extension FloatingEnergyButtons {
         print("检查条件: leftPointerHour=\(leftPointerHour ?? -1), leftPointerMinute=\(leftPointerMinute ?? -1)")
         print("检查条件: rightPointerHour=\(rightPointerHour ?? -1), rightPointerMinute=\(rightPointerMinute ?? -1)")
         
+        let hasLeftPointer = leftPointerHour != nil && leftPointerMinute != nil
+        let hasRightPointer = rightPointerHour != nil && rightPointerMinute != nil
+        print("指针检查: hasLeftPointer=\(hasLeftPointer), hasRightPointer=\(hasRightPointer)")
+        
         if showingPointers, let leftHour = leftPointerHour, let leftMinute = leftPointerMinute,
            let rightHour = rightPointerHour, let rightMinute = rightPointerMinute {
             print("进入分钟级保存分支")
@@ -2349,6 +2353,7 @@ extension FloatingEnergyButtons {
         } else {
             // 没有指针，使用原来的小时级规划
             print("进入小时级保存分支")
+            print("原因: showingPointers=\(showingPointers), hasLeftPointer=\(hasLeftPointer), hasRightPointer=\(hasRightPointer)")
             print("调用saveEnergyPlan: hour=\(hour), energyLevel=\(energyLevel)")
             saveEnergyPlan(hour: hour, energyLevel: energyLevel)
         }
