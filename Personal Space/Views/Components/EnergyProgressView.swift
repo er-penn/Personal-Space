@@ -124,10 +124,14 @@ struct EnergyProgressView: View {
     }
     
     private func getCurrentTimeOffset(width: CGFloat) -> CGFloat {
-        let currentHour = getCurrentHour()
-        let hourIndex = max(0, min(currentHour - 7, hours.count - 1))
+        let currentTime = getCurrentTime()
+        let hourIndex = max(0, min(currentTime.hour - 7, hours.count - 1))
         let segmentWidth = width / CGFloat(hours.count)
-        return segmentWidth * CGFloat(hourIndex) + segmentWidth / 2
+        
+        // 计算在当前小时内的分钟偏移
+        let minuteOffset = CGFloat(currentTime.minute) / 60.0 * segmentWidth
+        
+        return segmentWidth * CGFloat(hourIndex) + minuteOffset
     }
     
     // 计算时间标签的位置（左边缘对齐到对应时间块）
