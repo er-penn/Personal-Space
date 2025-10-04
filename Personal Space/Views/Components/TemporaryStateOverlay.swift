@@ -32,7 +32,7 @@ struct TemporaryStateOverlay: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(stateType.rawValue)
                                 .font(.subheadline)
-                                .fontWeight(.semibold)
+                                .bold()
                                 .foregroundColor(.primary)
                             
                             Text(formatRemainingTime(remainingTime))

@@ -32,7 +32,7 @@ struct TemporaryStateTimePicker: View {
                 
                 Text("设置持续时间")
                     .font(.headline)
-                    .fontWeight(.semibold)
+                    .bold()
                 
                 Spacer()
                 
@@ -42,7 +42,7 @@ struct TemporaryStateTimePicker: View {
                     isPresented = false
                 }
                 .foregroundColor(.blue)
-                .fontWeight(.semibold)
+                .bold()
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
@@ -78,7 +78,7 @@ struct TemporaryStateTimePicker: View {
                     
                     Text(formatTime(selectedMinutes))
                         .font(.title2)
-                        .fontWeight(.bold)
+                        .bold()
                         .foregroundColor(.primary)
                 }
                 .padding(.vertical, 10)
