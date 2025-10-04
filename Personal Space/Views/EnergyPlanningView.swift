@@ -2445,27 +2445,51 @@ struct EnergyTimelineOverlay: View {
                 .allowsHitTesting(true)
                 .zIndex(1000) // 确保在最上层
             } else if let start = batchStartHour, let end = batchEndHour, !showingEnergyButtons {
-                // 悬浮显示批量按钮，不占用空间
-                BatchEnergyButtons(
-                    startHour: start,
-                    endHour: end,
-                    selectedEnergyLevel: $selectedEnergyLevel,
-                    selectedDate: $selectedDate,
-                    batchStartHour: $batchStartHour,
-                    batchEndHour: $batchEndHour,
-                    selectedHour: $selectedHour,
-                    showingBatchSelector: $showingBatchSelector,
-                    selectedHourForButtons: $selectedHourForButtons,
-                    showingButtons: $showingButtons,
-                    leftPointerHour: $leftPointerHour,
-                    leftPointerMinute: $leftPointerMinute,
-                    rightPointerHour: $rightPointerHour,
-                    rightPointerMinute: $rightPointerMinute,
-                    showingPointers: $showingPointers
-                )
-                .allowsHitTesting(true)
-                .position(x: 220, y: 160) // 
-                .zIndex(1000) // 确保在最上层
+                // 多块选择时，如果有指针，使用FloatingEnergyButtons；否则使用BatchEnergyButtons
+                if showingPointers {
+                    // 有指针时，使用FloatingEnergyButtons实现分钟级精确控制
+                    FloatingEnergyButtons(
+                        hour: start, // 使用起始小时作为标识
+                        selectedEnergyLevel: $selectedEnergyLevel,
+                        showingButtons: $showingButtons,
+                        selectedDate: $selectedDate,
+                        selectedHour: $selectedHour,
+                        batchStartHour: $batchStartHour,
+                        batchEndHour: $batchEndHour,
+                        showingBatchSelector: $showingBatchSelector,
+                        selectedHourForButtons: $selectedHourForButtons,
+                        leftPointerHour: $leftPointerHour,
+                        leftPointerMinute: $leftPointerMinute,
+                        rightPointerHour: $rightPointerHour,
+                        rightPointerMinute: $rightPointerMinute,
+                        showingPointers: $showingPointers
+                    )
+                    .allowsHitTesting(true)
+                    .position(x: 220, y: 160) // 
+                    .zIndex(1000) // 确保在最上层
+                } else {
+                    // 没有指针时，使用BatchEnergyButtons
+                    BatchEnergyButtons(
+                        startHour: start,
+                        endHour: end,
+                        selectedEnergyLevel: $selectedEnergyLevel,
+                        selectedDate: $selectedDate,
+                        batchStartHour: $batchStartHour,
+                        batchEndHour: $batchEndHour,
+                        selectedHour: $selectedHour,
+                        showingBatchSelector: $showingBatchSelector,
+                        selectedHourForButtons: $selectedHourForButtons,
+                        showingButtons: $showingButtons,
+                        leftPointerHour: $leftPointerHour,
+                        leftPointerMinute: $leftPointerMinute,
+                        rightPointerHour: $rightPointerHour,
+                        rightPointerMinute: $rightPointerMinute,
+                        showingPointers: $showingPointers
+                    )
+                    .allowsHitTesting(true)
+                    .position(x: 220, y: 160) // 
+                    .zIndex(1000) // 确保在最上层
+                }
             }
             
             if showingUnselectableHint {
