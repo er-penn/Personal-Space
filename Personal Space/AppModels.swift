@@ -110,37 +110,6 @@ class UserState: ObservableObject {
         return isEnergyBoostActive ? .high : energyLevel
     }
     
-    // 获取指定日期和小时的最终能量状态（考虑优先级）
-    func getFinalEnergyLevel(for date: Date, hour: Int, showUnplanned: Bool = true) -> EnergyLevel {
-        let calendar = Calendar.current
-        let targetDate = calendar.startOfDay(for: date)
-        
-        // 优先级从高到低检查
-        // 1. 专注模式 (最高优先级)
-        if isFocusModeOn {
-            return .high // 专注模式时显示高能量
-        }
-        
-        // 2. 能量快充 (高优先级)
-        if isEnergyBoostActive {
-            return .high
-        }
-        
-        // 3. 能量预规划 (中优先级)
-        if let plan = energyPlans.first(where: { 
-            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour 
-        }) {
-            return plan.energyLevel
-        }
-        
-        // 4. 如果没有规划，根据showUnplanned参数决定是否返回待规划状态
-        if showUnplanned {
-            return .unplanned
-        } else {
-            // 如果不显示待规划，默认返回中能量
-            return .medium
-        }
-    }
     
     // 分钟级查询方法
     func getFinalEnergyLevel(for date: Date, hour: Int, minute: Int, showUnplanned: Bool = true) -> EnergyLevel {

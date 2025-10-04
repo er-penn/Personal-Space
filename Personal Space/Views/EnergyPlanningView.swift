@@ -1330,16 +1330,19 @@ struct SaveEnergyPlanButton: View {
                 plan.hour >= start && plan.hour <= end
             }
             
-            // 如果不是取消规划，则添加新规划
+            // 如果不是取消规划，则添加分钟级规划
             if energyLevel != .unplanned {
                 for hour in start...end {
-                    let newPlan = EnergyPlan(
-                        date: targetDate,
-                        hour: hour,
-                        energyLevel: energyLevel,
-                        createdAt: Date()
-                    )
-                    userState.energyPlans.append(newPlan)
+                    for minute in 0..<60 {
+                        let newPlan = EnergyPlan(
+                            date: targetDate,
+                            hour: hour,
+                            minute: minute,
+                            energyLevel: energyLevel,
+                            createdAt: Date()
+                        )
+                        userState.energyPlans.append(newPlan)
+                    }
                 }
             }
         } else if let hour = hour {
@@ -1348,24 +1351,30 @@ struct SaveEnergyPlanButton: View {
                 calendar.isDate(plan.date, inSameDayAs: targetDate) && plan.hour == hour
             }
             
-            // 如果不是取消规划，则添加新规划
+            // 如果不是取消规划，则添加分钟级规划
             if energyLevel != .unplanned {
-                let newPlan = EnergyPlan(
-                    date: targetDate,
-                    hour: hour,
-                    energyLevel: energyLevel,
-                    createdAt: Date()
-                )
-                userState.energyPlans.append(newPlan)
+                for minute in 0..<60 {
+                    let newPlan = EnergyPlan(
+                        date: targetDate,
+                        hour: hour,
+                        minute: minute,
+                        energyLevel: energyLevel,
+                        createdAt: Date()
+                    )
+                    userState.energyPlans.append(newPlan)
+                }
             }
         }
         
-        // 按日期和小时排序
+        // 按日期、小时和分钟排序
         userState.energyPlans.sort { plan1, plan2 in
             if plan1.date != plan2.date {
                 return plan1.date < plan2.date
             }
-            return plan1.hour < plan2.hour
+            if plan1.hour != plan2.hour {
+                return plan1.hour < plan2.hour
+            }
+            return plan1.minute < plan2.minute
         }
     }
 }
@@ -1844,34 +1853,6 @@ struct FloatingEnergyButtons: View {
         }
     }
     
-    private func saveEnergyPlan(hour: Int, energyLevel: EnergyLevel) {
-        let calendar = Calendar.current
-        let targetDate = calendar.startOfDay(for: selectedDate)
-        
-        // 移除同一天同一小时的旧规划
-        userState.energyPlans.removeAll { plan in
-            calendar.isDate(plan.date, inSameDayAs: targetDate) && plan.hour == hour
-        }
-        
-        // 如果不是取消规划，则添加新规划
-        if energyLevel != .unplanned {
-            let newPlan = EnergyPlan(
-                date: targetDate,
-                hour: hour,
-                energyLevel: energyLevel,
-                createdAt: Date()
-            )
-            userState.energyPlans.append(newPlan)
-        }
-        
-        // 按日期和小时排序
-        userState.energyPlans.sort { plan1, plan2 in
-            if plan1.date != plan2.date {
-                return plan1.date < plan2.date
-            }
-            return plan1.hour < plan2.hour
-        }
-    }
     
     // 清除选择状态
     private func clearSelectionState() {
@@ -1984,37 +1965,6 @@ struct BatchEnergyButtons: View {
         }
     }
     
-    private func saveBatchEnergyPlan(startHour: Int, endHour: Int, energyLevel: EnergyLevel) {
-        let calendar = Calendar.current
-        let targetDate = calendar.startOfDay(for: selectedDate)
-        
-        // 移除指定时间范围内的旧规划
-        userState.energyPlans.removeAll { plan in
-            calendar.isDate(plan.date, inSameDayAs: targetDate) && 
-            plan.hour >= startHour && plan.hour <= endHour
-        }
-        
-        // 如果不是取消规划，则批量添加新规划
-        if energyLevel != .unplanned {
-            for hour in startHour...endHour {
-                let newPlan = EnergyPlan(
-                    date: targetDate,
-                    hour: hour,
-                    energyLevel: energyLevel,
-                    createdAt: Date()
-                )
-                userState.energyPlans.append(newPlan)
-            }
-        }
-        
-        // 按日期和小时排序
-        userState.energyPlans.sort { plan1, plan2 in
-            if plan1.date != plan2.date {
-                return plan1.date < plan2.date
-            }
-            return plan1.hour < plan2.hour
-        }
-    }
     
     // 清除选择状态
     private func clearSelectionState() {
@@ -2411,11 +2361,33 @@ extension FloatingEnergyButtons {
                 }
             }
         } else {
-            // 没有指针，使用原来的小时级规划
-            print("进入小时级保存分支")
+            // 没有指针，使用分钟级规划保存整个小时
+            print("进入无指针分钟级保存分支")
             print("原因: showingPointers=\(showingPointers), hasLeftPointer=\(hasLeftPointer), hasRightPointer=\(hasRightPointer)")
-            print("调用saveEnergyPlan: hour=\(hour), energyLevel=\(energyLevel)")
-            saveEnergyPlan(hour: hour, energyLevel: energyLevel)
+            print("保存整个小时: hour=\(hour), energyLevel=\(energyLevel)")
+            
+            let calendar = Calendar.current
+            let targetDate = calendar.startOfDay(for: selectedDate)
+            
+            // 移除该小时的旧规划
+            userState.energyPlans.removeAll { plan in
+                calendar.isDate(plan.date, inSameDayAs: targetDate) && plan.hour == hour
+            }
+            
+            // 如果不是取消规划，则添加分钟级规划
+            if energyLevel != .unplanned {
+                for minute in 0..<60 {
+                    let newPlan = EnergyPlan(
+                        date: targetDate,
+                        hour: hour,
+                        minute: minute,
+                        energyLevel: energyLevel,
+                        createdAt: Date()
+                    )
+                    userState.energyPlans.append(newPlan)
+                }
+                print("为该小时创建了60个分钟级规划")
+            }
         }
         
         // 按日期、小时和分钟排序
