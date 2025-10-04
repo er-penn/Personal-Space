@@ -1801,8 +1801,13 @@ struct FloatingEnergyButtons: View {
                     saveMinuteLevelPlan(energyLevel: level)
                     
                     print("saveMinuteLevelPlan调用完成")
-                    clearSelectionState()
-                    showingButtons = false
+                    
+                    // 强制刷新UI
+                    DispatchQueue.main.async {
+                        print("强制刷新UI")
+                        clearSelectionState()
+                        showingButtons = false
+                    }
                 }) {
                     SmallBatteryIconView(energyLevel: level)
                 }
@@ -2354,6 +2359,17 @@ extension FloatingEnergyButtons {
                 }
                 
                 print("总共创建了 \(planCount) 个规划")
+                
+                // 验证保存的数据
+                print("=== 验证保存的数据 ===")
+                let verifyPlans = userState.energyPlans.filter { plan in
+                    calendar.isDate(plan.date, inSameDayAs: targetDate) && 
+                    plan.hour == startHour
+                }.sorted { $0.minute < $1.minute }
+                print("小时\(startHour)的规划数量: \(verifyPlans.count)")
+                if verifyPlans.count > 0 {
+                    print("前5个规划: \(verifyPlans.prefix(5).map { "\($0.hour):\($0.minute)-\($0.energyLevel)" })")
+                }
             }
         } else {
             // 没有指针，使用原来的小时级规划
