@@ -1003,12 +1003,12 @@ struct EnergyTimelineView: View {
     }
     
     private func getEnergyColor(for hour: Int) -> Color {
-        let finalLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour)
+        let finalLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: 0)
         return finalLevel.color
     }
     
     private func getCurrentEnergyLevel(for hour: Int) -> EnergyLevel {
-        return userState.getFinalEnergyLevel(for: selectedDate, hour: hour)
+        return userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: 0)
     }
     
     private func isToday(_ date: Date) -> Bool {
@@ -2210,7 +2210,7 @@ struct ReadOnlyEnergyTimelineView: View {
     
     private func getEnergyColor(for hour: Int) -> Color {
         // 获取该日期的能量预规划
-        let finalLevel = userState.getFinalEnergyLevel(for: date, hour: hour)
+        let finalLevel = userState.getFinalEnergyLevel(for: date, hour: hour, minute: 0)
         return finalLevel.color
     }
     
@@ -2218,7 +2218,7 @@ struct ReadOnlyEnergyTimelineView: View {
         var high = 0, medium = 0, low = 0
         
         for hour in hours {
-            let level = userState.getFinalEnergyLevel(for: date, hour: hour)
+            let level = userState.getFinalEnergyLevel(for: date, hour: hour, minute: 0)
             switch level {
             case .high: high += 1
             case .medium: medium += 1
@@ -2536,7 +2536,7 @@ struct EnergyHourButton: View {
     }
     
     private func getEnergyColor(for hour: Int) -> Color {
-        let finalLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour)
+        let finalLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: 0)
         return finalLevel.color
     }
     
