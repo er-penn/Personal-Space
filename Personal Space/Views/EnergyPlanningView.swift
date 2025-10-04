@@ -226,11 +226,9 @@ struct EnergyPlanningView: View {
             timePickerMinute = rightPointerMinute ?? 0
         }
         
-        // 使用DispatchQueue确保状态更新完成后再显示时间选择器
-        DispatchQueue.main.async {
-            print("准备显示时间选择器: isLeftPointerSelected=\(isLeftPointerSelected)")
-            self.showingTimePicker = true
-        }
+        // 立即显示时间选择器，不等待状态更新
+        print("准备显示时间选择器: isLeftPointerSelected=\(isLeftPointerSelected)")
+        showingTimePicker = true
     }
     
     private func onTimePickerConfirm(hour: Int, minute: Int) {
@@ -390,8 +388,8 @@ struct EnergyPlanningView: View {
     
     // 获取右指针的最大允许时间
     private func getMaxAllowedEndTime() -> (hour: Int, minute: Int) {
-        // 右指针的右极限为24点整
-        return (24, 0)
+        // 右指针的右极限为23:59
+        return (23, 59)
     }
     
     private func isHourSelectable(_ hour: Int) -> Bool {
@@ -469,12 +467,14 @@ struct EnergyPlanningView: View {
         print("minEndTime: \(minEndTime.0):\(minEndTime.1)")
         print("maxEndTime: \(maxEndTime.0):\(maxEndTime.1)")
         
-        let finalMinHour = isLeftPointerSelected ? minStartTime.0 : minEndTime.0
-        let finalMinMinute = isLeftPointerSelected ? minStartTime.1 : minEndTime.1
-        let finalMaxHour = isLeftPointerSelected ? maxStartTime.0 : maxEndTime.0
-        let finalMaxMinute = isLeftPointerSelected ? maxStartTime.1 : maxEndTime.1
+        // 直接使用isLeftPointerSelected的当前值，不依赖状态更新
+        let isLeft = isLeftPointerSelected
+        let finalMinHour = isLeft ? minStartTime.0 : minEndTime.0
+        let finalMinMinute = isLeft ? minStartTime.1 : minEndTime.1
+        let finalMaxHour = isLeft ? maxStartTime.0 : maxEndTime.0
+        let finalMaxMinute = isLeft ? maxStartTime.1 : maxEndTime.1
         
-        print("最终限制: min=\(finalMinHour):\(finalMinMinute), max=\(finalMaxHour):\(finalMaxMinute)")
+        print("最终限制: isLeft=\(isLeft), min=\(finalMinHour):\(finalMinMinute), max=\(finalMaxHour):\(finalMaxMinute)")
         
         return TimePickerView(
             selectedHour: $timePickerHour,
@@ -1164,8 +1164,8 @@ struct EnergyTimelineView: View {
     
     // 获取右指针的最大允许时间
     private func getMaxAllowedEndTime() -> (hour: Int, minute: Int) {
-        // 右指针的右极限为24点整
-        return (24, 0)
+        // 右指针的右极限为23:59
+        return (23, 59)
     }
     
     // 获取选择边框颜色
