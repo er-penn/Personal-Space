@@ -14,45 +14,65 @@ struct TemporaryStateOverlay: View {
     
     @State private var displayTime: TimeInterval = 0
     @State private var timer: Timer?
+    @State private var showWarning: Bool = false
     
     var body: some View {
         VStack(spacing: 0) {
             // 空白区域，让遮罩往下挪20像素
             Spacer()
-                .frame(height: 20)
+                .frame(height: 16)
             
             // 灰色遮罩区域 - 只覆盖顶部状态卡片区域
             ZStack {
-                // 灰色遮罩背景
-                Color.black.opacity(0.3)
-                    .frame(height: 180) // 限制高度，只覆盖状态卡片区域
-                    .frame(maxWidth: .infinity)
+                // 灰色遮罩背景 - 添加渐变效果
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.4),
+                        Color.black.opacity(0.2)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 180) // 限制高度，只覆盖状态卡片区域
+                .frame(maxWidth: .infinity)
                 
-                // 倒计时框 - 在遮罩中央
-                HStack(spacing: 8) {
+                // 倒计时框 - 在遮罩中央，添加更好的视觉效果
+                HStack(spacing: 10) {
+                    // 状态图标 - 添加脉冲动画
                     Image(systemName: stateType == .fastCharge ? "bolt.fill" : "battery.25")
-                        .font(.title3)
+                        .font(.title2)
                         .foregroundColor(stateType.buttonColor)
+                        .scaleEffect(1.1)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: displayTime)
                     
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(stateType.rawValue)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.primary)
                         
                         Text(formatRemainingTime(displayTime))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(showWarning ? .red : .secondary)
                             .monospacedDigit()
+                            .animation(.easeInOut(duration: 0.5), value: showWarning)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(.systemBackground))
-                .cornerRadius(20)
-                .shadow(radius: 4)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 25)
+                        .fill(Color(.systemBackground))
+                        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 25)
+                        .stroke(stateType.buttonColor.opacity(0.3), lineWidth: 1)
+                )
                 .onTapGesture {
                     // 点击状态指示器可以结束状态
-                    onEnd()
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        onEnd()
+                    }
                 }
             }
             
@@ -62,12 +82,14 @@ struct TemporaryStateOverlay: View {
         .onAppear {
             displayTime = remainingTime
             startTimer()
+            checkWarning()
         }
         .onDisappear {
             stopTimer()
         }
         .onChange(of: remainingTime) { newValue in
             displayTime = newValue
+            checkWarning()
         }
     }
     
@@ -84,6 +106,10 @@ struct TemporaryStateOverlay: View {
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+    
+    private func checkWarning() {
+        showWarning = displayTime <= 300 && displayTime > 0 // 最后5分钟显示警告
     }
     
     private func formatRemainingTime(_ time: TimeInterval) -> String {

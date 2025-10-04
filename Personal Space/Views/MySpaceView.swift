@@ -130,9 +130,11 @@ struct MySpaceView: View {
                                 maxDuration: userState.getTodayRemainingTimeRoundedTo15Minutes(),
                                 onConfirm: { duration in
                                     // 启动临时状态
-                                    userState.startTemporaryState(type: stateType, duration: duration)
-                                    showingTemporaryStateOverlay = true
-                                    showingTimePicker = false
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        userState.startTemporaryState(type: stateType, duration: duration)
+                                        showingTemporaryStateOverlay = true
+                                        showingTimePicker = false
+                                    }
                                 },
                                 onCancel: {
                                     showingTimePicker = false
@@ -151,16 +153,20 @@ struct MySpaceView: View {
                     }
                 }
                 
-                // 临时状态遮罩
+                // 临时状态遮罩 - 添加动画效果
                 if showingTemporaryStateOverlay && userState.isTemporaryStateActive {
                     TemporaryStateOverlay(
                         stateType: userState.temporaryStateType ?? .fastCharge,
                         remainingTime: userState.getTemporaryStateRemainingTime(),
                         onEnd: {
-                            userState.endTemporaryState()
-                            showingTemporaryStateOverlay = false
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                userState.endTemporaryState()
+                                showingTemporaryStateOverlay = false
+                            }
                         }
                     )
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .animation(.easeInOut(duration: 0.3), value: showingTemporaryStateOverlay)
                 }
             }
             .navigationBarHidden(true)

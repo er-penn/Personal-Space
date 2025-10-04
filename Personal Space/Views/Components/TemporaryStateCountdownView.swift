@@ -24,8 +24,7 @@ struct TemporaryStateCountdownView: View {
                     .foregroundColor(stateType.buttonColor)
                 
                 Text(stateType.rawValue)
-                    .font(.headline)
-                    .bold()
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.primary)
             }
             
@@ -36,8 +35,7 @@ struct TemporaryStateCountdownView: View {
                     .foregroundColor(.secondary)
                 
                 Text(formatCountdownTime(displayTime))
-                    .font(.title)
-                    .bold()
+                    .font(.system(size: 28, weight: .bold))
                     .foregroundColor(stateType.buttonColor)
                     .monospacedDigit()
             }
@@ -58,8 +56,7 @@ struct TemporaryStateCountdownView: View {
                     Image(systemName: "stop.fill")
                         .font(.caption)
                     Text("结束\(stateType.rawValue)")
-                        .font(.subheadline)
-                        .bold()
+                        .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)

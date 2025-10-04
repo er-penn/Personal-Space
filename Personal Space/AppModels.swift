@@ -354,6 +354,30 @@ class UserState: ObservableObject {
         }
     }
     
+    /// 检查是否需要提醒用户临时状态即将结束
+    func shouldShowExpirationWarning() -> Bool {
+        guard isTemporaryStateActive else { return false }
+        let remainingTime = getTemporaryStateRemainingTime()
+        return remainingTime <= 300 && remainingTime > 0 // 最后5分钟提醒
+    }
+    
+    /// 获取临时状态剩余时间描述
+    func getTemporaryStateTimeDescription() -> String {
+        guard isTemporaryStateActive else { return "" }
+        let remainingTime = getTemporaryStateRemainingTime()
+        let minutes = Int(remainingTime / 60)
+        
+        if minutes <= 0 {
+            return "即将结束"
+        } else if minutes < 60 {
+            return "剩余 \(minutes) 分钟"
+        } else {
+            let hours = minutes / 60
+            let mins = minutes % 60
+            return "剩余 \(hours) 小时 \(mins) 分钟"
+        }
+    }
+    
     /// 获取今天剩余时间（秒）
     func getTodayRemainingTime() -> TimeInterval {
         let calendar = Calendar.current

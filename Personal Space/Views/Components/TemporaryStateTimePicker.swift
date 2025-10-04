@@ -16,7 +16,11 @@ struct TemporaryStateTimePicker: View {
     
     @State private var selectedMinutes: Int = 120 // 默认2小时
     
-    private let timeOptions = Array(stride(from: 15, through: 480, by: 15)) // 15分钟到8小时，15分钟间隔
+    // 动态生成时间选项，基于maxDuration
+    private var timeOptions: [Int] {
+        let maxMinutes = Int(maxDuration / 60)
+        return Array(stride(from: 15, through: maxMinutes, by: 15))
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -103,6 +107,11 @@ struct TemporaryStateTimePicker: View {
             let availableOptions = timeOptions.filter { $0 <= maxMinutes }
             selectedMinutes = min(120, availableOptions.last ?? 120) // 默认2小时，但不超过最大值
             selectedDuration = TimeInterval(selectedMinutes * 60)
+            
+            print("=== 时间选择器初始化 ===")
+            print("maxDuration: \(maxDuration)秒 = \(maxMinutes)分钟")
+            print("可用选项: \(availableOptions)")
+            print("默认选择: \(selectedMinutes)分钟")
         }
     }
     
