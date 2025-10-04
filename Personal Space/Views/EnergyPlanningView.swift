@@ -1917,7 +1917,7 @@ struct BatchEnergyButtons: View {
             ForEach(EnergyLevel.allCases.filter { $0 != .unplanned }, id: \.self) { level in
                 Button(action: {
                     selectedEnergyLevel = level
-                    saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: level)
+                    saveBatchMinuteLevelPlan(startHour: startHour, endHour: endHour, energyLevel: level)
                     clearSelectionState()
                 }) {
                     SmallBatteryIconView(energyLevel: level)
@@ -1928,7 +1928,7 @@ struct BatchEnergyButtons: View {
             // 取消规划按钮
             Button(action: {
                 selectedEnergyLevel = .unplanned
-                saveBatchEnergyPlan(startHour: startHour, endHour: endHour, energyLevel: .unplanned)
+                saveBatchMinuteLevelPlan(startHour: startHour, endHour: endHour, energyLevel: .unplanned)
                 clearSelectionState()
             }) {
                 SmallBatteryIconView(energyLevel: .unplanned)
@@ -1943,6 +1943,45 @@ struct BatchEnergyButtons: View {
                 .fill(.ultraThinMaterial)
                 .shadow(color: AppTheme.Shadows.card, radius: 8, x: 0, y: 4)
         )
+    }
+    
+    private func saveBatchMinuteLevelPlan(startHour: Int, endHour: Int, energyLevel: EnergyLevel) {
+        print("=== saveBatchMinuteLevelPlan 方法被调用 ===")
+        let calendar = Calendar.current
+        let targetDate = calendar.startOfDay(for: selectedDate)
+        
+        print("批量保存范围: \(startHour):00 - \(endHour):59")
+        print("能量级别: \(energyLevel)")
+        
+        // 移除指定时间范围内的旧规划
+        let removedCount = userState.energyPlans.count
+        userState.energyPlans.removeAll { plan in
+            calendar.isDate(plan.date, inSameDayAs: targetDate) && 
+            plan.hour >= startHour && plan.hour <= endHour
+        }
+        print("移除了 \(removedCount - userState.energyPlans.count) 个旧规划")
+        
+        // 如果不是取消规划，则批量添加分钟级规划
+        if energyLevel != .unplanned {
+            print("开始创建批量分钟级规划...")
+            var planCount = 0
+            
+            for hour in startHour...endHour {
+                for minute in 0..<60 {
+                    let newPlan = EnergyPlan(
+                        date: targetDate,
+                        hour: hour,
+                        minute: minute,
+                        energyLevel: energyLevel,
+                        createdAt: Date()
+                    )
+                    userState.energyPlans.append(newPlan)
+                    planCount += 1
+                }
+            }
+            
+            print("总共创建了 \(planCount) 个分钟级规划")
+        }
     }
     
     private func saveBatchEnergyPlan(startHour: Int, endHour: Int, energyLevel: EnergyLevel) {
