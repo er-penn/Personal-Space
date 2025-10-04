@@ -358,7 +358,7 @@ class UserState: ObservableObject {
     func getTodayRemainingTime() -> TimeInterval {
         let calendar = Calendar.current
         let now = Date()
-        let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
+        let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 0, of: now) ?? now
         return max(0, endOfDay.timeIntervalSince(now))
     }
     
@@ -367,6 +367,13 @@ class UserState: ObservableObject {
         let remaining = getTodayRemainingTime()
         let minutes = Int(remaining / 60)
         let roundedMinutes = ((minutes + 14) / 15) * 15 // 向上取整到15分钟
+        
+        print("=== 时间计算调试 ===")
+        print("当前时间: \(Date())")
+        print("剩余时间: \(minutes)分钟")
+        print("向上取整后: \(roundedMinutes)分钟")
+        print("向上取整后: \(roundedMinutes/60)小时\(roundedMinutes%60)分钟")
+        
         return TimeInterval(roundedMinutes * 60)
     }
     

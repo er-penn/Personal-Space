@@ -12,52 +12,78 @@ struct TemporaryStateOverlay: View {
     let remainingTime: TimeInterval
     let onEnd: () -> Void
     
+    @State private var displayTime: TimeInterval = 0
+    @State private var timer: Timer?
+    
     var body: some View {
-        ZStack {
-            // 半透明背景
-            Color.black.opacity(0.3)
-                .ignoresSafeArea()
+        VStack(spacing: 0) {
+            // 空白区域，让遮罩往下挪20像素
+            Spacer()
+                .frame(height: 20)
             
-            // 状态栏遮罩
-            VStack {
-                HStack {
-                    Spacer()
-                    
-                    // 状态指示器
-                    HStack(spacing: 8) {
-                        Image(systemName: stateType == .fastCharge ? "bolt.fill" : "battery.25")
-                            .font(.title3)
-                            .foregroundColor(stateType.buttonColor)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(stateType.rawValue)
-                                .font(.subheadline)
-                                .bold()
-                                .foregroundColor(.primary)
-                            
-                            Text(formatRemainingTime(remainingTime))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .monospacedDigit()
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemBackground))
-                    .cornerRadius(20)
-                    .shadow(radius: 4)
-                    
-                    Spacer()
-                }
-                .padding(.top, 8)
+            // 灰色遮罩区域 - 只覆盖顶部状态卡片区域
+            ZStack {
+                // 灰色遮罩背景
+                Color.black.opacity(0.3)
+                    .frame(height: 180) // 限制高度，只覆盖状态卡片区域
+                    .frame(maxWidth: .infinity)
                 
-                Spacer()
+                // 倒计时框 - 在遮罩中央
+                HStack(spacing: 8) {
+                    Image(systemName: stateType == .fastCharge ? "bolt.fill" : "battery.25")
+                        .font(.title3)
+                        .foregroundColor(stateType.buttonColor)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(stateType.rawValue)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.primary)
+                        
+                        Text(formatRemainingTime(displayTime))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.systemBackground))
+                .cornerRadius(20)
+                .shadow(radius: 4)
+                .onTapGesture {
+                    // 点击状态指示器可以结束状态
+                    onEnd()
+                }
+            }
+            
+            // 空白区域，让下方内容正常显示
+            Spacer()
+        }
+        .onAppear {
+            displayTime = remainingTime
+            startTimer()
+        }
+        .onDisappear {
+            stopTimer()
+        }
+        .onChange(of: remainingTime) { newValue in
+            displayTime = newValue
+        }
+    }
+    
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            if displayTime > 0 {
+                displayTime -= 1
+            } else {
+                stopTimer()
             }
         }
-        .onTapGesture {
-            // 点击遮罩区域可以结束状态
-            onEnd()
-        }
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
     }
     
     private func formatRemainingTime(_ time: TimeInterval) -> String {
