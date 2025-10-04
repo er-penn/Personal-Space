@@ -114,8 +114,8 @@ struct EnergyProgressView: View {
     }
     
     private func getEnergyColor(for hour: Int) -> Color {
-        // 使用UserState的优先级系统
-        let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour)
+        // 使用UserState的优先级系统 - 使用分钟级查询，默认查询0分钟
+        let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
         return finalLevel.color
     }
     
@@ -153,7 +153,7 @@ struct EnergyProgressView: View {
         var unplannedCount = 0
         
         for hour in hours {
-            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour)
+            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
             switch finalLevel {
             case .high:
                 highCount += 1
@@ -218,7 +218,7 @@ struct EnergyProgressView: View {
         var unplannedCount = 0
         
         for hour in hours {
-            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour)
+            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
             switch finalLevel {
             case .high:
                 highCount += 1
