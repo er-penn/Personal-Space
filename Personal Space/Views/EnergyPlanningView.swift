@@ -812,7 +812,7 @@ struct EnergyTimelineView: View {
                     .cornerRadius(4)
                     
                     // 当前时间指示器（仅今天显示）
-                    if isToday(selectedDate) {
+                    if isToday(selectedDate) && geometry.size.width > 0 {
                         Rectangle()
                             .fill(AppTheme.Colors.text)
                             .frame(width: 2, height: 20)
