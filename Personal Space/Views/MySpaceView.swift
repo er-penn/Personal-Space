@@ -172,14 +172,13 @@ struct MySpaceView: View {
             .navigationBarHidden(true)
             .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
                 // 每秒检查临时状态是否过期
-                let wasActive = userState.isTemporaryStateActive
                 userState.checkTemporaryStateExpiration()
-                if wasActive && !userState.isTemporaryStateActive {
+                if !userState.isTemporaryStateActive {
                     showingTemporaryStateOverlay = false
                 }
                 
-                // 只在状态真正改变时才触发UI更新
-                // 移除不必要的objectWillChange.send()调用
+                // 触发状态栏颜色更新
+                userState.objectWillChange.send()
             }
         }
     }
@@ -328,8 +327,7 @@ struct MySpaceView: View {
                             hasSwitchedFromUnplanned = true
                         }
                     }
-                    .onLongPressGesture(minimumDuration: 0.8) {
-                        // 长按：显示手势引导提示
+                    .onLongPressGesture {
                         showGestureHints()
                     }
                     .simultaneousGesture(
