@@ -494,14 +494,20 @@ class UserState: ObservableObject {
         
         // 3. 默认状态处理
         // 对于7:00-8:20段，如果没有其他状态，返回灰色（unplanned）
-        // 对于其他时间段，如果没有其他状态，返回当前状态栏颜色（刷子逻辑）
+        // 对于其他过去时间段，如果没有其他状态，返回待规划状态（保持固定）
+        // 只有当前时间才使用刷子逻辑
         let targetTotalMinutes = hour * 60 + minute
+        let currentTotalMinutes = calendar.component(.hour, from: currentTime) * 60 + calendar.component(.minute, from: currentTime)
+        
         if targetTotalMinutes >= 7 * 60 && targetTotalMinutes < 8 * 60 + 20 {
             // 7:00-8:20段显示灰色
             return .unplanned
-        } else {
-            // 其他时间段使用刷子逻辑
+        } else if targetTotalMinutes == currentTotalMinutes {
+            // 当前时间使用刷子逻辑
             return displayEnergyLevel
+        } else {
+            // 其他过去时间段保持待规划状态（固定不变）
+            return .unplanned
         }
     }
     
