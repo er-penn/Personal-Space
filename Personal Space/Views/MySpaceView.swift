@@ -313,6 +313,9 @@ struct MySpaceView: View {
                     .onTapGesture {
                         // 短按：循环切换能量状态（高→中→低）
                         withAnimation(.easeInOut(duration: 0.3)) {
+                            // 记录状态切换时间（用于刷子逻辑）
+                            userState.lastEnergyLevelChangeTime = Date()
+                            
                             switch userState.energyLevel {
                             case .high:
                                 userState.energyLevel = .medium

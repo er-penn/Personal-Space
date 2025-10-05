@@ -73,6 +73,9 @@ class UserState: ObservableObject {
     @Published var temporaryStateEndTime: Date? = nil // 临时状态结束时间
     @Published var isShowingTemporaryStateOverlay: Bool = false // 是否显示临时状态遮罩
     
+    // MARK: - 刷子逻辑相关属性
+    @Published var lastEnergyLevelChangeTime: Date? = nil // 最后一次能量状态切换的时间
+    
     init() {
         // 添加一些示例能量规划数据
         setupSampleEnergyPlans()
@@ -503,19 +506,29 @@ class UserState: ObservableObject {
         let targetTotalMinutes = hour * 60 + minute
         let currentTotalMinutes = calendar.component(.hour, from: currentTime) * 60 + calendar.component(.minute, from: currentTime)
         
+        // 如果是当前时间点，显示顶部状态栏颜色（刷子逻辑）
+        if targetTotalMinutes == currentTotalMinutes {
+            return displayEnergyLevel
+        }
+        
+        // 刷子逻辑：从最后一次状态切换时间到当前时间，显示当前状态栏颜色
+        if let lastChangeTime = lastEnergyLevelChangeTime {
+            let lastChangeTotalMinutes = calendar.component(.hour, from: lastChangeTime) * 60 + calendar.component(.minute, from: lastChangeTime)
+            
+            // 如果查询的时间在最后一次状态切换时间之后，显示当前状态栏颜色
+            if targetTotalMinutes >= lastChangeTotalMinutes && targetTotalMinutes < currentTotalMinutes {
+                return displayEnergyLevel
+            }
+        }
+        
         // 对于7:00-8:20段，如果没有其他状态，返回灰色（unplanned）
         if targetTotalMinutes >= 7 * 60 && targetTotalMinutes < 8 * 60 + 20 {
             return .unplanned
         }
         
-        // 对于其他过去时间段（从8:20开始到当前时间），如果没有其他状态
-        // 使用刷子逻辑：被刷成当前顶部状态栏的颜色
-        if targetTotalMinutes >= 8 * 60 + 20 && targetTotalMinutes <= currentTotalMinutes {
-            return displayEnergyLevel
-        }
-        
-        // 对于未来时间，返回待规划状态
-        return .unplanned
+        // 对于其他过去时间段，如果没有其他状态，返回绿色（默认高能量状态）
+        // 过去时间一旦确定就不应该再改变
+        return .high
     }
     
     /// 获取今天剩余时间（秒）
