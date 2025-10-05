@@ -85,7 +85,15 @@ class UserState: ObservableObject {
         let today = calendar.startOfDay(for: Date())
         
         // 添加今天的测试数据
-        // 7:00-8:20 灰色（不设置，保持unplanned状态）
+        // 7:00-8:20 灰色（明确设置为unplanned状态）
+        for hour in 7...7 {
+            for minute in 0..<60 {
+                energyPlans.append(EnergyPlan(date: today, hour: hour, minute: minute, energyLevel: .unplanned))
+            }
+        }
+        for minute in 0..<20 {
+            energyPlans.append(EnergyPlan(date: today, hour: 8, minute: minute, energyLevel: .unplanned))
+        }
         
         // 8:20-10:00 绿色（高能量）
         for minute in 20..<60 {
