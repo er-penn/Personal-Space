@@ -169,7 +169,6 @@ struct EnergyProgressView: View {
         let currentTime = getCurrentTime()
         let currentHour = currentTime.hour
         let currentMinute = currentTime.minute
-        let currentTotalMinutes = currentHour * 60 + currentMinute
         
         // 获取今天第一次设置非灰色状态的时间
         let firstNonGrayTime = userState.getFirstNonGrayStateTime()
