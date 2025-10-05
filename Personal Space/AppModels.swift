@@ -84,12 +84,53 @@ class UserState: ObservableObject {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         
-        // 添加今天的规划
-        energyPlans.append(EnergyPlan(date: today, hour: 8, energyLevel: .high))
-        energyPlans.append(EnergyPlan(date: today, hour: 9, energyLevel: .high))
-        energyPlans.append(EnergyPlan(date: today, hour: 10, energyLevel: .medium))
-        energyPlans.append(EnergyPlan(date: today, hour: 14, energyLevel: .low))
-        energyPlans.append(EnergyPlan(date: today, hour: 18, energyLevel: .high))
+        // 添加今天的测试数据
+        // 7:00-8:00 灰色（不设置，保持unplanned状态）
+        
+        // 8:00-10:00 绿色（高能量）
+        for hour in 8...9 {
+            for minute in 0..<60 {
+                energyPlans.append(EnergyPlan(date: today, hour: hour, minute: minute, energyLevel: .high))
+            }
+        }
+        
+        // 10:00-10:55 红色（低能量）
+        for minute in 0..<55 {
+            energyPlans.append(EnergyPlan(date: today, hour: 10, minute: minute, energyLevel: .low))
+        }
+        
+        // 10:55-11:20 绿色（高能量）
+        for minute in 55..<60 {
+            energyPlans.append(EnergyPlan(date: today, hour: 10, minute: minute, energyLevel: .high))
+        }
+        for minute in 0..<20 {
+            energyPlans.append(EnergyPlan(date: today, hour: 11, minute: minute, energyLevel: .high))
+        }
+        
+        // 11:20-12:50 黄色（中能量）
+        for minute in 20..<60 {
+            energyPlans.append(EnergyPlan(date: today, hour: 11, minute: minute, energyLevel: .medium))
+        }
+        for minute in 0..<50 {
+            energyPlans.append(EnergyPlan(date: today, hour: 12, minute: minute, energyLevel: .medium))
+        }
+        
+        // 12:50-当前时间 绿色（高能量）
+        for minute in 50..<60 {
+            energyPlans.append(EnergyPlan(date: today, hour: 12, minute: minute, energyLevel: .high))
+        }
+        // 13:00-14:00 绿色（高能量）
+        for minute in 0..<60 {
+            energyPlans.append(EnergyPlan(date: today, hour: 13, minute: minute, energyLevel: .high))
+        }
+        // 14:00-当前时间 绿色（高能量）
+        let currentHour = calendar.component(.hour, from: Date())
+        let currentMinute = calendar.component(.minute, from: Date())
+        if currentHour >= 14 {
+            for minute in 0..<min(currentMinute, 60) {
+                energyPlans.append(EnergyPlan(date: today, hour: 14, minute: minute, energyLevel: .high))
+            }
+        }
         
         // 添加明天的规划
         if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) {
