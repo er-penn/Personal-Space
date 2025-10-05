@@ -57,11 +57,12 @@ enum TemporaryStateType: String, CaseIterable, Codable {
 
 // MARK: - 状态切换历史记录
 struct EnergyLevelChange: Identifiable, Codable {
-    let id = UUID()
+    let id: UUID
     let changeTime: Date // 状态切换时间
     let newEnergyLevel: EnergyLevel // 切换后的新状态
 
     init(changeTime: Date, newEnergyLevel: EnergyLevel) {
+        self.id = UUID()
         self.changeTime = changeTime
         self.newEnergyLevel = newEnergyLevel
     }
@@ -209,7 +210,6 @@ class UserState: ObservableObject {
     func getFinalEnergyLevel(for date: Date, hour: Int, minute: Int, showUnplanned: Bool = true) -> EnergyLevel {
         let calendar = Calendar.current
         let targetDate = calendar.startOfDay(for: date)
-        let currentTime = Date()
         let targetTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) ?? date
         
         // 优先级从高到低检查

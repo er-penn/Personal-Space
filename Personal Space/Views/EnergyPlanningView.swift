@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+// MARK: - 辅助函数
+private func isToday(_ date: Date) -> Bool {
+    Calendar.current.isDateInToday(date)
+}
+
 // MARK: - 指针组件
 struct PointerView: View {
     let hour: Int
@@ -68,8 +73,15 @@ struct MinuteLevelEnergyBlock: View {
     }
     
     private func getEnergyColor(for hour: Int, minute: Int) -> Color {
-        let energyLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: minute)
-        return energyLevel.color
+        // 如果是今天，使用与我的空间页面完全一致的刷子逻辑
+        if isToday(selectedDate) {
+            let actualLevel = userState.getActualRecordedEnergyLevel(for: selectedDate, hour: hour, minute: minute)
+            return actualLevel.color
+        } else {
+            // 其他日期使用原有的预规划逻辑
+            let energyLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: minute)
+            return energyLevel.color
+        }
     }
 }
 
@@ -1002,9 +1014,6 @@ struct EnergyTimelineView: View {
         return userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: 0)
     }
     
-    private func isToday(_ date: Date) -> Bool {
-        Calendar.current.isDateInToday(date)
-    }
     
     private func getCurrentHour() -> Int {
         Calendar.current.component(.hour, from: Date())
