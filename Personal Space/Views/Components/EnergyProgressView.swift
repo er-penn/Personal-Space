@@ -222,12 +222,12 @@ struct EnergyProgressView: View {
             let hours = minutes / 60
             let remainingMinutes = minutes % 60
             if remainingMinutes == 0 {
-                return "\(hours)小时"
+                return "\(hours)h"
             } else {
-                return "\(hours)小时\(remainingMinutes)分钟"
+                return "\(hours)h\(remainingMinutes)m"
             }
         } else {
-            return "\(minutes)分钟"
+            return "\(minutes)m"
         }
     }
     
