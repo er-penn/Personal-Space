@@ -498,8 +498,9 @@ class UserState: ObservableObject {
             return plan.energyLevel
         }
         
-        // 5. 默认状态 - 对于已记录的部分，如果没有其他状态，返回待规划状态
-        return .unplanned
+        // 5. 默认状态 - 对于已记录的部分，如果没有其他状态，返回当前状态栏颜色（刷子逻辑）
+        // 这样黑色竖线经过的部分会被"刷"成当前状态栏的颜色
+        return displayEnergyLevel
     }
     
     /// 获取今天剩余时间（秒）
