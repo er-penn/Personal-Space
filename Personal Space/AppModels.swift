@@ -447,14 +447,21 @@ class UserState: ObservableObject {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         
-        // 从7:00开始查找第一个非灰色状态
-        for hour in 7...23 {
-            for minute in 0..<60 {
-                let level = getActualRecordedEnergyLevel(for: today, hour: hour, minute: minute)
-                if level != .unplanned {
-                    return hour * 60 + minute
-                }
-            }
+        // 优化：直接检查energyPlans中第一个非unplanned的状态
+        // 按时间顺序排序，找到第一个非unplanned的状态
+        let sortedPlans = energyPlans
+            .filter { calendar.isDate($0.date, inSameDayAs: today) }
+            .sorted { ($0.hour * 60 + $0.minute) < ($1.hour * 60 + $1.minute) }
+        
+        // 找到第一个非unplanned的状态
+        if let firstNonUnplanned = sortedPlans.first(where: { $0.energyLevel != .unplanned }) {
+            return firstNonUnplanned.hour * 60 + firstNonUnplanned.minute
+        }
+        
+        // 如果没有找到，检查是否有临时状态、专注模式或能量快充
+        if isTemporaryStateActive || isFocusModeOn || isEnergyBoostActive {
+            // 如果有这些状态，说明8:20之后就有非灰色状态了
+            return 8 * 60 + 20 // 8:20
         }
         
         return nil // 今天还没有设置过非灰色状态
@@ -494,20 +501,16 @@ class UserState: ObservableObject {
         
         // 3. 默认状态处理
         // 对于7:00-8:20段，如果没有其他状态，返回灰色（unplanned）
-        // 对于其他过去时间段，如果没有其他状态，返回待规划状态（保持固定）
-        // 只有当前时间才使用刷子逻辑
+        // 对于其他过去时间段，如果没有其他状态，返回当前状态栏颜色（刷子逻辑）
+        // 这样黑色竖线经过的部分会被"刷"成当前状态栏的颜色
         let targetTotalMinutes = hour * 60 + minute
-        let currentTotalMinutes = calendar.component(.hour, from: currentTime) * 60 + calendar.component(.minute, from: currentTime)
         
         if targetTotalMinutes >= 7 * 60 && targetTotalMinutes < 8 * 60 + 20 {
             // 7:00-8:20段显示灰色
             return .unplanned
-        } else if targetTotalMinutes == currentTotalMinutes {
-            // 当前时间使用刷子逻辑
-            return displayEnergyLevel
         } else {
-            // 其他过去时间段保持待规划状态（固定不变）
-            return .unplanned
+            // 其他时间段使用刷子逻辑（包括过去和当前时间）
+            return displayEnergyLevel
         }
     }
     
