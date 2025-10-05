@@ -85,15 +85,8 @@ class UserState: ObservableObject {
         let today = calendar.startOfDay(for: Date())
         
         // 添加今天的测试数据
-        // 7:00-8:20 灰色（明确设置为unplanned状态）
-        for hour in 7...7 {
-            for minute in 0..<60 {
-                energyPlans.append(EnergyPlan(date: today, hour: hour, minute: minute, energyLevel: .unplanned))
-            }
-        }
-        for minute in 0..<20 {
-            energyPlans.append(EnergyPlan(date: today, hour: 8, minute: minute, energyLevel: .unplanned))
-        }
+        // 7:00-8:20 灰色（不设置，保持unplanned状态）
+        // 注意：不需要为每个分钟都创建EnergyPlan，让getActualRecordedEnergyLevel方法处理默认状态
         
         // 8:20-10:00 绿色（高能量）
         for minute in 20..<60 {
@@ -506,9 +499,17 @@ class UserState: ObservableObject {
             return plan.energyLevel
         }
         
-        // 5. 默认状态 - 对于已记录的部分，如果没有其他状态，返回当前状态栏颜色（刷子逻辑）
-        // 这样黑色竖线经过的部分会被"刷"成当前状态栏的颜色
-        return displayEnergyLevel
+        // 5. 默认状态处理
+        // 对于7:00-8:20段，如果没有其他状态，返回灰色（unplanned）
+        // 对于其他时间段，如果没有其他状态，返回当前状态栏颜色（刷子逻辑）
+        let targetTotalMinutes = hour * 60 + minute
+        if targetTotalMinutes >= 7 * 60 && targetTotalMinutes < 8 * 60 + 20 {
+            // 7:00-8:20段显示灰色
+            return .unplanned
+        } else {
+            // 其他时间段使用刷子逻辑
+            return displayEnergyLevel
+        }
     }
     
     /// 获取今天剩余时间（秒）
