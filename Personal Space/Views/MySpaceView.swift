@@ -313,19 +313,21 @@ struct MySpaceView: View {
                     .onTapGesture {
                         // 短按：循环切换能量状态（高→中→低）
                         withAnimation(.easeInOut(duration: 0.3)) {
-                            // 记录状态切换时间（用于刷子逻辑）
-                            userState.lastEnergyLevelChangeTime = Date()
-                            
+                            let newLevel: EnergyLevel
                             switch userState.energyLevel {
                             case .high:
-                                userState.energyLevel = .medium
+                                newLevel = .medium
                             case .medium:
-                                userState.energyLevel = .low
+                                newLevel = .low
                             case .low:
-                                userState.energyLevel = .high
+                                newLevel = .high
                             case .unplanned:
-                                userState.energyLevel = .high
+                                newLevel = .high
                             }
+
+                            // 更新状态并记录状态切换历史
+                            userState.energyLevel = newLevel
+                            userState.recordEnergyLevelChange(to: newLevel)
                             userState.isEnergyBoostActive = false
                             hasSwitchedFromUnplanned = true
                         }

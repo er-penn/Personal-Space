@@ -55,6 +55,18 @@ enum TemporaryStateType: String, CaseIterable, Codable {
     }
 }
 
+// MARK: - 状态切换历史记录
+struct EnergyLevelChange: Identifiable, Codable {
+    let id = UUID()
+    let changeTime: Date // 状态切换时间
+    let newEnergyLevel: EnergyLevel // 切换后的新状态
+
+    init(changeTime: Date, newEnergyLevel: EnergyLevel) {
+        self.changeTime = changeTime
+        self.newEnergyLevel = newEnergyLevel
+    }
+}
+
 // MARK: - 用户状态模型
 class UserState: ObservableObject {
     @Published var energyLevel: EnergyLevel = .high
@@ -75,6 +87,7 @@ class UserState: ObservableObject {
     
     // MARK: - 刷子逻辑相关属性
     @Published var lastEnergyLevelChangeTime: Date? = nil // 最后一次能量状态切换的时间
+    @Published var energyLevelChangeHistory: [EnergyLevelChange] = [] // 状态切换历史记录
     
     init() {
         // 添加一些示例能量规划数据
@@ -462,7 +475,23 @@ class UserState: ObservableObject {
         
         return nil // 今天还没有设置过非灰色状态
     }
-    
+
+    /// 记录状态切换（用于刷子逻辑）
+    func recordEnergyLevelChange(to newLevel: EnergyLevel) {
+        let changeTime = Date()
+        lastEnergyLevelChangeTime = changeTime
+
+        // 添加到状态切换历史记录
+        let change = EnergyLevelChange(changeTime: changeTime, newEnergyLevel: newLevel)
+        energyLevelChangeHistory.append(change)
+
+        // 为了防止历史记录无限增长，只保留今天的记录
+        let calendar = Calendar.current
+        energyLevelChangeHistory = energyLevelChangeHistory.filter {
+            calendar.isDate($0.changeTime, inSameDayAs: Date())
+        }
+    }
+
     /// 获取实际记录的能量状态（用于已记录部分的统计和显示）
     func getActualRecordedEnergyLevel(for date: Date, hour: Int, minute: Int) -> EnergyLevel {
         let calendar = Calendar.current
@@ -511,13 +540,16 @@ class UserState: ObservableObject {
             return displayEnergyLevel
         }
         
-        // 刷子逻辑：从最后一次状态切换时间到当前时间，显示当前状态栏颜色
-        if let lastChangeTime = lastEnergyLevelChangeTime {
-            let lastChangeTotalMinutes = calendar.component(.hour, from: lastChangeTime) * 60 + calendar.component(.minute, from: lastChangeTime)
-            
-            // 如果查询的时间在最后一次状态切换时间之后，显示当前状态栏颜色
-            if targetTotalMinutes >= lastChangeTotalMinutes && targetTotalMinutes < currentTotalMinutes {
-                return displayEnergyLevel
+        // 刷子逻辑：基于状态切换历史记录确定每个时间段的颜色
+        // 按时间倒序排列状态切换历史，找到目标时间对应的状态
+        let sortedHistory = energyLevelChangeHistory.sorted { $0.changeTime > $1.changeTime }
+
+        for change in sortedHistory {
+            let changeTotalMinutes = calendar.component(.hour, from: change.changeTime) * 60 + calendar.component(.minute, from: change.changeTime)
+
+            // 如果查询的时间在这次状态切换之后（或等于），使用这次切换后的状态
+            if targetTotalMinutes >= changeTotalMinutes {
+                return change.newEnergyLevel
             }
         }
         
