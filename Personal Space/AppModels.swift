@@ -405,7 +405,7 @@ class UserState: ObservableObject {
         // 从7:00开始查找第一个非灰色状态
         for hour in 7...23 {
             for minute in 0..<60 {
-                let level = getFinalEnergyLevel(for: today, hour: hour, minute: minute, showUnplanned: false)
+                let level = getActualRecordedEnergyLevel(for: today, hour: hour, minute: minute)
                 if level != .unplanned {
                     return hour * 60 + minute
                 }
@@ -413,6 +413,49 @@ class UserState: ObservableObject {
         }
         
         return nil // 今天还没有设置过非灰色状态
+    }
+    
+    /// 获取实际记录的能量状态（用于已记录部分的统计和显示）
+    func getActualRecordedEnergyLevel(for date: Date, hour: Int, minute: Int) -> EnergyLevel {
+        let calendar = Calendar.current
+        let targetDate = calendar.startOfDay(for: date)
+        let currentTime = Date()
+        let targetTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) ?? date
+        
+        // 如果查询的是未来时间，返回待规划状态
+        if targetTime > currentTime {
+            return .unplanned
+        }
+        
+        // 优先级从高到低检查（只检查实际记录的状态）
+        // 1. 临时状态 (最高优先级) - 只对当前时间到结束时间有效
+        if isTemporaryStateActive, 
+           let tempType = temporaryStateType,
+           let startTime = temporaryStateStartTime,
+           let endTime = temporaryStateEndTime,
+           targetTime >= startTime && targetTime <= endTime {
+            return tempType.energyLevel
+        }
+        
+        // 2. 专注模式 (高优先级)
+        if isFocusModeOn {
+            return .high
+        }
+        
+        // 3. 能量快充 (高优先级)
+        if isEnergyBoostActive {
+            return .high
+        }
+        
+        // 4. 能量预规划 (中优先级) - 精确匹配分钟
+        if let plan = energyPlans.first(where: { 
+            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour && $0.minute == minute
+        }) {
+            return plan.energyLevel
+        }
+        
+        // 5. 默认状态 - 对于已记录的部分，如果没有其他状态，返回当前的基础状态
+        return energyLevel
     }
     
     /// 获取今天剩余时间（秒）

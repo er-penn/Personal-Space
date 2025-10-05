@@ -129,8 +129,8 @@ struct EnergyProgressView: View {
         if hour < currentHour {
             // 已记录部分：如果已经设置过非灰色状态，则从第一次设置时间开始不显示灰色
             if let firstTime = firstNonGrayTime, hourTotalMinutes >= firstTime {
-                let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
-                return finalLevel.color
+                let actualLevel = userState.getActualRecordedEnergyLevel(for: Date(), hour: hour, minute: 0)
+                return actualLevel.color
             } else {
                 // 在第一次设置非灰色状态之前，显示灰色
                 return EnergyLevel.unplanned.color
@@ -226,8 +226,8 @@ struct EnergyProgressView: View {
             if hour >= 7 && hour <= 23 {
                 // 如果已经设置过非灰色状态，则从第一次设置时间开始统计
                 if let firstTime = firstNonGrayTime, minute >= firstTime {
-                    let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: min)
-                    switch finalLevel {
+                    let actualLevel = userState.getActualRecordedEnergyLevel(for: Date(), hour: hour, minute: min)
+                    switch actualLevel {
                     case .high:
                         highMinutes += 1
                     case .medium:
