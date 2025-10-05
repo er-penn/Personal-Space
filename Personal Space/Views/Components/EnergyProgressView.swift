@@ -7,6 +7,56 @@
 
 import SwiftUI
 
+// MARK: - 能量记录专用分钟级能量块
+struct EnergyRecordMinuteBlock: View {
+    let hour: Int
+    let width: CGFloat
+    let height: CGFloat
+    @ObservedObject var userState: UserState
+    let selectedDate: Date
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<60, id: \.self) { minute in
+                Rectangle()
+                    .fill(getEnergyColor(for: hour, minute: minute))
+                    .frame(width: width / 60, height: height)
+            }
+        }
+        .cornerRadius(2)
+    }
+    
+    private func getEnergyColor(for hour: Int, minute: Int) -> Color {
+        let currentTime = Date()
+        let calendar = Calendar.current
+        let currentHour = calendar.component(.hour, from: currentTime)
+        let currentMinute = calendar.component(.minute, from: currentTime)
+        let currentTotalMinutes = currentHour * 60 + currentMinute
+        let targetTotalMinutes = hour * 60 + minute
+        
+        // 获取今天第一次设置非灰色状态的时间
+        let firstNonGrayTime = userState.getFirstNonGrayStateTime()
+        
+        // 如果查询的是未来时间，显示预规划状态
+        if targetTotalMinutes > currentTotalMinutes {
+            let finalLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: minute)
+            return finalLevel.color
+        } else if targetTotalMinutes == currentTotalMinutes {
+            // 当前时间：显示顶部状态栏颜色
+            return userState.displayEnergyLevel.color
+        } else {
+            // 已记录部分：如果已经设置过非灰色状态，则从第一次设置时间开始不显示灰色
+            if let firstTime = firstNonGrayTime, targetTotalMinutes >= firstTime {
+                let actualLevel = userState.getActualRecordedEnergyLevel(for: selectedDate, hour: hour, minute: minute)
+                return actualLevel.color
+            } else {
+                // 在第一次设置非灰色状态之前，显示灰色
+                return EnergyLevel.unplanned.color
+            }
+        }
+    }
+}
+
 struct EnergyProgressView: View {
     @EnvironmentObject var userState: UserState
     @State private var currentTime = Date()
@@ -62,15 +112,17 @@ struct EnergyProgressView: View {
                     }
                     .frame(height: 20)
                     
-                    // 进度条 - 按小时显示
+                    // 进度条 - 按分钟级显示
                     GeometryReader { geometry in
-                        HStack(spacing: 1) {
+                        HStack(spacing: 0.5) {
                             ForEach(hours, id: \.self) { hour in
-                                Rectangle()
-                                    .fill(getEnergyColor(for: hour))
-                                    .frame(width: geometry.size.width / CGFloat(hours.count), height: 20)
-                                    .cornerRadius(2)
-                                    .animation(.easeInOut(duration: 0.3), value: getEnergyColor(for: hour))
+                                EnergyRecordMinuteBlock(
+                                    hour: hour,
+                                    width: geometry.size.width / CGFloat(hours.count),
+                                    height: 20,
+                                    userState: userState,
+                                    selectedDate: Date()
+                                )
                             }
                         }
                         .background(Color.gray.opacity(0.2))
