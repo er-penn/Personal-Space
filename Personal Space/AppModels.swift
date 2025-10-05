@@ -378,6 +378,25 @@ class UserState: ObservableObject {
         }
     }
     
+    /// 获取当前时间对应的预规划状态颜色（用于顶部状态栏）
+    func getCurrentPlannedEnergyColor() -> Color {
+        let currentTime = Date()
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: currentTime)
+        let minute = calendar.component(.minute, from: currentTime)
+        
+        // 获取当前时间的预规划状态
+        let plannedLevel = getFinalEnergyLevel(for: currentTime, hour: hour, minute: minute, showUnplanned: false)
+        
+        // 如果是待规划状态，返回默认状态栏颜色
+        if plannedLevel == .unplanned {
+            return displayEnergyLevel.color
+        }
+        
+        // 返回预规划状态的颜色
+        return plannedLevel.color
+    }
+    
     /// 获取今天剩余时间（秒）
     func getTodayRemainingTime() -> TimeInterval {
         let calendar = Calendar.current

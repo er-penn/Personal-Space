@@ -21,7 +21,7 @@ struct EnergyProgressView: View {
         }) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 HStack {
-                    Text("今日能量规划")
+                    Text("能量记录")
                         .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.primary)
                     
@@ -32,7 +32,7 @@ struct EnergyProgressView: View {
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
                 
-                getEnergyPlanSummaryView()
+                getEnergyRecordSummaryView()
                     .font(.system(size: AppTheme.FontSize.body))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             
@@ -114,9 +114,23 @@ struct EnergyProgressView: View {
     }
     
     private func getEnergyColor(for hour: Int) -> Color {
-        // 使用UserState的优先级系统 - 使用分钟级查询，默认查询0分钟
-        let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
-        return finalLevel.color
+        let currentTime = getCurrentTime()
+        let currentHour = currentTime.hour
+        let currentMinute = currentTime.minute
+        
+        // 如果当前小时小于查询的小时，或者当前小时等于查询小时但当前分钟为0，显示预规划状态
+        if hour < currentHour || (hour == currentHour && currentMinute == 0) {
+            // 显示预规划状态
+            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
+            return finalLevel.color
+        } else if hour == currentHour {
+            // 当前小时：黑色竖线经过的部分显示顶部状态栏颜色
+            return userState.displayEnergyLevel.color
+        } else {
+            // 未来时间：显示预规划状态
+            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
+            return finalLevel.color
+        }
     }
     
     private func getCurrentHour() -> Int {
@@ -165,66 +179,76 @@ struct EnergyProgressView: View {
         return String(format: "%02d:%02d", hour, minute)
     }
     
-    private func getEnergyPlanSummaryView() -> some View {
-        var highCount = 0
-        var mediumCount = 0
-        var lowCount = 0
-        var unplannedCount = 0
+    private func getEnergyRecordSummaryView() -> some View {
+        var highMinutes = 0
+        var mediumMinutes = 0
+        var lowMinutes = 0
+        var unplannedMinutes = 0
         
-        for hour in hours {
-            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
-            switch finalLevel {
-            case .high:
-                highCount += 1
-            case .medium:
-                mediumCount += 1
-            case .low:
-                lowCount += 1
-            case .unplanned:
-                unplannedCount += 1
+        let currentTime = getCurrentTime()
+        let currentTotalMinutes = currentTime.hour * 60 + currentTime.minute
+        
+        // 只统计当前时间之前的状态（以分钟为精度）
+        for minute in 0..<currentTotalMinutes {
+            let hour = minute / 60
+            let min = minute % 60
+            
+            // 只统计7:00-23:00范围内的时间
+            if hour >= 7 && hour <= 23 {
+                let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: min)
+                switch finalLevel {
+                case .high:
+                    highMinutes += 1
+                case .medium:
+                    mediumMinutes += 1
+                case .low:
+                    lowMinutes += 1
+                case .unplanned:
+                    unplannedMinutes += 1
+                }
             }
         }
         
         return HStack(spacing: 4) {
-            Text("今日计划：")
+            Text("今日记录：")
             
-            if highCount > 0 {
+            if highMinutes > 0 {
                 HStack(spacing: 2) {
                     Rectangle()
                         .fill(EnergyLevel.high.color)
                         .frame(width: 8, height: 8)
                         .cornerRadius(1)
-                    Text("\(highCount)小时")
+                    Text("\(highMinutes)分钟")
                 }
             }
             
-            if mediumCount > 0 {
+            if mediumMinutes > 0 {
                 HStack(spacing: 2) {
                     Rectangle()
                         .fill(EnergyLevel.medium.color)
                         .frame(width: 8, height: 8)
                         .cornerRadius(1)
-                    Text("\(mediumCount)小时")
+                    Text("\(mediumMinutes)分钟")
                 }
             }
             
-            if lowCount > 0 {
+            if lowMinutes > 0 {
                 HStack(spacing: 2) {
                     Rectangle()
                         .fill(EnergyLevel.low.color)
                         .frame(width: 8, height: 8)
                         .cornerRadius(1)
-                    Text("\(lowCount)小时")
+                    Text("\(lowMinutes)分钟")
                 }
             }
             
-            if unplannedCount > 0 {
+            if unplannedMinutes > 0 {
                 HStack(spacing: 2) {
                     Rectangle()
                         .fill(EnergyLevel.unplanned.color)
                         .frame(width: 8, height: 8)
                         .cornerRadius(1)
-                    Text("\(unplannedCount)小时")
+                    Text("\(unplannedMinutes)分钟")
                 }
             }
         }

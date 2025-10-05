@@ -176,6 +176,9 @@ struct MySpaceView: View {
                 if !userState.isTemporaryStateActive {
                     showingTemporaryStateOverlay = false
                 }
+                
+                // 触发状态栏颜色更新
+                userState.objectWillChange.send()
             }
         }
     }
@@ -194,13 +197,13 @@ struct MySpaceView: View {
                     // 能量状态（电池图标设计）
                     VStack(spacing: AppTheme.Spacing.sm) {
                         ZStack {
-                            // 背景圆形渐变
+                            // 背景圆形渐变 - 根据预规划状态动态变化
                             Circle()
                                 .fill(
                                     LinearGradient(
                                         colors: [
-                                            userState.displayEnergyLevel.color.opacity(0.2),
-                                            userState.displayEnergyLevel.color.opacity(0.1)
+                                            userState.getCurrentPlannedEnergyColor().opacity(0.2),
+                                            userState.getCurrentPlannedEnergyColor().opacity(0.1)
                                         ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
