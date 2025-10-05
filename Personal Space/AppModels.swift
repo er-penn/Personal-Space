@@ -503,19 +503,19 @@ class UserState: ObservableObject {
         let targetTotalMinutes = hour * 60 + minute
         let currentTotalMinutes = calendar.component(.hour, from: currentTime) * 60 + calendar.component(.minute, from: currentTime)
         
-        // 如果是当前时间点，显示顶部状态栏颜色（刷子逻辑）
-        if targetTotalMinutes == currentTotalMinutes {
-            return displayEnergyLevel
-        }
-        
         // 对于7:00-8:20段，如果没有其他状态，返回灰色（unplanned）
         if targetTotalMinutes >= 7 * 60 && targetTotalMinutes < 8 * 60 + 20 {
             return .unplanned
         }
         
-        // 对于其他过去时间段，如果没有其他状态，返回绿色（默认高能量状态）
-        // 过去时间一旦确定就不应该再改变
-        return .high
+        // 对于其他过去时间段（从8:20开始到当前时间），如果没有其他状态
+        // 使用刷子逻辑：被刷成当前顶部状态栏的颜色
+        if targetTotalMinutes >= 8 * 60 + 20 && targetTotalMinutes <= currentTotalMinutes {
+            return displayEnergyLevel
+        }
+        
+        // 对于未来时间，返回待规划状态
+        return .unplanned
     }
     
     /// 获取今天剩余时间（秒）
