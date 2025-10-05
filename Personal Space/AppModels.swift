@@ -473,7 +473,7 @@ class UserState: ObservableObject {
         }
         
         // 优先级从高到低检查（只检查实际记录的状态）
-        // 1. 临时状态 (最高优先级) - 只对当前时间到结束时间有效
+        // 1. 临时状态 (最高优先级) - 只对临时状态时间范围内有效
         if isTemporaryStateActive, 
            let tempType = temporaryStateType,
            let startTime = temporaryStateStartTime,
@@ -482,24 +482,17 @@ class UserState: ObservableObject {
             return tempType.energyLevel
         }
         
-        // 2. 专注模式 (高优先级)
-        if isFocusModeOn {
-            return .high
-        }
+        // 注意：专注模式和能量快充不应该影响过去的时间段
+        // 它们只影响当前时间和未来时间
         
-        // 3. 能量快充 (高优先级)
-        if isEnergyBoostActive {
-            return .high
-        }
-        
-        // 4. 能量预规划 (中优先级) - 精确匹配分钟
+        // 2. 能量预规划 (中优先级) - 精确匹配分钟
         if let plan = energyPlans.first(where: { 
             calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour && $0.minute == minute
         }) {
             return plan.energyLevel
         }
         
-        // 5. 默认状态处理
+        // 3. 默认状态处理
         // 对于7:00-8:20段，如果没有其他状态，返回灰色（unplanned）
         // 对于其他时间段，如果没有其他状态，返回当前状态栏颜色（刷子逻辑）
         let targetTotalMinutes = hour * 60 + minute
