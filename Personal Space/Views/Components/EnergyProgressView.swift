@@ -168,7 +168,6 @@ struct EnergyProgressView: View {
     private func getEnergyColor(for hour: Int) -> Color {
         let currentTime = getCurrentTime()
         let currentHour = currentTime.hour
-        let currentMinute = currentTime.minute
         
         // 获取今天第一次设置非灰色状态的时间
         let firstNonGrayTime = userState.getFirstNonGrayStateTime()
@@ -226,12 +225,23 @@ struct EnergyProgressView: View {
         return round(totalOffset)
     }
     
-    // 计算时间标签的位置（左边缘对齐到对应时间块）
+    // 计算时间标签的位置（精确到分钟级，与当前时间指示器保持一致）
     private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
         let hourIndex = hour - 7 // 7点对应索引0
         let blockWidth = totalWidth / CGFloat(hours.count)
-        let spacing: CGFloat = 1 // 块之间的间距
-        return blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
+        let spacing: CGFloat = 1 // 块之间的间距，与getCurrentTimeOffset保持一致
+        
+        // 计算时间标签应该位于的时间块边界位置
+        // 考虑块之间的间距
+        let blockStartOffset = blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
+        
+        // 时间标签对应的是整点时间（分钟为0），所以分钟偏移为0
+        let minuteOffset = (CGFloat(0) / 60.0) * blockWidth
+        
+        let totalOffset = blockStartOffset + minuteOffset
+        
+        // 确保标签精确对齐到像素边界
+        return round(totalOffset)
     }
     
     // 获取当前时间的精确字符串（小时:分钟）
