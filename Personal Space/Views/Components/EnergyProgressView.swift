@@ -117,12 +117,24 @@ struct EnergyProgressView: View {
         let currentTime = getCurrentTime()
         let currentHour = currentTime.hour
         let currentMinute = currentTime.minute
+        let currentTotalMinutes = currentHour * 60 + currentMinute
         
-        // 如果当前小时小于查询的小时，或者当前小时等于查询小时但当前分钟为0，显示预规划状态
-        if hour < currentHour || (hour == currentHour && currentMinute == 0) {
-            // 显示预规划状态
-            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
-            return finalLevel.color
+        // 获取今天第一次设置非灰色状态的时间
+        let firstNonGrayTime = userState.getFirstNonGrayStateTime()
+        
+        // 计算当前小时的总分钟数
+        let hourTotalMinutes = hour * 60
+        
+        // 如果当前小时小于查询的小时，显示已记录状态
+        if hour < currentHour {
+            // 已记录部分：如果已经设置过非灰色状态，则从第一次设置时间开始不显示灰色
+            if let firstTime = firstNonGrayTime, hourTotalMinutes >= firstTime {
+                let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
+                return finalLevel.color
+            } else {
+                // 在第一次设置非灰色状态之前，显示灰色
+                return EnergyLevel.unplanned.color
+            }
         } else if hour == currentHour {
             // 当前小时：黑色竖线经过的部分显示顶部状态栏颜色
             return userState.displayEnergyLevel.color
@@ -179,6 +191,20 @@ struct EnergyProgressView: View {
         return String(format: "%02d:%02d", hour, minute)
     }
     
+    private func formatMinutesToHours(_ minutes: Int) -> String {
+        if minutes >= 60 {
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            if remainingMinutes == 0 {
+                return "\(hours)小时"
+            } else {
+                return "\(hours)小时\(remainingMinutes)分钟"
+            }
+        } else {
+            return "\(minutes)分钟"
+        }
+    }
+    
     private func getEnergyRecordSummaryView() -> some View {
         var highMinutes = 0
         var mediumMinutes = 0
@@ -188,6 +214,9 @@ struct EnergyProgressView: View {
         let currentTime = getCurrentTime()
         let currentTotalMinutes = currentTime.hour * 60 + currentTime.minute
         
+        // 获取今天第一次设置非灰色状态的时间
+        let firstNonGrayTime = userState.getFirstNonGrayStateTime()
+        
         // 只统计当前时间之前的状态（以分钟为精度）
         for minute in 0..<currentTotalMinutes {
             let hour = minute / 60
@@ -195,15 +224,21 @@ struct EnergyProgressView: View {
             
             // 只统计7:00-23:00范围内的时间
             if hour >= 7 && hour <= 23 {
-                let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: min)
-                switch finalLevel {
-                case .high:
-                    highMinutes += 1
-                case .medium:
-                    mediumMinutes += 1
-                case .low:
-                    lowMinutes += 1
-                case .unplanned:
+                // 如果已经设置过非灰色状态，则从第一次设置时间开始统计
+                if let firstTime = firstNonGrayTime, minute >= firstTime {
+                    let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: min)
+                    switch finalLevel {
+                    case .high:
+                        highMinutes += 1
+                    case .medium:
+                        mediumMinutes += 1
+                    case .low:
+                        lowMinutes += 1
+                    case .unplanned:
+                        unplannedMinutes += 1
+                    }
+                } else {
+                    // 在第一次设置非灰色状态之前，都算作待规划
                     unplannedMinutes += 1
                 }
             }
@@ -218,7 +253,7 @@ struct EnergyProgressView: View {
                         .fill(EnergyLevel.high.color)
                         .frame(width: 8, height: 8)
                         .cornerRadius(1)
-                    Text("\(highMinutes)分钟")
+                    Text(formatMinutesToHours(highMinutes))
                 }
             }
             
@@ -228,7 +263,7 @@ struct EnergyProgressView: View {
                         .fill(EnergyLevel.medium.color)
                         .frame(width: 8, height: 8)
                         .cornerRadius(1)
-                    Text("\(mediumMinutes)分钟")
+                    Text(formatMinutesToHours(mediumMinutes))
                 }
             }
             
@@ -238,7 +273,7 @@ struct EnergyProgressView: View {
                         .fill(EnergyLevel.low.color)
                         .frame(width: 8, height: 8)
                         .cornerRadius(1)
-                    Text("\(lowMinutes)分钟")
+                    Text(formatMinutesToHours(lowMinutes))
                 }
             }
             
@@ -248,7 +283,7 @@ struct EnergyProgressView: View {
                         .fill(EnergyLevel.unplanned.color)
                         .frame(width: 8, height: 8)
                         .cornerRadius(1)
-                    Text("\(unplannedMinutes)分钟")
+                    Text(formatMinutesToHours(unplannedMinutes))
                 }
             }
         }

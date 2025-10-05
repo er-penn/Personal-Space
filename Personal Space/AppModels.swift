@@ -397,6 +397,24 @@ class UserState: ObservableObject {
         return plannedLevel.color
     }
     
+    /// 获取今天第一次设置非灰色状态的时间（分钟）
+    func getFirstNonGrayStateTime() -> Int? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        // 从7:00开始查找第一个非灰色状态
+        for hour in 7...23 {
+            for minute in 0..<60 {
+                let level = getFinalEnergyLevel(for: today, hour: hour, minute: minute, showUnplanned: false)
+                if level != .unplanned {
+                    return hour * 60 + minute
+                }
+            }
+        }
+        
+        return nil // 今天还没有设置过非灰色状态
+    }
+    
     /// 获取今天剩余时间（秒）
     func getTodayRemainingTime() -> TimeInterval {
         let calendar = Calendar.current
