@@ -498,8 +498,8 @@ class UserState: ObservableObject {
             return plan.energyLevel
         }
         
-        // 5. 默认状态 - 对于已记录的部分，如果没有其他状态，返回当前的基础状态
-        return energyLevel
+        // 5. 默认状态 - 对于已记录的部分，如果没有其他状态，返回待规划状态
+        return .unplanned
     }
     
     /// 获取今天剩余时间（秒）
