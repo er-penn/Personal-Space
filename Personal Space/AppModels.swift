@@ -70,7 +70,7 @@ struct EnergyLevelChange: Identifiable, Codable {
 
 // MARK: - 用户状态模型
 class UserState: ObservableObject {
-    @Published var energyLevel: EnergyLevel = .high
+    @Published var energyLevel: EnergyLevel = .unplanned
     @Published var isFocusModeOn: Bool = false
     @Published var isEnergyBoostActive: Bool = false
     @Published var moodRecords: [MoodRecord] = [] // 心情记录
@@ -90,11 +90,37 @@ class UserState: ObservableObject {
     @Published var lastEnergyLevelChangeTime: Date? = nil // 最后一次能量状态切换的时间
     @Published var energyLevelChangeHistory: [EnergyLevelChange] = [] // 状态切换历史记录
     
+    // MARK: - 每日首次打开相关属性
+    @Published var lastAppOpenDate: Date? = nil // 最后一次打开app的日期
+    
     init() {
-        // 添加一些示例能量规划数据
-        setupSampleEnergyPlans()
-        // 添加一些示例实际能量记录数据
-        setupSampleActualEnergyRecords()
+        // 检查是否是今天第一次打开app
+        checkFirstOpenToday()
+        
+        // 注释掉示例数据，让用户从空白状态开始
+        // setupSampleEnergyPlans()
+        // setupSampleActualEnergyRecords()
+    }
+    
+    /// 检查是否是今天第一次打开app
+    private func checkFirstOpenToday() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        // 如果今天还没有打开过app，或者是第一次打开app
+        if lastAppOpenDate == nil || !calendar.isDate(lastAppOpenDate!, inSameDayAs: today) {
+            // 重置为未规划状态
+            energyLevel = .unplanned
+            // 清除状态切换历史记录
+            energyLevelChangeHistory.removeAll()
+            // 清除临时状态
+            endTemporaryState()
+            
+            print("今天第一次打开app，重置为未规划状态")
+        }
+        
+        // 更新最后打开app的日期
+        lastAppOpenDate = Date()
     }
     
     private func setupSampleEnergyPlans() {
@@ -553,14 +579,9 @@ class UserState: ObservableObject {
             }
         }
         
-        // 对于7:00-8:20段，如果没有其他状态，返回灰色（unplanned）
-        if targetTotalMinutes >= 7 * 60 && targetTotalMinutes < 8 * 60 + 20 {
-            return .unplanned
-        }
-        
-        // 对于其他过去时间段，如果没有其他状态，返回绿色（默认高能量状态）
-        // 过去时间一旦确定就不应该再改变
-        return .high
+        // 对于所有过去时间段，如果没有其他状态，返回灰色（unplanned）
+        // 每天第一次打开app时，当前时间之前应该都是灰色
+        return .unplanned
     }
     
     /// 获取今天剩余时间（秒）
