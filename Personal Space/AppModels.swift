@@ -395,10 +395,13 @@ class UserState: ObservableObject {
     func startTemporaryState(type: TemporaryStateType, duration: TimeInterval) {
         let currentTime = Date()
         let endTime = currentTime.addingTimeInterval(duration)
-        
+
         // 保存原始状态
         originalEnergyLevel = energyLevel
-        
+
+        // 🎯 记录临时状态的开始到历史记录中
+        recordEnergyLevelChange(to: type.energyLevel)
+
         // 设置临时状态
         isTemporaryStateActive = true
         temporaryStateType = type
@@ -406,21 +409,26 @@ class UserState: ObservableObject {
         temporaryStateDuration = duration
         temporaryStateEndTime = endTime
         isShowingTemporaryStateOverlay = true
-        
+
         print("启动临时状态: \(type.rawValue), 持续时间: \(duration/60)分钟, 结束时间: \(endTime)")
     }
     
     /// 结束临时状态，恢复到原始状态
     func endTemporaryState() {
         guard isTemporaryStateActive else { return }
-        
+
         print("结束临时状态: \(temporaryStateType?.rawValue ?? "未知")")
-        
+
+        // 🎯 记录临时状态的结束到历史记录中
+        if let original = originalEnergyLevel {
+            recordEnergyLevelChange(to: original)
+        }
+
         // 恢复原始状态
         if let original = originalEnergyLevel {
             energyLevel = original
         }
-        
+
         // 清除临时状态
         isTemporaryStateActive = false
         temporaryStateType = nil

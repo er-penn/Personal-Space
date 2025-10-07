@@ -87,6 +87,8 @@ struct TemporaryStateCountdownView: View {
                 displayTime -= 1
             } else {
                 stopTimer()
+                // 🎯 倒计时结束，主动触发结束回调
+                onEnd()
             }
         }
     }

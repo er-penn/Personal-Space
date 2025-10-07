@@ -162,6 +162,10 @@ struct MySpaceView: View {
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 userState.endTemporaryState()
                                 showingTemporaryStateOverlay = false
+                                // 🎯 手动触发一次UI刷新，让能量条立即显示新的状态
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    userState.objectWillChange.send()
+                                }
                             }
                         }
                     )
@@ -170,16 +174,6 @@ struct MySpaceView: View {
                 }
             }
             .navigationBarHidden(true)
-            .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
-                // 每秒检查临时状态是否过期
-                userState.checkTemporaryStateExpiration()
-                if !userState.isTemporaryStateActive {
-                    showingTemporaryStateOverlay = false
-                }
-                
-                // 触发状态栏颜色更新
-                userState.objectWillChange.send()
-            }
         }
     }
     
