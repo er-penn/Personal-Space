@@ -157,14 +157,18 @@ struct MinuteLevelEnergyBlock: View {
     }
     
     private func getEnergyColor(for hour: Int, minute: Int) -> Color {
-        // 如果是今天，使用与我的空间页面完全一致的刷子逻辑
-        if isToday(selectedDate) {
-            let actualLevel = userState.getActualRecordedEnergyLevel(for: selectedDate, hour: hour, minute: minute)
-            return actualLevel.color
-        } else {
-            // 其他日期使用原有的预规划逻辑
+        let calendar = Calendar.current
+        let targetTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: selectedDate) ?? selectedDate
+        let currentTime = Date()
+        
+        if targetTime > currentTime {
+            // 未来时间：使用预规划状态
             let energyLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: minute)
             return energyLevel.color
+        } else {
+            // 过去时间：使用实际记录状态（刷子逻辑）
+            let actualLevel = userState.getActualRecordedEnergyLevel(for: selectedDate, hour: hour, minute: minute)
+            return actualLevel.color
         }
     }
 }

@@ -78,10 +78,67 @@ struct EnergyRecordMinuteBlock: View {
     
     
     private func getEnergyColor(for hour: Int, minute: Int) -> Color {
-        // 简化计算，直接使用getActualRecordedEnergyLevel方法
-        // 这个方法已经包含了所有必要的逻辑
-        let actualLevel = userState.getActualRecordedEnergyLevel(for: selectedDate, hour: hour, minute: minute)
-        return actualLevel.color
+        let calendar = Calendar.current
+        let targetTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: selectedDate) ?? selectedDate
+        let currentTime = Date()
+        
+        if targetTime > currentTime {
+            // 未来时间：使用预规划状态
+            let energyLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: minute)
+            return energyLevel.color
+        } else {
+            // 过去时间：使用实际记录状态（刷子逻辑）
+            let actualLevel = userState.getActualRecordedEnergyLevel(for: selectedDate, hour: hour, minute: minute)
+            return actualLevel.color
+        }
+    }
+}
+
+// MARK: - 能量记录小时块（带遮罩层）
+struct EnergyRecordHourBlock: View {
+    let hour: Int
+    let width: CGFloat
+    let height: CGFloat
+    @ObservedObject var userState: UserState
+    let selectedDate: Date
+    
+    var body: some View {
+        ZStack {
+            // 能量块
+            EnergyRecordMinuteBlock(
+                hour: hour,
+                width: width,
+                height: height,
+                userState: userState,
+                selectedDate: selectedDate
+            )
+            
+            // 过去时间的灰色覆盖层
+            Rectangle()
+                .fill(Color.black.opacity(0.6))
+                .frame(width: width, height: height)
+                .cornerRadius(2)
+                .opacity(isHourSelectable(hour) ? 0 : 1)
+        }
+    }
+    
+    // 检查小时是否可选择（不能选择过去的时间）
+    private func isHourSelectable(_ hour: Int) -> Bool {
+        let now = Date()
+        let calendar = Calendar.current
+        let currentHour = calendar.component(.hour, from: now)
+        
+        // 如果是今天，不能选择过去的时间
+        if calendar.isDateInToday(selectedDate) {
+            // 基本检查：不能选择过去的时间
+            if hour < currentHour {
+                return false
+            }
+            return true
+        } else {
+            // 其他日期都可以选择
+            return true
+        }
     }
 }
 
@@ -147,7 +204,7 @@ struct EnergyProgressView: View {
                         
                         HStack(spacing: 0.5) {
                             ForEach(hours, id: \.self) { hour in
-                                EnergyRecordMinuteBlock(
+                                EnergyRecordHourBlock(
                                     hour: hour,
                                     width: geometry.size.width / CGFloat(hours.count),
                                     height: 20,
