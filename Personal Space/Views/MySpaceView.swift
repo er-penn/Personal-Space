@@ -42,6 +42,10 @@ struct MySpaceView: View {
     @State private var hasSwitchedFromUnplanned = false
     // 移除 showingMomentDetail 状态，改用 NavigationLink
     
+    // MARK: - 定时器相关状态变量
+    @State private var currentTime = Date()
+    @State private var timer: Timer?
+    
     // MARK: - 临时状态相关状态变量
     @State private var showingTimePicker = false
     @State private var selectedTemporaryStateType: TemporaryStateType? = nil
@@ -172,9 +176,57 @@ struct MySpaceView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     .animation(.easeInOut(duration: 0.3), value: showingTemporaryStateOverlay)
                 }
+                
+                // 预规划状态遮罩 - 当不在临时状态且处于预规划状态时显示
+                if !userState.isTemporaryStateActive && userState.isPlannedStateActive,
+                   let plannedLevel = userState.currentPlannedStateLevel {
+                    PlannedStateOverlay(
+                        energyLevel: plannedLevel,
+                        remainingTime: userState.getPlannedStateRemainingTime(),
+                        onEnd: {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                userState.endPlannedStateManually()
+                                // 🎯 手动触发一次UI刷新，让能量条立即显示新的状态
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    userState.objectWillChange.send()
+                                }
+                            }
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .animation(.easeInOut(duration: 0.3), value: userState.isPlannedStateActive)
+                }
             }
             .navigationBarHidden(true)
         }
+        .onAppear {
+            startTimer()
+        }
+        .onDisappear {
+            stopTimer()
+        }
+    }
+    
+    // MARK: - 定时器管理
+    private func startTimer() {
+        // 每分钟更新一次，确保能量状态能够及时切换
+        timer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { _ in
+            currentTime = Date()
+            
+            // 检查并更新预规划状态
+            userState.checkAndUpdatePlannedState()
+            
+            // 触发UI更新，让displayEnergyLevel重新计算
+            userState.objectWillChange.send()
+        }
+        
+        // 立即执行一次检查
+        userState.checkAndUpdatePlannedState()
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
     }
     
     // MARK: - 顶部状态区
