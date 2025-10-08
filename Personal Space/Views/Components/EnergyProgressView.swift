@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-// MARK: - 能量记录专用分钟级能量块
+// MARK: - 能量记录专用分钟级能量块（优化版：合并相同颜色的相邻块）
 struct EnergyRecordMinuteBlock: View {
     let hour: Int
     let width: CGFloat
@@ -15,16 +15,67 @@ struct EnergyRecordMinuteBlock: View {
     @ObservedObject var userState: UserState
     let selectedDate: Date
     
+    // 合并后的块信息
+    struct MergedBlock: Identifiable {
+        let id = UUID()
+        let startMinute: Int
+        let endMinute: Int // 包含这个分钟
+        let color: Color
+        
+        var minuteCount: Int {
+            return endMinute - startMinute + 1
+        }
+    }
+    
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(0..<60, id: \.self) { minute in
+        let mergedBlocks = getMergedBlocks()
+        
+        return HStack(spacing: 0) {
+            ForEach(mergedBlocks) { block in
                 Rectangle()
-                    .fill(getEnergyColor(for: hour, minute: minute))
-                    .frame(width: width / 60, height: height)
+                    .fill(block.color)
+                    .frame(width: width * CGFloat(block.minuteCount) / 60.0, height: height)
             }
         }
         .cornerRadius(2)
     }
+    
+    // 获取合并后的能量块
+    private func getMergedBlocks() -> [MergedBlock] {
+        var blocks: [MergedBlock] = []
+        
+        guard !Array(0..<60).isEmpty else { return blocks }
+        
+        var currentColor = getEnergyColor(for: hour, minute: 0)
+        var startMinute = 0
+        
+        for minute in 1..<60 {
+            let color = getEnergyColor(for: hour, minute: minute)
+            
+            // 如果颜色发生变化，保存前一个块
+            if color != currentColor {
+                blocks.append(MergedBlock(
+                    startMinute: startMinute,
+                    endMinute: minute - 1,
+                    color: currentColor
+                ))
+                
+                // 开始新的块
+                currentColor = color
+                startMinute = minute
+            }
+        }
+        
+        // 添加最后一个块
+        blocks.append(MergedBlock(
+            startMinute: startMinute,
+            endMinute: 59,
+            color: currentColor
+        ))
+        
+        return blocks
+    }
+    
     
     private func getEnergyColor(for hour: Int, minute: Int) -> Color {
         // 简化计算，直接使用getActualRecordedEnergyLevel方法
@@ -91,6 +142,9 @@ struct EnergyProgressView: View {
                     
                     // 进度条 - 按分钟级显示
                     GeometryReader { geometry in
+                        let allBlocks = getAllMergedBlocks()
+                        let _ = printAllBlockInfo(allBlocks)
+                        
                         HStack(spacing: 0.5) {
                             ForEach(hours, id: \.self) { hour in
                                 EnergyRecordMinuteBlock(
@@ -352,6 +406,99 @@ struct EnergyProgressView: View {
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+    
+    // 获取所有小时的合并块
+    private func getAllMergedBlocks() -> [(hour: Int, blocks: [EnergyRecordMinuteBlock.MergedBlock])] {
+        var allBlocks: [(hour: Int, blocks: [EnergyRecordMinuteBlock.MergedBlock])] = []
+        
+        for hour in hours {
+            let blocks = getMergedBlocksForHour(hour)
+            allBlocks.append((hour: hour, blocks: blocks))
+        }
+        
+        return allBlocks
+    }
+    
+    // 获取指定小时的合并块
+    private func getMergedBlocksForHour(_ hour: Int) -> [EnergyRecordMinuteBlock.MergedBlock] {
+        var blocks: [EnergyRecordMinuteBlock.MergedBlock] = []
+        
+        guard !Array(0..<60).isEmpty else { return blocks }
+        
+        var currentColor = getEnergyColorForHour(hour, minute: 0)
+        var startMinute = 0
+        
+        for minute in 1..<60 {
+            let color = getEnergyColorForHour(hour, minute: minute)
+            
+            // 如果颜色发生变化，保存前一个块
+            if color != currentColor {
+                blocks.append(EnergyRecordMinuteBlock.MergedBlock(
+                    startMinute: startMinute,
+                    endMinute: minute - 1,
+                    color: currentColor
+                ))
+                
+                // 开始新的块
+                currentColor = color
+                startMinute = minute
+            }
+        }
+        
+        // 添加最后一个块
+        blocks.append(EnergyRecordMinuteBlock.MergedBlock(
+            startMinute: startMinute,
+            endMinute: 59,
+            color: currentColor
+        ))
+        
+        return blocks
+    }
+    
+    // 获取指定小时和分钟的能量颜色
+    private func getEnergyColorForHour(_ hour: Int, minute: Int) -> Color {
+        let actualLevel = userState.getActualRecordedEnergyLevel(for: Date(), hour: hour, minute: minute)
+        return actualLevel.color
+    }
+    
+    // 打印所有块的全局信息
+    private func printAllBlockInfo(_ allBlocks: [(hour: Int, blocks: [EnergyRecordMinuteBlock.MergedBlock])]) {
+        let calendar = Calendar.current
+        let isToday = calendar.isDateInToday(Date())
+        
+        // 只在今天打印
+        if isToday {
+            // 获取当前时间戳
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "HH:mm:ss.SSS"
+            let timestamp = dateFormatter.string(from: Date())
+            
+            var globalBlockIndex = 1
+            var totalBlocks = 0
+            
+            for (hour, blocks) in allBlocks {
+                for block in blocks {
+                    let colorName: String
+                    if block.color == EnergyLevel.high.color {
+                        colorName = "绿色"
+                    } else if block.color == EnergyLevel.medium.color {
+                        colorName = "黄色"
+                    } else if block.color == EnergyLevel.low.color {
+                        colorName = "红色"
+                    } else {
+                        colorName = "灰色"
+                    }
+                    
+                    print("[\(timestamp)] 块#\(globalBlockIndex): \(hour):\(String(format: "%02d", block.startMinute))-\(hour):\(String(format: "%02d", block.endMinute)) (\(colorName), \(block.minuteCount)分钟)")
+                    
+                    globalBlockIndex += 1
+                    totalBlocks += 1
+                }
+            }
+            
+            print("[\(timestamp)] === 总计渲染 \(totalBlocks) 个块 ===")
+        }
     }
 }
 
