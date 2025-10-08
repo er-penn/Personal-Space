@@ -53,23 +53,107 @@ struct PointerView: View {
     }
 }
 
-// MARK: - 分钟级能量块
+// MARK: - 分钟级能量块（优化版：合并相同颜色的相邻块）
 struct MinuteLevelEnergyBlock: View {
     let hour: Int
     let width: CGFloat
     let height: CGFloat
     @ObservedObject var userState: UserState
     let selectedDate: Date
+    let globalStartIndex: Int // 全局起始索引
+    
+    // 合并后的块信息
+    struct MergedBlock: Identifiable {
+        let id = UUID()
+        let startMinute: Int
+        let endMinute: Int // 包含这个分钟
+        let color: Color
+        
+        var minuteCount: Int {
+            return endMinute - startMinute + 1
+        }
+    }
     
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(0..<60, id: \.self) { minute in
+        let mergedBlocks = getMergedBlocks()
+        
+        // 打印能量预规划页面的渲染块信息（使用全局索引）
+        let _ = printEnergyPlanningBlockInfo(mergedBlocks, globalStartIndex: globalStartIndex)
+        
+        return HStack(spacing: 0) {
+            ForEach(mergedBlocks) { block in
                 Rectangle()
-                    .fill(getEnergyColor(for: hour, minute: minute))
-                    .frame(width: width / 60, height: height)
+                    .fill(block.color)
+                    .frame(width: width * CGFloat(block.minuteCount) / 60.0, height: height)
             }
         }
         .cornerRadius(2)
+    }
+    
+    // 获取合并后的能量块
+    private func getMergedBlocks() -> [MergedBlock] {
+        var blocks: [MergedBlock] = []
+        
+        guard !Array(0..<60).isEmpty else { return blocks }
+        
+        var currentColor = getEnergyColor(for: hour, minute: 0)
+        var startMinute = 0
+        
+        for minute in 1..<60 {
+            let color = getEnergyColor(for: hour, minute: minute)
+            
+            // 如果颜色发生变化，保存前一个块
+            if color != currentColor {
+                blocks.append(MergedBlock(
+                    startMinute: startMinute,
+                    endMinute: minute - 1,
+                    color: currentColor
+                ))
+                
+                // 开始新的块
+                currentColor = color
+                startMinute = minute
+            }
+        }
+        
+        // 添加最后一个块
+        blocks.append(MergedBlock(
+            startMinute: startMinute,
+            endMinute: 59,
+            color: currentColor
+        ))
+        
+        return blocks
+    }
+    
+    // 打印能量预规划页面的渲染块信息（使用全局索引）
+    private func printEnergyPlanningBlockInfo(_ blocks: [MergedBlock], globalStartIndex: Int) {
+        let calendar = Calendar.current
+        let isToday = calendar.isDateInToday(selectedDate)
+        
+        // 只在今天打印
+        if isToday {
+            // 获取当前时间戳
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "HH:mm:ss.SSS"
+            let timestamp = dateFormatter.string(from: Date())
+            
+            for (index, block) in blocks.enumerated() {
+                let colorName: String
+                if block.color == EnergyLevel.high.color {
+                    colorName = "绿色"
+                } else if block.color == EnergyLevel.medium.color {
+                    colorName = "黄色"
+                } else if block.color == EnergyLevel.low.color {
+                    colorName = "红色"
+                } else {
+                    colorName = "灰色"
+                }
+                
+                let globalIndex = globalStartIndex + index
+                print("[\(timestamp)] [能量预规划] 块#\(globalIndex): \(hour):\(String(format: "%02d", block.startMinute))-\(hour):\(String(format: "%02d", block.endMinute)) (\(colorName), \(block.minuteCount)分钟)")
+            }
+        }
     }
     
     private func getEnergyColor(for hour: Int, minute: Int) -> Color {
@@ -2188,13 +2272,14 @@ struct ReadOnlyEnergyTimelineView: View {
             // 能量条
             GeometryReader { geometry in
                 HStack(spacing: 0.5) {
-                    ForEach(hours, id: \.self) { hour in
+                    ForEach(Array(hours.enumerated()), id: \.element) { index, hour in
                         MinuteLevelEnergyBlock(
                             hour: hour,
                             width: geometry.size.width / CGFloat(hours.count),
                             height: 16,
                             userState: userState,
-                            selectedDate: date
+                            selectedDate: date,
+                            globalStartIndex: index * 60 // 每个小时最多60个块，所以起始索引是小时索引*60
                         )
                     }
                 }
@@ -2521,6 +2606,7 @@ struct EnergyTimelineOverlay: View {
         rightPointerMinute = nil
         showingPointers = false
     }
+    
 }
 
 // MARK: - EnergyHourButton
@@ -2545,7 +2631,8 @@ struct EnergyHourButton: View {
                 width: width,
                 height: height,
                 userState: userState,
-                selectedDate: selectedDate
+                selectedDate: selectedDate,
+                globalStartIndex: 0 // 在按钮中不需要全局索引，设为0
             )
         }
         .overlay(
