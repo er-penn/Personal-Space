@@ -71,8 +71,6 @@ struct EnergyLevelChange: Identifiable, Codable {
 // MARK: - 用户状态模型
 class UserState: ObservableObject {
     @Published var energyLevel: EnergyLevel = .unplanned
-    @Published var isFocusModeOn: Bool = false
-    @Published var isEnergyBoostActive: Bool = false
     @Published var moodRecords: [MoodRecord] = [] // 心情记录
     @Published var energyPlans: [EnergyPlan] = [] // 能量预规划
     @Published var actualEnergyRecords: [ActualEnergyRecord] = [] // 实际能量记录
@@ -277,33 +275,28 @@ class UserState: ObservableObject {
     }
     
     var displayEnergyLevel: EnergyLevel {
-        // 优先级：临时状态 > 能量快充 > 专注模式 > 预规划状态 > 基础状态
-        
+        // 优先级：临时状态 > 预规划状态 > 基础状态
+
         // 1. 临时状态优先级最高
         if isTemporaryStateActive, let tempType = temporaryStateType {
             return tempType.energyLevel
         }
-        
-        // 2. 能量快充
-        if isEnergyBoostActive {
-            return .high
-        }
-        
-        // 3. 检查当前时间是否有预规划状态
+
+        // 2. 检查当前时间是否有预规划状态
         let currentTime = Date()
         let calendar = Calendar.current
         let hour = calendar.component(.hour, from: currentTime)
         let minute = calendar.component(.minute, from: currentTime)
-        
+
         // 获取当前时间的预规划状态
         let plannedLevel = getFinalEnergyLevel(for: currentTime, hour: hour, minute: minute, showUnplanned: false)
-        
-        // 4. 如果有预规划状态且不是待规划，则使用预规划状态
+
+        // 3. 如果有预规划状态且不是待规划，则使用预规划状态
         if plannedLevel != .unplanned {
             return plannedLevel
         }
-        
-        // 5. 最后返回基础状态
+
+        // 4. 最后返回基础状态
         return energyLevel
     }
     
@@ -313,35 +306,25 @@ class UserState: ObservableObject {
         let calendar = Calendar.current
         let targetDate = calendar.startOfDay(for: date)
         let targetTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) ?? date
-        
+
         // 优先级从高到低检查
         // 1. 临时状态 (最高优先级) - 只对当前时间到结束时间有效
-        if isTemporaryStateActive, 
+        if isTemporaryStateActive,
            let tempType = temporaryStateType,
            let startTime = temporaryStateStartTime,
            let endTime = temporaryStateEndTime,
            targetTime >= startTime && targetTime <= endTime {
             return tempType.energyLevel
         }
-        
-        // 2. 专注模式 (高优先级)
-        if isFocusModeOn {
-            return .high
-        }
-        
-        // 3. 能量快充 (高优先级)
-        if isEnergyBoostActive {
-            return .high
-        }
-        
-        // 4. 能量预规划 (中优先级) - 精确匹配分钟
-        if let plan = energyPlans.first(where: { 
+
+        // 2. 能量预规划 (中优先级) - 精确匹配分钟
+        if let plan = energyPlans.first(where: {
             calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour && $0.minute == minute
         }) {
             return plan.energyLevel
         }
-        
-        // 5. 默认状态
+
+        // 3. 默认状态
         if showUnplanned {
             return .unplanned
         } else {
@@ -785,48 +768,38 @@ class UserState: ObservableObject {
         let targetDate = calendar.startOfDay(for: date)
         let currentTime = Date()
         let targetTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) ?? date
-        
+
         // 如果查询的是未来时间，返回待规划状态
         if targetTime > currentTime {
             return .unplanned
         }
-        
+
         // 优先级从高到低检查（只检查实际记录的状态）
         // 1. 临时状态 (最高优先级) - 只对当前时间到结束时间有效
-        if isTemporaryStateActive, 
+        if isTemporaryStateActive,
            let tempType = temporaryStateType,
            let startTime = temporaryStateStartTime,
            let endTime = temporaryStateEndTime,
            targetTime >= startTime && targetTime <= endTime {
             return tempType.energyLevel
         }
-        
-        // 2. 专注模式 (高优先级)
-        if isFocusModeOn {
-            return .high
-        }
-        
-        // 3. 能量快充 (高优先级)
-        if isEnergyBoostActive {
-            return .high
-        }
-        
-        // 4. 能量预规划 (中优先级) - 精确匹配分钟
-        if let plan = energyPlans.first(where: { 
+
+        // 2. 能量预规划 (中优先级) - 精确匹配分钟
+        if let plan = energyPlans.first(where: {
             calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour && $0.minute == minute
         }) {
             return plan.energyLevel
         }
-        
-        // 5. 默认状态处理
+
+        // 3. 默认状态处理
         let targetTotalMinutes = hour * 60 + minute
         let currentTotalMinutes = calendar.component(.hour, from: currentTime) * 60 + calendar.component(.minute, from: currentTime)
-        
+
         // 如果是当前时间点，显示顶部状态栏颜色（刷子逻辑）
         if targetTotalMinutes == currentTotalMinutes {
             return displayEnergyLevel
         }
-        
+
         // 刷子逻辑：基于状态切换历史记录确定每个时间段的颜色
         // 按时间倒序排列状态切换历史，找到目标时间对应的状态
         let sortedHistory = energyLevelChangeHistory.sorted { $0.changeTime > $1.changeTime }
@@ -839,7 +812,7 @@ class UserState: ObservableObject {
                 return change.newEnergyLevel
             }
         }
-        
+
         // 对于所有过去时间段，如果没有其他状态，返回基础状态
         // 这样预规划状态结束后，会显示基础状态而不是灰色
         return energyLevel
@@ -883,7 +856,6 @@ class UserState: ObservableObject {
 // MARK: - 伴侣状态模型
 class PartnerState: ObservableObject {
     @Published var energyLevel: EnergyLevel = .medium
-    @Published var isFocusModeOn: Bool = false
     @Published var lastSeen: Date = Date()
 }
 
@@ -1049,22 +1021,6 @@ struct ActualEnergyRecord: Identifiable, Codable {
     }
 }
 
-// MARK: - 能量状态优先级枚举
-enum EnergyPriority: Int, CaseIterable {
-    case dailyCheckIn = 1    // 每天能量状态签到 (最弱)
-    case energyPlanning = 2  // 能量预规划
-    case energyBoost = 3     // 能量快充
-    case focusMode = 4       // 专注模式 (最强)
-    
-    var description: String {
-        switch self {
-        case .dailyCheckIn: return "每日签到"
-        case .energyPlanning: return "能量预规划"
-        case .energyBoost: return "能量快充"
-        case .focusMode: return "专注模式"
-        }
-    }
-}
 
 // MARK: - 成长花园模型
 class GrowthGarden: ObservableObject {

@@ -725,10 +725,8 @@ struct PartnerEnergyProgressView: View {
     }
     
     private func getEnergyColor(for hour: Int) -> Color {
-        // 优先级：专注模式 > 预规划 > 当天状态
-        if partnerState.isFocusModeOn {
-            return .blue
-        }
+        // 优先级：预规划 > 当天状态
+        // 注意：PartnerState 暂时没有 isFocusModeOn 属性，已移除专注模式检查
         
         // 检查是否有预规划
         if let plannedLevel = partnerPlannedEnergy[hour] {

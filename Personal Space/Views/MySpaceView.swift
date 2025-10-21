@@ -374,7 +374,6 @@ struct MySpaceView: View {
                             // 更新状态并记录状态切换历史
                             userState.energyLevel = newLevel
                             userState.recordEnergyLevelChange(to: newLevel)
-                            userState.isEnergyBoostActive = false
                             hasSwitchedFromUnplanned = true
                         }
                     }
@@ -440,7 +439,6 @@ struct MySpaceView: View {
                                 onShortPress: {
                                     withAnimation(.easeInOut(duration: 0.3)) {
                                         userState.energyLevel = .high
-                                        userState.isEnergyBoostActive = false
                                         hasSwitchedFromUnplanned = true
                                     }
                                 },
@@ -452,7 +450,7 @@ struct MySpaceView: View {
                                     print("showingTimePicker 设置为: \(showingTimePicker)")
                                 }
                             )
-                            
+
                             // 低电量模式按钮
                             TemporaryStateButton(
                                 stateType: .lowPower,
@@ -460,7 +458,6 @@ struct MySpaceView: View {
                                 onShortPress: {
                                     withAnimation(.easeInOut(duration: 0.3)) {
                                         userState.energyLevel = .low
-                                        userState.isEnergyBoostActive = false
                                         hasSwitchedFromUnplanned = true
                                     }
                                 },
@@ -616,7 +613,6 @@ struct MySpaceView: View {
     private func switchToEnergyLevel(_ level: EnergyLevel) {
         withAnimation(.easeInOut(duration: 0.3)) {
             userState.energyLevel = level
-            userState.isEnergyBoostActive = false
             hasSwitchedFromUnplanned = true
         }
     }
