@@ -289,7 +289,7 @@ class UserState: ObservableObject {
         let minute = calendar.component(.minute, from: currentTime)
 
         // 获取当前时间的预规划状态
-        let plannedLevel = getFinalEnergyLevel(for: currentTime, hour: hour, minute: minute, showUnplanned: false)
+        let plannedLevel = getFinalEnergyLevel(for: currentTime, hour: hour, minute: minute, showUnplanned: true)
 
         // 3. 如果有预规划状态且不是待规划，则使用预规划状态
         if plannedLevel != .unplanned {
