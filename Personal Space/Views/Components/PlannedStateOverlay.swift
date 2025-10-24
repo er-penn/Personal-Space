@@ -11,9 +11,8 @@ struct PlannedStateOverlay: View {
     let energyLevel: EnergyLevel
     let remainingTime: TimeInterval
     let onEnd: () -> Void
+    @EnvironmentObject var userState: UserState
     
-    @State private var displayTime: TimeInterval = 0
-    @State private var timer: Timer?
     @State private var showWarning: Bool = false
     
     var body: some View {
@@ -43,14 +42,14 @@ struct PlannedStateOverlay: View {
                         .font(.title2)
                         .foregroundColor(energyLevel.color)
                         .scaleEffect(1.1)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: displayTime)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: userState.plannedStateCountdown)
                     
                     VStack(alignment: .leading, spacing: 3) {
                         Text("预规划：\(energyLevel.description)")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.primary)
                         
-                        Text(formatRemainingTime(displayTime))
+                        Text(formatRemainingTime(TimeInterval(userState.plannedStateCountdown)))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(showWarning ? .red : .secondary)
                             .monospacedDigit()
@@ -80,15 +79,16 @@ struct PlannedStateOverlay: View {
             Spacer()
         }
         .onAppear {
-            displayTime = remainingTime
-            startTimer()
+            // 设置统一倒计时
+            userState.setPlannedStateCountdown(Int(remainingTime))
             checkWarning()
         }
         .onDisappear {
-            stopTimer()
+            // 停止统一倒计时
+            userState.stopUnifiedCountdownTimer()
         }
         .onChange(of: remainingTime) { newValue in
-            displayTime = newValue
+            userState.setPlannedStateCountdown(Int(newValue))
             checkWarning()
         }
     }
@@ -106,25 +106,10 @@ struct PlannedStateOverlay: View {
         }
     }
     
-    private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if displayTime > 0 {
-                displayTime -= 1
-            } else {
-                stopTimer()
-                // 🎯 倒计时结束，主动触发结束回调
-                onEnd()
-            }
-        }
-    }
-    
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
-    }
+    // 🎯 Timer已移除：使用统一倒计时管理
     
     private func checkWarning() {
-        showWarning = displayTime <= 300 && displayTime > 0 // 最后5分钟显示警告
+        showWarning = userState.plannedStateCountdown <= 300 && userState.plannedStateCountdown > 0 // 最后5分钟显示警告
     }
     
     private func formatRemainingTime(_ time: TimeInterval) -> String {

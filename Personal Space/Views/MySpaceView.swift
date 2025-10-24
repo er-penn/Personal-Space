@@ -43,7 +43,6 @@ struct MySpaceView: View {
     // 移除 showingMomentDetail 状态，改用 NavigationLink
     
     // MARK: - 定时器相关状态变量
-    @State private var currentTime = Date()
     @State private var timer: Timer?
     
     // MARK: - 临时状态相关状态变量
@@ -207,19 +206,21 @@ struct MySpaceView: View {
         }
     }
     
-    // MARK: - 定时器管理
+    // MARK: - 定时器管理（全局状态管理）
     private func startTimer() {
         // 每分钟更新一次，确保能量状态能够及时切换
         timer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { _ in
-            currentTime = Date()
+            // 🎯 全局状态管理：统一负责所有状态更新
+            // 1. 更新全局当前时间（所有组件自动响应）
+            userState.currentTime = Date()
 
-            // 🎯 每分钟检查并追加基础状态时间段
+            // 2. 每分钟检查并追加基础状态时间段
             userState.checkAndAppendBaseStateTimeSlot()
 
-            // 检查并更新预规划状态
+            // 3. 检查并更新预规划状态
             userState.checkAndUpdatePlannedState()
 
-            // 触发UI更新，让displayEnergyLevel重新计算
+            // 4. 触发UI更新，让所有子组件自动响应状态变化
             userState.objectWillChange.send()
         }
 

@@ -87,12 +87,18 @@ class UserState: ObservableObject {
     // MARK: - 基础状态相关属性
     @Published var currentBaseEnergyLevel: EnergyLevel = .unplanned // 实时基础状态（用于UI显示）
     @Published var lastProcessedMinute: Date? = nil // 最后处理的分钟（用于检测分钟变化）
+    @Published var currentTime: Date = Date() // 全局当前时间（统一管理）
 
     // MARK: - 预规划状态遮罩相关属性
     @Published var isPlannedStateActive: Bool = false // 是否处于预规划状态遮罩
     @Published var currentPlannedStateLevel: EnergyLevel? = nil // 当前预规划状态的能量等级
     @Published var currentPlannedStateStartTime: Date? = nil // 当前预规划状态的开始时间
     @Published var currentPlannedStateEndTime: Date? = nil // 当前预规划状态的结束时间
+    
+    // MARK: - 统一倒计时管理
+    @Published var plannedStateCountdown: Int = 0 // 预规划状态倒计时（秒）
+    @Published var temporaryStateCountdown: Int = 0 // 临时状态倒计时（秒）
+    private var unifiedCountdownTimer: Timer? // 统一倒计时Timer
     
     // MARK: - 状态切换历史记录（用于统计）
     @Published var energyLevelChangeHistory: [EnergyLevelChange] = [] // 状态切换历史记录
@@ -155,6 +161,67 @@ class UserState: ObservableObject {
         currentBaseEnergyLevel = newLevel
 
         print("🎯 更新实时基础状态为：\(newLevel.description)（将在下一分钟追加时间段）")
+    }
+    
+    // MARK: - 统一倒计时管理方法
+    
+    /// 启动统一倒计时Timer
+    func startUnifiedCountdownTimer() {
+        // 如果已经有Timer在运行，先停止
+        stopUnifiedCountdownTimer()
+        
+        unifiedCountdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            self.updateCountdowns()
+        }
+        
+        print("🎯 启动统一倒计时Timer")
+    }
+    
+    /// 停止统一倒计时Timer
+    func stopUnifiedCountdownTimer() {
+        unifiedCountdownTimer?.invalidate()
+        unifiedCountdownTimer = nil
+        print("🎯 停止统一倒计时Timer")
+    }
+    
+    /// 更新所有倒计时
+    private func updateCountdowns() {
+        // 更新预规划状态倒计时
+        if isPlannedStateActive && plannedStateCountdown > 0 {
+            plannedStateCountdown -= 1
+            if plannedStateCountdown <= 0 {
+                endPlannedStateNaturally()
+            }
+        }
+        
+        // 更新临时状态倒计时
+        if isTemporaryStateActive && temporaryStateCountdown > 0 {
+            temporaryStateCountdown -= 1
+            if temporaryStateCountdown <= 0 {
+                endTemporaryState()
+            }
+        }
+        
+        // 如果没有任何倒计时，停止Timer
+        if !isPlannedStateActive && !isTemporaryStateActive {
+            stopUnifiedCountdownTimer()
+        }
+    }
+    
+    /// 设置预规划状态倒计时
+    func setPlannedStateCountdown(_ seconds: Int) {
+        plannedStateCountdown = seconds
+        if seconds > 0 {
+            startUnifiedCountdownTimer()
+        }
+    }
+    
+    /// 设置临时状态倒计时
+    func setTemporaryStateCountdown(_ seconds: Int) {
+        temporaryStateCountdown = seconds
+        if seconds > 0 {
+            startUnifiedCountdownTimer()
+        }
     }
 
     /// 每分钟检查并追加基础状态时间段
@@ -408,8 +475,19 @@ class UserState: ObservableObject {
     }
     
     var displayEnergyLevel: EnergyLevel {
-        // 简化逻辑：临时状态 > 预规划状态 > 基础状态（带截断）
-
+        // 🎯 只有在临时状态或预规划状态遮罩激活时，才按优先级检查
+        // 其他时候直接返回实时基础状态，确保UI立即响应
+        
+        // 检查是否有遮罩状态激活
+        let hasActiveOverlay = isTemporaryStateActive || isPlannedStateActive
+        
+        // 如果没有遮罩状态激活，直接返回实时基础状态
+        if !hasActiveOverlay {
+            return currentBaseEnergyLevel
+        }
+        
+        // 有遮罩状态激活时，按优先级检查：临时状态 > 预规划状态 > 基础状态
+        
         // 1. 临时状态优先级最高
         if isTemporaryStateActive, let tempType = currentTemporaryStateType {
             return tempType.energyLevel

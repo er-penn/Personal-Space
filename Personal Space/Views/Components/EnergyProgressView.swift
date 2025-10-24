@@ -193,9 +193,13 @@ struct EnergyRecordHourBlock: View {
 
 struct EnergyProgressView: View {
     @EnvironmentObject var userState: UserState
-    @State private var currentTime = Date()
-    @State private var timer: Timer?
     @State private var showingEnergyPlanning = false
+    
+    // 🎯 架构说明：
+    // - 全局状态管理由 MySpaceView 统一负责
+    // - EnergyProgressView 只负责 UI 更新和显示
+    // - 通过 @EnvironmentObject 自动响应状态变化
+    // - 使用 userState.currentTime 获取当前时间
     
     private let hours = Array(7...23) // 7点到23点
     
@@ -290,12 +294,6 @@ struct EnergyProgressView: View {
         .cornerRadius(AppTheme.Radius.card)
         .shadow(color: AppTheme.Shadows.card, radius: 8, x: 0, y: 4)
         .overlay(RoundedRectangle(cornerRadius: AppTheme.Radius.card).stroke(AppTheme.Colors.border, lineWidth: 1))
-        .onAppear {
-            startTimer()
-        }
-        .onDisappear {
-            stopTimer()
-        }
             .fullScreenCover(isPresented: $showingEnergyPlanning) {
                 EnergyPlanningView()
                     .environmentObject(userState)
@@ -333,13 +331,13 @@ struct EnergyProgressView: View {
     }
     
     private func getCurrentHour() -> Int {
-        return Calendar.current.component(.hour, from: currentTime)
+        return Calendar.current.component(.hour, from: userState.currentTime)
     }
     
     private func getCurrentTime() -> (hour: Int, minute: Int) {
         let calendar = Calendar.current
-        let hour = calendar.component(.hour, from: currentTime)
-        let minute = calendar.component(.minute, from: currentTime)
+        let hour = calendar.component(.hour, from: userState.currentTime)
+        let minute = calendar.component(.minute, from: userState.currentTime)
         return (hour, minute)
     }
     
@@ -373,8 +371,8 @@ struct EnergyProgressView: View {
     // 获取当前时间的精确字符串（小时:分钟）
     private func getCurrentTimeString() -> String {
         let calendar = Calendar.current
-        let hour = calendar.component(.hour, from: currentTime)
-        let minute = calendar.component(.minute, from: currentTime)
+        let hour = calendar.component(.hour, from: userState.currentTime)
+        let minute = calendar.component(.minute, from: userState.currentTime)
         return String(format: "%02d:%02d", hour, minute)
     }
     
@@ -503,19 +501,8 @@ struct EnergyProgressView: View {
         }
     }
     
-    private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
-            currentTime = Date()
-
-            // 🎯 每分钟检查并追加基础状态时间段
-            userState.checkAndAppendBaseStateTimeSlot()
-        }
-    }
-    
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
-    }
+    // 🎯 Timer 已移除：时间管理统一由 MySpaceView 负责
+    // 通过 userState.currentTime 自动响应时间变化
     
     // 获取所有小时的合并块
     private func getAllMergedBlocks() -> [(hour: Int, blocks: [EnergyRecordMinuteBlock.MergedBlock])] {
