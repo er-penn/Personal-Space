@@ -160,7 +160,7 @@ struct MySpaceView: View {
                 // 临时状态遮罩 - 添加动画效果
                 if showingTemporaryStateOverlay && userState.isTemporaryStateActive {
                     TemporaryStateOverlay(
-                        stateType: userState.temporaryStateType ?? .fastCharge,
+                        stateType: userState.currentTemporaryStateType ?? .fastCharge,
                         remainingTime: userState.getTemporaryStateRemainingTime(),
                         onEnd: {
                             withAnimation(.easeInOut(duration: 0.3)) {
@@ -212,14 +212,17 @@ struct MySpaceView: View {
         // 每分钟更新一次，确保能量状态能够及时切换
         timer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { _ in
             currentTime = Date()
-            
+
+            // 🎯 每分钟检查并追加基础状态时间段
+            userState.checkAndAppendBaseStateTimeSlot()
+
             // 检查并更新预规划状态
             userState.checkAndUpdatePlannedState()
-            
+
             // 触发UI更新，让displayEnergyLevel重新计算
             userState.objectWillChange.send()
         }
-        
+
         // 立即执行一次检查
         userState.checkAndUpdatePlannedState()
     }
@@ -360,7 +363,7 @@ struct MySpaceView: View {
                         // 短按：循环切换能量状态（高→中→低）
                         withAnimation(.easeInOut(duration: 0.3)) {
                             let newLevel: EnergyLevel
-                            switch userState.energyLevel {
+                            switch userState.currentBaseEnergyLevel {
                             case .high:
                                 newLevel = .medium
                             case .medium:
@@ -371,8 +374,8 @@ struct MySpaceView: View {
                                 newLevel = .high
                             }
 
-                            // 更新状态并记录状态切换历史
-                            userState.energyLevel = newLevel
+                            // 更新状态并记录状态切换历史（使用新的实时截断策略）
+                            userState.updateCurrentBaseEnergyLevel(to: newLevel)
                             userState.recordEnergyLevelChange(to: newLevel)
                             hasSwitchedFromUnplanned = true
                         }
@@ -435,10 +438,10 @@ struct MySpaceView: View {
                             // 快充模式按钮
                             TemporaryStateButton(
                                 stateType: .fastCharge,
-                                isActive: userState.energyLevel == .high,
+                                isActive: userState.currentBaseEnergyLevel == .high,
                                 onShortPress: {
                                     withAnimation(.easeInOut(duration: 0.3)) {
-                                        userState.energyLevel = .high
+                                        userState.updateCurrentBaseEnergyLevel(to: .high)  // 使用新的实时截断策略
                                         hasSwitchedFromUnplanned = true
                                     }
                                 },
@@ -454,10 +457,10 @@ struct MySpaceView: View {
                             // 低电量模式按钮
                             TemporaryStateButton(
                                 stateType: .lowPower,
-                                isActive: userState.energyLevel == .low,
+                                isActive: userState.currentBaseEnergyLevel == .low,
                                 onShortPress: {
                                     withAnimation(.easeInOut(duration: 0.3)) {
-                                        userState.energyLevel = .low
+                                        userState.updateCurrentBaseEnergyLevel(to: .low)  // 使用新的实时截断策略
                                         hasSwitchedFromUnplanned = true
                                     }
                                 },
@@ -612,7 +615,7 @@ struct MySpaceView: View {
     
     private func switchToEnergyLevel(_ level: EnergyLevel) {
         withAnimation(.easeInOut(duration: 0.3)) {
-            userState.energyLevel = level
+            userState.updateCurrentBaseEnergyLevel(to: level)  // 使用新的实时截断策略
             hasSwitchedFromUnplanned = true
         }
     }

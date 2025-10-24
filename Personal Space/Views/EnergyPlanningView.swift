@@ -163,7 +163,7 @@ struct MinuteLevelEnergyBlock: View {
         
         if targetTime > currentTime {
             // 未来时间：使用预规划状态
-            let energyLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: minute)
+            let energyLevel = userState.getPlannedEnergyLevel(for: selectedDate, hour: hour, minute: minute)
             return energyLevel.color
         } else {
             // 过去时间：使用实际记录状态（刷子逻辑）
@@ -744,7 +744,7 @@ struct EnergyPlanningView: View {
                     Spacer()
                     FloatingCalendarView(
                         selectedDate: $selectedDate,
-                        energyPlans: userState.energyPlans,
+                        energyPlans: userState.plannedEnergyPlans,
                         showingCalendar: $showingCalendar
                     )
                     .padding(.horizontal, AppTheme.Spacing.lg)
@@ -1094,12 +1094,12 @@ struct EnergyTimelineView: View {
     }
     
     private func getEnergyColor(for hour: Int) -> Color {
-        let finalLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: 0)
+        let finalLevel = userState.getPlannedEnergyLevel(for: selectedDate, hour: hour, minute: 0)
         return finalLevel.color
     }
     
     private func getCurrentEnergyLevel(for hour: Int) -> EnergyLevel {
-        return userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: 0)
+        return userState.getPlannedEnergyLevel(for: selectedDate, hour: hour, minute: 0)
     }
     
     
@@ -1417,56 +1417,71 @@ struct SaveEnergyPlanButton: View {
         
         if isBatchMode, let start = startHour, let end = endHour {
             // 批量保存：移除指定时间范围内的旧规划
-            userState.energyPlans.removeAll { plan in
+            userState.plannedEnergyPlans.removeAll { plan in
                 calendar.isDate(plan.date, inSameDayAs: targetDate) && 
-                plan.hour >= start && plan.hour <= end
+                plan.timeSlots.contains { slot in
+                    slot.startHour >= start && slot.endHour <= end
+                }
             }
             
-            // 如果不是取消规划，则添加分钟级规划
+            // 如果不是取消规划，则使用整合逻辑添加规划
             if energyLevel != .unplanned {
-            for hour in start...end {
-                    for minute in 0..<60 {
-                let newPlan = EnergyPlan(
-                    date: targetDate,
-                    hour: hour,
-                            minute: minute,
-                    energyLevel: energyLevel,
-                    createdAt: Date()
+                // 🎯 使用整合逻辑：为整个时间范围创建一个TimeSlot
+                let batchTimeSlot = TimeSlot(
+                    startHour: start,
+                    startMinute: 0,
+                    endHour: end,
+                    endMinute: 59
                 )
-                userState.energyPlans.append(newPlan)
-                    }
-                }
+                userState.addOrMergePlannedEnergyPlan(
+                    date: targetDate,
+                    timeSlot: batchTimeSlot,
+                    energyLevel: energyLevel
+                )
+                print("🎯 批量保存整合：\(start):00 - \(end):59, 能量等级：\(energyLevel.rawValue)")
             }
         } else if let hour = hour {
             // 单个保存：移除同一天同一小时的旧规划
-            userState.energyPlans.removeAll { plan in
-                calendar.isDate(plan.date, inSameDayAs: targetDate) && plan.hour == hour
+            userState.plannedEnergyPlans.removeAll { plan in
+                calendar.isDate(plan.date, inSameDayAs: targetDate) && 
+                plan.timeSlots.contains { slot in
+                    slot.startHour <= hour && slot.endHour >= hour
+                }
             }
             
-            // 如果不是取消规划，则添加分钟级规划
+            // 如果不是取消规划，则使用整合逻辑添加规划
             if energyLevel != .unplanned {
-                for minute in 0..<60 {
-            let newPlan = EnergyPlan(
-                date: targetDate,
-                hour: hour,
-                        minute: minute,
-                energyLevel: energyLevel,
-                createdAt: Date()
-            )
-            userState.energyPlans.append(newPlan)
-                }
+                // 🎯 使用整合逻辑：为整个小时创建一个TimeSlot
+                let hourlyTimeSlot = TimeSlot(
+                    startHour: hour,
+                    startMinute: 0,
+                    endHour: hour,
+                    endMinute: 59
+                )
+                userState.addOrMergePlannedEnergyPlan(
+                    date: targetDate,
+                    timeSlot: hourlyTimeSlot,
+                    energyLevel: energyLevel
+                )
+                print("🎯 单小时保存整合：\(hour):00 - \(hour):59, 能量等级：\(energyLevel.rawValue)")
             }
         }
         
         // 按日期、小时和分钟排序
-        userState.energyPlans.sort { plan1, plan2 in
+        userState.plannedEnergyPlans.sort { (plan1: EnergyPlan, plan2: EnergyPlan) in
             if plan1.date != plan2.date {
                 return plan1.date < plan2.date
             }
-            if plan1.hour != plan2.hour {
-            return plan1.hour < plan2.hour
+            let slot1 = plan1.timeSlots.first
+            let slot2 = plan2.timeSlots.first
+            let hour1 = slot1?.startHour ?? 0
+            let hour2 = slot2?.startHour ?? 0
+            if hour1 != hour2 {
+                return hour1 < hour2
             }
-            return plan1.minute < plan2.minute
+            let minute1 = slot1?.startMinute ?? 0
+            let minute2 = slot2?.startMinute ?? 0
+            return minute1 < minute2
         }
     }
 }
@@ -1658,7 +1673,7 @@ struct HistoricalEnergyTimelinesView: View {
         
         // 只获取今天之前的实际能量记录
         for record in userState.actualEnergyRecords {
-            let date = calendar.startOfDay(for: record.date)
+            let date = record.date
             // 只包含今天之前的日期
             if date < today {
             if grouped[date] == nil {
@@ -2027,33 +2042,32 @@ struct BatchEnergyButtons: View {
         print("能量级别: \(energyLevel)")
         
         // 移除指定时间范围内的旧规划
-        let removedCount = userState.energyPlans.count
-        userState.energyPlans.removeAll { plan in
+        let removedCount = userState.plannedEnergyPlans.count
+        userState.plannedEnergyPlans.removeAll { plan in
             calendar.isDate(plan.date, inSameDayAs: targetDate) && 
-            plan.hour >= startHour && plan.hour <= endHour
-        }
-        print("移除了 \(removedCount - userState.energyPlans.count) 个旧规划")
-        
-        // 如果不是取消规划，则批量添加分钟级规划
-        if energyLevel != .unplanned {
-            print("开始创建批量分钟级规划...")
-            var planCount = 0
-            
-        for hour in startHour...endHour {
-                for minute in 0..<60 {
-            let newPlan = EnergyPlan(
-                date: targetDate,
-                hour: hour,
-                        minute: minute,
-                energyLevel: energyLevel,
-                createdAt: Date()
-            )
-            userState.energyPlans.append(newPlan)
-                    planCount += 1
-                }
+            plan.timeSlots.contains { slot in
+                slot.startHour >= startHour && slot.endHour <= endHour
             }
-            
-            print("总共创建了 \(planCount) 个分钟级规划")
+        }
+        print("移除了 \(removedCount - userState.plannedEnergyPlans.count) 个旧规划")
+        
+        // 如果不是取消规划，则使用整合逻辑批量添加规划
+        if energyLevel != .unplanned {
+            print("开始创建批量整合规划...")
+
+            // 🎯 使用整合逻辑：为整个时间范围创建一个TimeSlot
+            let batchTimeSlot = TimeSlot(
+                startHour: startHour,
+                startMinute: 0,
+                endHour: endHour,
+                endMinute: 59
+            )
+            userState.addOrMergePlannedEnergyPlan(
+                date: targetDate,
+                timeSlot: batchTimeSlot,
+                energyLevel: energyLevel
+            )
+            print("🎯 批量分钟级保存整合：\(startHour):00 - \(endHour):59, 能量等级：\(energyLevel.rawValue)")
         }
     }
     
@@ -2303,7 +2317,7 @@ struct ReadOnlyEnergyTimelineView: View {
     
     private func getEnergyColor(for hour: Int) -> Color {
         // 获取该日期的能量预规划
-        let finalLevel = userState.getFinalEnergyLevel(for: date, hour: hour, minute: 0)
+        let finalLevel = userState.getPlannedEnergyLevel(for: date, hour: hour, minute: 0)
         return finalLevel.color
     }
     
@@ -2311,7 +2325,7 @@ struct ReadOnlyEnergyTimelineView: View {
         var high = 0, medium = 0, low = 0
         
         for hour in hours {
-            let level = userState.getFinalEnergyLevel(for: date, hour: hour, minute: 0)
+            let level = userState.getPlannedEnergyLevel(for: date, hour: hour, minute: 0)
             switch level {
             case .high: high += 1
             case .medium: medium += 1
@@ -2379,78 +2393,69 @@ extension FloatingEnergyButtons {
             print("开始移除旧规划...")
             print("移除条件: 日期=\(targetDate), 左边界=\(startHour):\(startMinute), 右边界=\(endHour):\(endMinute)")
             
-            let removedCount = userState.energyPlans.count
+            let removedCount = userState.plannedEnergyPlans.count
             // 移除指定时间范围内的旧规划
-            userState.energyPlans.removeAll { plan in
+            userState.plannedEnergyPlans.removeAll { plan in
                 let isSameDate = calendar.isDate(plan.date, inSameDayAs: targetDate)
-                let isInRange: Bool
-                
-                if startHour == endHour {
-                    // 同一小时内
-                    isInRange = plan.hour == startHour && plan.minute >= startMinute && plan.minute < endMinute
-                } else {
-                    // 跨小时
-                    if plan.hour == startHour {
-                        isInRange = plan.minute >= startMinute
-                    } else if plan.hour == endHour {
-                        isInRange = plan.minute < endMinute
-                    } else {
-                        isInRange = plan.hour > startHour && plan.hour < endHour
-                    }
+                let isInRange = plan.timeSlots.contains { slot in
+                    // 检查时间段是否与目标范围重叠
+                    let slotStartMinutes = slot.startHour * 60 + slot.startMinute
+                    let slotEndMinutes = slot.endHour * 60 + slot.endMinute
+                    let targetStartMinutes = startHour * 60 + startMinute
+                    let targetEndMinutes = endHour * 60 + endMinute
+                    
+                    return slotStartMinutes < targetEndMinutes && slotEndMinutes > targetStartMinutes
                 }
                 
                 let shouldRemove = isSameDate && isInRange
                 
                 if shouldRemove {
-                    print("移除规划: \(plan.hour):\(plan.minute) - \(plan.energyLevel)")
+                    print("移除规划: \(plan.timeSlots.first?.startHour ?? 0):\(plan.timeSlots.first?.startMinute ?? 0) - \(plan.energyLevel)")
                 }
                 return shouldRemove
             }
-            print("移除了 \(removedCount - userState.energyPlans.count) 个旧规划")
+            print("移除了 \(removedCount - userState.plannedEnergyPlans.count) 个旧规划")
             
             // 如果不是取消规划，则添加分钟级规划
             if energyLevel != .unplanned {
                 print("开始创建分钟级规划...")
                 print("创建范围: \(startHour):\(startMinute) - \(endHour):\(endMinute)")
                 
-                // 按分钟级创建规划
-                var currentHour = startHour
-                var currentMinute = startMinute
-                var planCount = 0
-                
-                while currentHour < endHour || (currentHour == endHour && currentMinute < endMinute) {
-                    let newPlan = EnergyPlan(
-                        date: targetDate,
-                        hour: currentHour,
-                        minute: currentMinute,
-                        energyLevel: energyLevel,
-                        createdAt: Date()
-                    )
-                    userState.energyPlans.append(newPlan)
-                    planCount += 1
-                    
-                    print("创建规划: \(String(format: "%02d:%02d", currentHour, currentMinute)) - \(energyLevel)")
-                    
-                    // 增加1分钟
-                    currentMinute += 1
-                    if currentMinute >= 60 {
-                        currentMinute = 0
-                        currentHour += 1
-                        print("分钟重置，小时增加到: \(currentHour)")
-                    }
-                }
-                
-                print("总共创建了 \(planCount) 个规划")
+                // 🎯 使用整合逻辑创建规划
+                let rangeTimeSlot = TimeSlot(
+                    startHour: startHour,
+                    startMinute: startMinute,
+                    endHour: endHour,
+                    endMinute: endMinute
+                )
+                userState.addOrMergePlannedEnergyPlan(
+                    date: targetDate,
+                    timeSlot: rangeTimeSlot,
+                    energyLevel: energyLevel
+                )
+                print("🎯 范围保存整合：\(String(format: "%02d:%02d", startHour, startMinute)) - \(String(format: "%02d:%02d", endHour, endMinute)), 能量等级：\(energyLevel.rawValue)")
                 
                 // 验证保存的数据
                 print("=== 验证保存的数据 ===")
-                let verifyPlans = userState.energyPlans.filter { plan in
+                let verifyPlans = userState.plannedEnergyPlans.filter { plan in
                     calendar.isDate(plan.date, inSameDayAs: targetDate) && 
-                    plan.hour == startHour
-                }.sorted { $0.minute < $1.minute }
+                    plan.timeSlots.contains { slot in
+                        slot.startHour <= startHour && slot.endHour >= startHour
+                    }
+                }.sorted { (plan1: EnergyPlan, plan2: EnergyPlan) in
+                    let slot1 = plan1.timeSlots.first
+                    let slot2 = plan2.timeSlots.first
+                    let minute1 = slot1?.startMinute ?? 0
+                    let minute2 = slot2?.startMinute ?? 0
+                    return minute1 < minute2
+                }
                 print("小时\(startHour)的规划数量: \(verifyPlans.count)")
                 if verifyPlans.count > 0 {
-                    print("前5个规划: \(verifyPlans.prefix(5).map { "\($0.hour):\($0.minute)-\($0.energyLevel)" })")
+                    let planDescriptions = verifyPlans.prefix(5).map { plan in
+                        let slot = plan.timeSlots.first
+                        return "\(slot?.startHour ?? 0):\(slot?.startMinute ?? 0)-\(plan.energyLevel)"
+                    }
+                    print("前5个规划: \(planDescriptions)")
                 }
             }
         } else {
@@ -2463,35 +2468,46 @@ extension FloatingEnergyButtons {
             let targetDate = calendar.startOfDay(for: selectedDate)
             
             // 移除该小时的旧规划
-            userState.energyPlans.removeAll { plan in
-                calendar.isDate(plan.date, inSameDayAs: targetDate) && plan.hour == hour
+            userState.plannedEnergyPlans.removeAll { plan in
+                calendar.isDate(plan.date, inSameDayAs: targetDate) && 
+                plan.timeSlots.contains { slot in
+                    slot.startHour <= hour && slot.endHour >= hour
+                }
             }
             
-            // 如果不是取消规划，则添加分钟级规划
+            // 如果不是取消规划，则使用整合逻辑添加规划
             if energyLevel != .unplanned {
-                for minute in 0..<60 {
-                    let newPlan = EnergyPlan(
-                        date: targetDate,
-                        hour: hour,
-                        minute: minute,
-                        energyLevel: energyLevel,
-                        createdAt: Date()
-                    )
-                    userState.energyPlans.append(newPlan)
-                }
-                print("为该小时创建了60个分钟级规划")
+                // 🎯 使用整合逻辑：为整个小时创建一个TimeSlot
+                let hourlyTimeSlot = TimeSlot(
+                    startHour: hour,
+                    startMinute: 0,
+                    endHour: hour,
+                    endMinute: 59
+                )
+                userState.addOrMergePlannedEnergyPlan(
+                    date: targetDate,
+                    timeSlot: hourlyTimeSlot,
+                    energyLevel: energyLevel
+                )
+                print("🎯 单小时整合保存：\(hour):00 - \(hour):59, 能量等级：\(energyLevel.rawValue)")
             }
         }
         
         // 按日期、小时和分钟排序
-        userState.energyPlans.sort { plan1, plan2 in
+        userState.plannedEnergyPlans.sort { (plan1: EnergyPlan, plan2: EnergyPlan) in
             if plan1.date != plan2.date {
                 return plan1.date < plan2.date
             }
-            if plan1.hour != plan2.hour {
-                return plan1.hour < plan2.hour
+            let slot1 = plan1.timeSlots.first
+            let slot2 = plan2.timeSlots.first
+            let hour1 = slot1?.startHour ?? 0
+            let hour2 = slot2?.startHour ?? 0
+            if hour1 != hour2 {
+                return hour1 < hour2
             }
-            return plan1.minute < plan2.minute
+            let minute1 = slot1?.startMinute ?? 0
+            let minute2 = slot2?.startMinute ?? 0
+            return minute1 < minute2
         }
     }
 }
@@ -2655,7 +2671,7 @@ struct EnergyHourButton: View {
     }
     
     private func getEnergyColor(for hour: Int) -> Color {
-        let finalLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: 0)
+        let finalLevel = userState.getPlannedEnergyLevel(for: selectedDate, hour: hour, minute: 0)
         return finalLevel.color
     }
     

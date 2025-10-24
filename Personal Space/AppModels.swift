@@ -70,28 +70,31 @@ struct EnergyLevelChange: Identifiable, Codable {
 
 // MARK: - 用户状态模型
 class UserState: ObservableObject {
-    @Published var energyLevel: EnergyLevel = .unplanned
     @Published var moodRecords: [MoodRecord] = [] // 心情记录
-    @Published var energyPlans: [EnergyPlan] = [] // 能量预规划
+    @Published var plannedEnergyPlans: [EnergyPlan] = [] // 预规划状态（用户的计划）
+    @Published var baseEnergyPlans: [EnergyPlan] = [] // 基础状态（实际发生的历史）
     @Published var actualEnergyRecords: [ActualEnergyRecord] = [] // 实际能量记录
     
-    // MARK: - 临时状态相关属性
+    // MARK: - 临时状态相关属性（混合模型）
+    @Published var temporaryStatePlans: [EnergyPlan] = [] // 临时状态的时间段规划（支持一天多次临时状态）
     @Published var isTemporaryStateActive: Bool = false // 是否处于临时状态
-    @Published var temporaryStateType: TemporaryStateType? = nil // 临时状态类型
+    @Published var currentTemporaryStateType: TemporaryStateType? = nil // 当前临时状态类型
     @Published var originalEnergyLevel: EnergyLevel? = nil // 原始能量状态（用于恢复）
-    @Published var temporaryStateStartTime: Date? = nil // 临时状态开始时间
-    @Published var temporaryStateDuration: TimeInterval = 0 // 临时状态持续时间（秒）
-    @Published var temporaryStateEndTime: Date? = nil // 临时状态结束时间
+    @Published var currentTemporaryStateStartTime: Date? = nil // 当前临时状态开始时间
+    @Published var currentTemporaryStateEndTime: Date? = nil // 当前临时状态结束时间
     @Published var isShowingTemporaryStateOverlay: Bool = false // 是否显示临时状态遮罩
     
+    // MARK: - 基础状态相关属性
+    @Published var currentBaseEnergyLevel: EnergyLevel = .unplanned // 实时基础状态（用于UI显示）
+    @Published var lastProcessedMinute: Date? = nil // 最后处理的分钟（用于检测分钟变化）
+
     // MARK: - 预规划状态遮罩相关属性
     @Published var isPlannedStateActive: Bool = false // 是否处于预规划状态遮罩
     @Published var currentPlannedStateLevel: EnergyLevel? = nil // 当前预规划状态的能量等级
     @Published var currentPlannedStateStartTime: Date? = nil // 当前预规划状态的开始时间
     @Published var currentPlannedStateEndTime: Date? = nil // 当前预规划状态的结束时间
     
-    // MARK: - 刷子逻辑相关属性
-    @Published var lastEnergyLevelChangeTime: Date? = nil // 最后一次能量状态切换的时间
+    // MARK: - 状态切换历史记录（用于统计）
     @Published var energyLevelChangeHistory: [EnergyLevelChange] = [] // 状态切换历史记录
     
     // MARK: - 每日首次打开相关属性
@@ -100,29 +103,179 @@ class UserState: ObservableObject {
     init() {
         // 检查是否是今天第一次打开app
         checkFirstOpenToday()
-        
+
+        // 初始化基础状态为未规划，覆盖7:00-23:59
+        initializeBaseEnergyPlan()
+
         // 临时启用示例数据来测试预规划状态切换功能
         setupSampleEnergyPlans()
         // setupSampleActualEnergyRecords()
+
+        // 调试：打印当前基础状态信息
+        printCurrentBaseStateInfo()
+
+        // 🎯 初始化完成，基础状态追加逻辑已启用
+    }
+
+    /// 初始化基础状态规划（创建7:00-当前时间的unplanned状态）
+    private func initializeBaseEnergyPlan() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let now = Date()
+        let currentHour = calendar.component(.hour, from: now)
+        let currentMinute = calendar.component(.minute, from: now)
+
+        // 只有在当前时间大于7:00时才创建基础状态规划
+        if currentHour > 7 || (currentHour == 7 && currentMinute >= 0) {
+            let initialTimeSlot = TimeSlot(
+                startHour: 7, startMinute: 0,
+                endHour: currentHour, endMinute: currentMinute
+            )
+
+            // 🎯 使用整合逻辑创建基础状态规划
+            addOrMergeBaseEnergyPlan(
+                date: today,
+                timeSlot: initialTimeSlot,
+                energyLevel: .unplanned
+            )
+
+            print("🎯 初始化基础状态规划：7:00 - \(currentHour):\(String(format: "%02d", currentMinute)) = 未规划")
+        }
     }
     
+    /// 更新实时基础状态（UI立即响应，数据在下一分钟追加）
+    /// - Parameter newLevel: 新的基础能量状态
+    func updateCurrentBaseEnergyLevel(to newLevel: EnergyLevel) {
+        // 如果状态没有变化，直接返回
+        if currentBaseEnergyLevel == newLevel {
+            return
+        }
+
+        // 更新实时状态（立即生效，影响UI显示）
+        currentBaseEnergyLevel = newLevel
+
+        print("🎯 更新实时基础状态为：\(newLevel.description)（将在下一分钟追加时间段）")
+    }
+
+    /// 每分钟检查并追加基础状态时间段
+    /// 在新的一分钟到来时检查当前基础状态并追加相应的时间段
+    func checkAndAppendBaseStateTimeSlot() {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMinute = calendar.dateInterval(of: .minute, for: now)?.start ?? now
+
+        // 检查是否进入了新的一分钟
+        if let lastMinute = lastProcessedMinute,
+           calendar.isDate(lastMinute, inSameDayAs: now) &&
+           calendar.component(.hour, from: lastMinute) == calendar.component(.hour, from: now) &&
+           calendar.component(.minute, from: lastMinute) == calendar.component(.minute, from: now) {
+            return // 还是同一分钟，无需处理
+        }
+
+        // 更新最后处理的分钟
+        lastProcessedMinute = currentMinute
+
+        // 🎯 执行追加逻辑
+        appendBaseStateTimeSlot(for: now)
+    }
+
+    /// 追加基础状态时间段
+    /// - Parameter date: 当前时间
+    private func appendBaseStateTimeSlot(for date: Date) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: date)
+        let currentHour = calendar.component(.hour, from: date)
+        let currentMinute = calendar.component(.minute, from: date)
+
+        print("🎯 追加基础状态时间段：\(currentHour):\(String(format: "%02d", currentMinute)), 状态：\(currentBaseEnergyLevel.description)")
+
+        // 🎯 查找当前基础状态对应的 EnergyPlan
+        if let existingPlan = baseEnergyPlans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: today) && $0.energyLevel == currentBaseEnergyLevel
+        }) {
+            // 找到了对应的 EnergyPlan，检查是否有连续的 TimeSlot
+            let previousTime = calendar.date(byAdding: .minute, value: -1, to: date)!
+            let prevHour = calendar.component(.hour, from: previousTime)
+            let prevMinute = calendar.component(.minute, from: previousTime)
+
+            // 查找是否有 endTime = 上一分钟 的 TimeSlot
+            if let timeSlotIndex = existingPlan.timeSlots.firstIndex(where: { slot in
+                slot.endHour == prevHour && slot.endMinute == prevMinute
+            }) {
+                // 找到连续的 TimeSlot，更新 endTime
+                var updatedPlan = existingPlan
+                updatedPlan.timeSlots[timeSlotIndex] = TimeSlot(
+                    startHour: updatedPlan.timeSlots[timeSlotIndex].startHour,
+                    startMinute: updatedPlan.timeSlots[timeSlotIndex].startMinute,
+                    endHour: currentHour,
+                    endMinute: currentMinute
+                )
+
+                // 更新数组中的对应项
+                if let planIndex = baseEnergyPlans.firstIndex(where: { $0.id == existingPlan.id }) {
+                    baseEnergyPlans[planIndex] = updatedPlan
+                    print("🎯 更新连续时间段：\(updatedPlan.timeSlots[timeSlotIndex].startHour):\(String(format: "%02d", updatedPlan.timeSlots[timeSlotIndex].startMinute)) - \(currentHour):\(String(format: "%02d", currentMinute))")
+                }
+            } else {
+                // 没找到连续的 TimeSlot，创建新的
+                let newTimeSlot = TimeSlot(
+                    startHour: currentHour,
+                    startMinute: currentMinute,
+                    endHour: currentHour,
+                    endMinute: currentMinute
+                )
+
+                var updatedPlan = existingPlan
+                updatedPlan.timeSlots.append(newTimeSlot)
+
+                // 更新数组中的对应项
+                if let planIndex = baseEnergyPlans.firstIndex(where: { $0.id == existingPlan.id }) {
+                    baseEnergyPlans[planIndex] = updatedPlan
+                    print("🎯 创建新时间段：\(currentHour):\(String(format: "%02d", currentMinute))")
+                }
+            }
+        } else {
+            // 没找到对应的 EnergyPlan，创建新的
+            let newTimeSlot = TimeSlot(
+                startHour: currentHour,
+                startMinute: currentMinute,
+                endHour: currentHour,
+                endMinute: currentMinute
+            )
+
+            let newPlan = EnergyPlan(
+                date: today,
+                timeSlots: [newTimeSlot],
+                energyLevel: currentBaseEnergyLevel
+            )
+
+            baseEnergyPlans.append(newPlan)
+            print("🎯 创建新的基础状态规划：\(currentBaseEnergyLevel.description), 时间段：\(currentHour):\(String(format: "%02d", currentMinute))")
+        }
+    }
+
     /// 检查是否是今天第一次打开app
     private func checkFirstOpenToday() {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        
+
         // 如果今天还没有打开过app，或者是第一次打开app
         if lastAppOpenDate == nil || !calendar.isDate(lastAppOpenDate!, inSameDayAs: today) {
-            // 重置为未规划状态
-            energyLevel = .unplanned
+            // 重置为未规划状态（使用新的追加逻辑）
+            initializeBaseEnergyPlan()
+            currentBaseEnergyLevel = .unplanned
             // 清除状态切换历史记录
             energyLevelChangeHistory.removeAll()
             // 清除临时状态
+            temporaryStatePlans.removeAll()
             endTemporaryState()
-            
+            // 清除预规划和基础状态
+            plannedEnergyPlans.removeAll()
+            baseEnergyPlans.removeAll()
+
             print("今天第一次打开app，重置为未规划状态")
         }
-        
+
         // 更新最后打开app的日期
         lastAppOpenDate = Date()
     }
@@ -130,206 +283,179 @@ class UserState: ObservableObject {
     private func setupSampleEnergyPlans() {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        
-        // 添加今天的测试数据
+
+        // 添加今天的测试数据（使用新的混合模型）
         // 7:00-8:20 灰色（不设置，保持unplanned状态）
-        // 注意：不需要为每个分钟都创建EnergyPlan，让getActualRecordedEnergyLevel方法处理默认状态
-        
-        // 8:20-10:00 绿色（高能量）
-        for minute in 20..<60 {
-            energyPlans.append(EnergyPlan(date: today, hour: 8, minute: minute, energyLevel: .high))
-        }
-        for hour in 9...9 {
-            for minute in 0..<60 {
-                energyPlans.append(EnergyPlan(date: today, hour: hour, minute: minute, energyLevel: .high))
-            }
-        }
-        
-        // 10:00-10:55 红色（低能量）
-        for minute in 0..<55 {
-            energyPlans.append(EnergyPlan(date: today, hour: 10, minute: minute, energyLevel: .low))
-        }
-        
-        // 10:55-11:20 绿色（高能量）
-        for minute in 55..<60 {
-            energyPlans.append(EnergyPlan(date: today, hour: 10, minute: minute, energyLevel: .high))
-        }
-        for minute in 0..<20 {
-            energyPlans.append(EnergyPlan(date: today, hour: 11, minute: minute, energyLevel: .high))
-        }
-        
-        // 11:20-12:50 黄色（中能量）
-        for minute in 20..<60 {
-            energyPlans.append(EnergyPlan(date: today, hour: 11, minute: minute, energyLevel: .medium))
-        }
-        for minute in 0..<50 {
-            energyPlans.append(EnergyPlan(date: today, hour: 12, minute: minute, energyLevel: .medium))
-        }
-        
-        // 12:50-当前时间 绿色（高能量）
-        for minute in 50..<60 {
-            energyPlans.append(EnergyPlan(date: today, hour: 12, minute: minute, energyLevel: .high))
-        }
-        // 13:00-14:00 绿色（高能量）
-        for minute in 0..<60 {
-            energyPlans.append(EnergyPlan(date: today, hour: 13, minute: minute, energyLevel: .high))
-        }
-        // 14:00-当前时间 绿色（高能量）
+
+        // 8:20-10:00 绿色（高能量）- 使用整合逻辑
+        addOrMergePlannedEnergyPlan(
+            date: today,
+            timeSlot: TimeSlot(startHour: 8, startMinute: 20, endHour: 9, endMinute: 59),
+            energyLevel: .high
+        )
+
+        // 10:00-10:55 红色（低能量）- 使用整合逻辑
+        addOrMergePlannedEnergyPlan(
+            date: today,
+            timeSlot: TimeSlot(startHour: 10, startMinute: 0, endHour: 10, endMinute: 54),
+            energyLevel: .low
+        )
+
+        // 10:55-11:20 绿色（高能量）- 这会合并到前面的高能量规划中
+        addOrMergePlannedEnergyPlan(
+            date: today,
+            timeSlot: TimeSlot(startHour: 10, startMinute: 55, endHour: 11, endMinute: 19),
+            energyLevel: .high
+        )
+
+        // 11:20-12:50 黄色（中能量）- 使用整合逻辑
+        addOrMergePlannedEnergyPlan(
+            date: today,
+            timeSlot: TimeSlot(startHour: 11, startMinute: 20, endHour: 12, endMinute: 49),
+            energyLevel: .medium
+        )
+
+        // 12:50-当前时间 绿色（高能量）- 这会合并到前面的高能量规划中
         let currentHour = calendar.component(.hour, from: Date())
         let currentMinute = calendar.component(.minute, from: Date())
-        if currentHour >= 14 {
-            for minute in 0..<min(currentMinute, 60) {
-                energyPlans.append(EnergyPlan(date: today, hour: 14, minute: minute, energyLevel: .high))
-            }
+        if currentHour >= 12 && currentMinute >= 50 {
+            addOrMergePlannedEnergyPlan(
+                date: today,
+                timeSlot: TimeSlot(startHour: 12, startMinute: 50, endHour: currentHour, endMinute: currentMinute),
+                energyLevel: .high
+            )
         }
-        
-        // 添加未来时间的测试数据，用于测试自动切换功能
-        // 添加从当前时间后2分钟开始的测试数据
+  
+        // 添加未来时间的测试数据（使用新的混合模型）
         let testStartHour = currentHour
         let testStartMinute = currentMinute + 2 // 2分钟后开始
-        
+
         var testHour = testStartHour
         var testMinute = testStartMinute
-        
+
         // 调整时间（处理分钟溢出）
         if testMinute >= 60 {
             testMinute -= 60
             testHour += 1
         }
-        
-        print("🎯 添加测试预规划数据：")
-        
+
+        print("🎯 添加测试预规划数据（混合模型）：")
+
         // 第一段：红色（低能量）- 5分钟
-        for i in 0..<5 {
-            var hour = testHour
-            var minute = testMinute + i
-            if minute >= 60 {
-                minute -= 60
-                hour += 1
-            }
-            energyPlans.append(EnergyPlan(date: today, hour: hour, minute: minute, energyLevel: .low))
-            if i == 0 {
-                print("  📍 \(hour):\(String(format: "%02d", minute))-\(hour):\(String(format: "%02d", minute + 4)) 红色（低能量）")
-            }
-        }
-        
+        let firstEndHour = testHour + (testStartMinute + 4) / 60
+        let firstEndMinute = (testStartMinute + 4) % 60
+        addOrMergePlannedEnergyPlan(
+            date: today,
+            timeSlot: TimeSlot(startHour: testHour, startMinute: testStartMinute, endHour: firstEndHour, endMinute: firstEndMinute),
+            energyLevel: .low
+        )
+        print("  📍 \(testHour):\(String(format: "%02d", testStartMinute))-\(firstEndHour):\(String(format: "%02d", firstEndMinute)) 红色（低能量）")
+
         // 第二段：黄色（中能量）- 5分钟
-        for i in 5..<10 {
-            var hour = testHour
-            var minute = testMinute + i
-            if minute >= 60 {
-                minute -= 60
-                hour += 1
-            }
-            energyPlans.append(EnergyPlan(date: today, hour: hour, minute: minute, energyLevel: .medium))
-            if i == 5 {
-                print("  📍 \(hour):\(String(format: "%02d", minute))-\(hour):\(String(format: "%02d", minute + 4)) 黄色（中能量）")
-            }
-        }
-        
+        let secondSegmentStart = testStartMinute + 5
+        let secondSegmentEnd = testStartMinute + 9
+        let secondStartHour = testHour + secondSegmentStart / 60
+        let secondStartMinute = secondSegmentStart % 60
+        let secondEndHour = testHour + secondSegmentEnd / 60
+        let secondEndMinute = secondSegmentEnd % 60
+        addOrMergePlannedEnergyPlan(
+            date: today,
+            timeSlot: TimeSlot(startHour: secondStartHour, startMinute: secondStartMinute, endHour: secondEndHour, endMinute: secondEndMinute),
+            energyLevel: .medium
+        )
+        print("  📍 \(secondStartHour):\(String(format: "%02d", secondStartMinute))-\(secondEndHour):\(String(format: "%02d", secondEndMinute)) 黄色（中能量）")
+
         print("  当前时间: \(currentHour):\(String(format: "%02d", currentMinute))")
-        print("  测试将在 \(testHour):\(String(format: "%02d", testMinute)) 开始")
-        
-        // 添加明天的规划
+        print("  测试将在 \(testHour):\(String(format: "%02d", testStartMinute)) 开始")
+
+        // 添加明天的规划（混合模型示例：多个分散时间段）
         if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) {
-            energyPlans.append(EnergyPlan(date: tomorrow, hour: 9, energyLevel: .high))
-            energyPlans.append(EnergyPlan(date: tomorrow, hour: 15, energyLevel: .medium))
-            energyPlans.append(EnergyPlan(date: tomorrow, hour: 20, energyLevel: .low))
+            // 示例：上午有两个高能量时段
+            addOrMergePlannedEnergyPlan(
+                date: tomorrow,
+                timeSlot: TimeSlot(startHour: 9, startMinute: 0, endHour: 11, endMinute: 30),
+                energyLevel: .high
+            )
+            addOrMergePlannedEnergyPlan(
+                date: tomorrow,
+                timeSlot: TimeSlot(startHour: 14, startMinute: 0, endHour: 15, endMinute: 30),
+                energyLevel: .high
+            )
+
+            // 中午时段：中能量
+            addOrMergePlannedEnergyPlan(
+                date: tomorrow,
+                timeSlot: TimeSlot(startHour: 12, startMinute: 0, endHour: 13, endMinute: 30),
+                energyLevel: .medium
+            )
+
+            // 晚上：低能量
+            addOrMergePlannedEnergyPlan(
+                date: tomorrow,
+                timeSlot: TimeSlot(startHour: 20, startMinute: 0, endHour: 22, endMinute: 0),
+                energyLevel: .low
+            )
         }
-        
-        // 添加后天的规划
+
+        // 添加后天的规划（混合模型示例：单个长时段）
         if let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: today) {
-            energyPlans.append(EnergyPlan(date: dayAfterTomorrow, hour: 7, energyLevel: .high))
-            energyPlans.append(EnergyPlan(date: dayAfterTomorrow, hour: 12, energyLevel: .medium))
-            energyPlans.append(EnergyPlan(date: dayAfterTomorrow, hour: 16, energyLevel: .low))
-            energyPlans.append(EnergyPlan(date: dayAfterTomorrow, hour: 19, energyLevel: .high))
-        }
-        
-        // 为10月4日添加分钟级测试数据（假设今天是10月3日）
-        let october4 = calendar.date(from: DateComponents(year: 2025, month: 10, day: 4)) ?? today
-        if calendar.isDate(october4, inSameDayAs: today) || october4 > today {
-            // 为12:00-13:00这个小时块添加分钟级颜色分割
-            // 0-20分钟：高能量（绿色）
-            for minute in 0..<20 {
-                energyPlans.append(EnergyPlan(date: october4, hour: 12, minute: minute, energyLevel: .high))
-            }
-            // 20-40分钟：中能量（黄色）
-            for minute in 20..<40 {
-                energyPlans.append(EnergyPlan(date: october4, hour: 12, minute: minute, energyLevel: .medium))
-            }
-            // 40-60分钟：低能量（红色）
-            for minute in 40..<60 {
-                energyPlans.append(EnergyPlan(date: october4, hour: 12, minute: minute, energyLevel: .low))
-            }
-            
-            // 为14:00-15:00这个小时块添加另一种分钟级颜色分割
-            // 0-30分钟：高能量（绿色）
-            for minute in 0..<30 {
-                energyPlans.append(EnergyPlan(date: october4, hour: 14, minute: minute, energyLevel: .high))
-            }
-            // 30-60分钟：中能量（黄色）
-            for minute in 30..<60 {
-                energyPlans.append(EnergyPlan(date: october4, hour: 14, minute: minute, energyLevel: .medium))
-            }
+            addOrMergePlannedEnergyPlan(
+                date: dayAfterTomorrow,
+                timeSlot: TimeSlot(startHour: 7, startMinute: 0, endHour: 18, endMinute: 0),
+                energyLevel: .high
+            )
         }
     }
     
     var displayEnergyLevel: EnergyLevel {
-        // 优先级：临时状态 > 预规划状态 > 基础状态
+        // 简化逻辑：临时状态 > 预规划状态 > 基础状态（带截断）
 
         // 1. 临时状态优先级最高
-        if isTemporaryStateActive, let tempType = temporaryStateType {
+        if isTemporaryStateActive, let tempType = currentTemporaryStateType {
             return tempType.energyLevel
         }
 
-        // 2. 检查当前时间是否有预规划状态
+        // 2. 检查当前时间的预规划状态
         let currentTime = Date()
         let calendar = Calendar.current
         let hour = calendar.component(.hour, from: currentTime)
         let minute = calendar.component(.minute, from: currentTime)
 
-        // 获取当前时间的预规划状态
-        let plannedLevel = getFinalEnergyLevel(for: currentTime, hour: hour, minute: minute, showUnplanned: true)
-
-        // 3. 如果有预规划状态且不是待规划，则使用预规划状态
-        if plannedLevel != .unplanned {
-            return plannedLevel
-        }
-
-        // 4. 最后返回基础状态
-        return energyLevel
-    }
-    
-    
-    // 分钟级查询方法
-    func getFinalEnergyLevel(for date: Date, hour: Int, minute: Int, showUnplanned: Bool = true) -> EnergyLevel {
-        let calendar = Calendar.current
-        let targetDate = calendar.startOfDay(for: date)
-        let targetTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) ?? date
-
-        // 优先级从高到低检查
-        // 1. 临时状态 (最高优先级) - 只对当前时间到结束时间有效
-        if isTemporaryStateActive,
-           let tempType = temporaryStateType,
-           let startTime = temporaryStateStartTime,
-           let endTime = temporaryStateEndTime,
-           targetTime >= startTime && targetTime <= endTime {
-            return tempType.energyLevel
-        }
-
-        // 2. 能量预规划 (中优先级) - 精确匹配分钟
-        if let plan = energyPlans.first(where: {
-            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour && $0.minute == minute
+        // 获取预规划状态（用户的计划）
+        if let plan = plannedEnergyPlans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: calendar.startOfDay(for: currentTime)) &&
+            $0.containsTime(hour: hour, minute: minute)
         }) {
             return plan.energyLevel
         }
 
-        // 3. 默认状态
-        if showUnplanned {
-            return .unplanned
-        } else {
-            return .medium
+        // 3. 基础状态（实际发生的历史记录）
+        if let basePlan = baseEnergyPlans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: calendar.startOfDay(for: currentTime)) &&
+            $0.containsTime(hour: hour, minute: minute)
+        }) {
+            return basePlan.energyLevel
         }
+
+        // 4. 默认返回实时基础状态
+        return currentBaseEnergyLevel
+    }
+    
+    
+    // 分钟级查询方法（完整混合模型支持）
+    func getPlannedEnergyLevel(for date: Date, hour: Int, minute: Int, showUnplanned: Bool = true) -> EnergyLevel {
+        let calendar = Calendar.current
+        let targetDate = calendar.startOfDay(for: date)
+
+        // 🎯 未来时间：只检查预规划状态，其他显示未规划
+        if let plan = plannedEnergyPlans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.containsTime(hour: hour, minute: minute)
+        }) {
+            return plan.energyLevel
+        }
+
+        // 没有预规划则显示未规划状态
+        return .unplanned
     }
     
     // MARK: - 能量规划相关方法
@@ -339,9 +465,9 @@ class UserState: ObservableObject {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         
-        return energyPlans
+        return plannedEnergyPlans
             .filter { calendar.isDate($0.date, inSameDayAs: today) || $0.date > today }
-            .map { calendar.startOfDay(for: $0.date) }
+            .map { $0.date }
             .removingDuplicates()
             .sorted()
     }
@@ -350,10 +476,21 @@ class UserState: ObservableObject {
     func getEnergyPlans(for date: Date) -> [EnergyPlan] {
         let calendar = Calendar.current
         let targetDate = calendar.startOfDay(for: date)
-        
-        return energyPlans.filter { plan in
+
+        return plannedEnergyPlans.filter { plan in
             calendar.isDate(plan.date, inSameDayAs: targetDate)
-        }.sorted { $0.hour < $1.hour }
+        }.sorted { (plan1: EnergyPlan, plan2: EnergyPlan) in
+            // 按第一个时间段的开始时间排序
+            guard let slot1 = plan1.timeSlots.first,
+                  let slot2 = plan2.timeSlots.first else {
+                return false
+            }
+
+            let start1 = slot1.startHour * 60 + slot1.startMinute
+            let start2 = slot2.startHour * 60 + slot2.startMinute
+
+            return start1 < start2
+        }
     }
     
     // MARK: - 实际能量记录相关方法
@@ -365,7 +502,7 @@ class UserState: ObservableObject {
         
         return actualEnergyRecords
             .filter { calendar.isDate($0.date, inSameDayAs: today) || $0.date < today }
-            .map { calendar.startOfDay(for: $0.date) }
+            .map { $0.date }
             .removingDuplicates()
             .sorted()
     }
@@ -447,60 +584,100 @@ class UserState: ObservableObject {
     
     // MARK: - 临时状态相关方法
     
-    /// 启动临时状态
+    /// 启动临时状态（使用混合模型）
     /// - Parameters:
     ///   - type: 临时状态类型（快充模式或低电量模式）
     ///   - duration: 持续时间（秒）
     func startTemporaryState(type: TemporaryStateType, duration: TimeInterval) {
         let currentTime = Date()
         let endTime = currentTime.addingTimeInterval(duration)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: currentTime)
 
-        // 保存原始状态
-        originalEnergyLevel = energyLevel
+        // 保存原始状态（使用混合模型）
+        originalEnergyLevel = currentBaseEnergyLevel
 
         // 🎯 记录临时状态的开始到历史记录中
         recordEnergyLevelChange(to: type.energyLevel)
 
-        // 设置临时状态
+        // 创建临时状态的时间段规划
+        let startHour = calendar.component(.hour, from: currentTime)
+        let startMinute = calendar.component(.minute, from: currentTime)
+        let endHour = calendar.component(.hour, from: endTime)
+        let endMinute = calendar.component(.minute, from: endTime)
+
+        let temporaryTimeSlot = TimeSlot(
+            startHour: startHour, startMinute: startMinute,
+            endHour: endHour, endMinute: endMinute
+        )
+
+        // 🎯 方式1：查找是否有相同能量等级的EnergyPlan可以合并
+        if let existingPlan = temporaryStatePlans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: today) && $0.energyLevel == type.energyLevel
+        }) {
+            // 找到相同能量等级的EnergyPlan，添加新的TimeSlot
+            var updatedPlan = existingPlan
+            updatedPlan.timeSlots.append(temporaryTimeSlot)
+
+            // 更新数组中的对应项
+            if let index = temporaryStatePlans.firstIndex(where: { $0.id == existingPlan.id }) {
+                temporaryStatePlans[index] = updatedPlan
+                print("🎯 合并到现有临时状态规划: \(type.rawValue), 现有\(updatedPlan.timeSlots.count)个时间段")
+            }
+        } else {
+            // 没有找到相同能量等级的EnergyPlan，创建新的
+            let newTemporaryPlan = EnergyPlan(
+                date: today,
+                timeSlots: [temporaryTimeSlot],
+                energyLevel: type.energyLevel
+            )
+
+            // 添加到临时状态规划数组中
+            temporaryStatePlans.append(newTemporaryPlan)
+            print("🎯 创建新的临时状态规划: \(type.rawValue)")
+        }
+
+        // 设置当前临时状态
         isTemporaryStateActive = true
-        temporaryStateType = type
-        temporaryStateStartTime = currentTime
-        temporaryStateDuration = duration
-        temporaryStateEndTime = endTime
+        currentTemporaryStateType = type
+        currentTemporaryStateStartTime = currentTime
+        currentTemporaryStateEndTime = endTime
         isShowingTemporaryStateOverlay = true
 
         print("启动临时状态: \(type.rawValue), 持续时间: \(duration/60)分钟, 结束时间: \(endTime)")
+        print("🎯 临时状态时间段: \(startHour):\(String(format: "%02d", startMinute)) - \(endHour):\(String(format: "%02d", endMinute))")
     }
     
-    /// 结束临时状态，恢复到原始状态
+    /// 结束临时状态，恢复到原始状态（使用混合模型）
     func endTemporaryState() {
         guard isTemporaryStateActive else { return }
 
-        print("结束临时状态: \(temporaryStateType?.rawValue ?? "未知")")
+        print("结束临时状态: \(currentTemporaryStateType?.rawValue ?? "未知")")
 
         // 🎯 记录临时状态的结束到历史记录中
         if let original = originalEnergyLevel {
             recordEnergyLevelChange(to: original)
         }
 
-        // 恢复原始状态
+        // 恢复原始状态（UI立即响应）
         if let original = originalEnergyLevel {
-            energyLevel = original
+            updateCurrentBaseEnergyLevel(to: original)
         }
 
-        // 清除临时状态
+        // 清除当前临时状态
         isTemporaryStateActive = false
-        temporaryStateType = nil
+        currentTemporaryStateType = nil
         originalEnergyLevel = nil
-        temporaryStateStartTime = nil
-        temporaryStateDuration = 0
-        temporaryStateEndTime = nil
+        currentTemporaryStateStartTime = nil
+        currentTemporaryStateEndTime = nil
         isShowingTemporaryStateOverlay = false
+
+        print("🎯 已清除临时状态时间段规划")
     }
     
     /// 检查临时状态是否已过期，如果过期则自动结束
     func checkTemporaryStateExpiration() {
-        guard isTemporaryStateActive, let endTime = temporaryStateEndTime else { return }
+        guard isTemporaryStateActive, let endTime = currentTemporaryStateEndTime else { return }
         
         if Date() >= endTime {
             print("临时状态已过期，自动结束")
@@ -520,7 +697,7 @@ class UserState: ObservableObject {
         guard isTemporaryStateActive else { return "" }
         let remainingTime = getTemporaryStateRemainingTime()
         let minutes = Int(remainingTime / 60)
-        
+
         if minutes <= 0 {
             return "即将结束"
         } else if minutes < 60 {
@@ -540,7 +717,7 @@ class UserState: ObservableObject {
         let minute = calendar.component(.minute, from: currentTime)
         
         // 获取当前时间的预规划状态
-        let plannedLevel = getFinalEnergyLevel(for: currentTime, hour: hour, minute: minute, showUnplanned: false)
+        let plannedLevel = getPlannedEnergyLevel(for: currentTime, hour: hour, minute: minute, showUnplanned: false)
         
         // 如果是待规划状态，返回默认状态栏颜色
         if plannedLevel == .unplanned {
@@ -561,10 +738,9 @@ class UserState: ObservableObject {
         let today = calendar.startOfDay(for: currentTime)
         
         // 查找当前时间对应的预规划
-        let currentPlans = energyPlans.filter { plan in
+        let currentPlans = plannedEnergyPlans.filter { plan in
             calendar.isDate(plan.date, inSameDayAs: today) &&
-            plan.hour == currentHour &&
-            plan.minute == currentMinute
+            plan.containsTime(hour: currentHour, minute: currentMinute)
         }
         
         // 如果当前时间有预规划，且不是 unplanned
@@ -595,33 +771,24 @@ class UserState: ObservableObject {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         
-        var currentHour = startHour
-        var currentMinute = startMinute
+        // 查找包含当前时间的预规划
+        let currentPlans = plannedEnergyPlans.filter { plan in
+            calendar.isDate(plan.date, inSameDayAs: today) &&
+            plan.containsTime(hour: startHour, minute: startMinute) &&
+            plan.energyLevel == energyLevel
+        }
         
-        // 从当前时刻开始，向后查找连续的相同能量等级的预规划
-        while currentHour < 24 {
-            let plans = energyPlans.filter { plan in
-                calendar.isDate(plan.date, inSameDayAs: today) &&
-                plan.hour == currentHour &&
-                plan.minute == currentMinute &&
-                plan.energyLevel == energyLevel
-            }
-            
-            if plans.isEmpty {
-                // 找到了结束点，返回这个时间点
-                return calendar.date(bySettingHour: currentHour, minute: currentMinute, second: 0, of: today)
-            }
-            
-            // 继续下一分钟
-            currentMinute += 1
-            if currentMinute >= 60 {
-                currentMinute = 0
-                currentHour += 1
+        guard let currentPlan = currentPlans.first else { return nil }
+        
+        // 找到包含当前时间的 TimeSlot
+        for slot in currentPlan.timeSlots {
+            if slot.contains(hour: startHour, minute: startMinute) {
+                // 返回这个 TimeSlot 的结束时间
+                return calendar.date(bySettingHour: slot.endHour, minute: slot.endMinute, second: 0, of: today)
             }
         }
         
-        // 如果到了一天的结束还没结束，返回23:59
-        return calendar.date(bySettingHour: 23, minute: 59, second: 59, of: today)
+        return nil
     }
     
     /// 启动预规划状态遮罩
@@ -640,14 +807,15 @@ class UserState: ObservableObject {
     /// 自然结束预规划状态（时间到了）
     private func endPlannedStateNaturally() {
         // 记录预规划状态结束，切换到基础状态
-        recordEnergyLevelChange(to: energyLevel)
+        let baseLevel = currentBaseEnergyLevel
+        recordEnergyLevelChange(to: baseLevel)
         
         isPlannedStateActive = false
         currentPlannedStateLevel = nil
         currentPlannedStateStartTime = nil
         currentPlannedStateEndTime = nil
         
-        print("🎯 预规划遮罩自然结束，记录状态切换为: \(energyLevel.description)")
+        print("🎯 预规划遮罩自然结束，记录状态切换为: \(baseLevel.description)")
     }
     
     /// 获取当前预规划状态的剩余时间
@@ -666,7 +834,7 @@ class UserState: ObservableObject {
     /// 会清除当前时刻到预规划结束时刻的所有预规划数据
     func endPlannedStateManually() {
         guard isPlannedStateActive,
-              let startTime = currentPlannedStateStartTime,
+              let _ = currentPlannedStateStartTime,
               let endTime = currentPlannedStateEndTime else {
             return
         }
@@ -687,10 +855,9 @@ class UserState: ObservableObject {
         
         while hour < endHour || (hour == endHour && minute < endMinute) {
             // 查找并标记要删除的预规划
-            let plansAtTime = energyPlans.filter { plan in
+            let plansAtTime = plannedEnergyPlans.filter { plan in
                 calendar.isDate(plan.date, inSameDayAs: today) &&
-                plan.hour == hour &&
-                plan.minute == minute
+                plan.containsTime(hour: hour, minute: minute)
             }
             plansToRemove.append(contentsOf: plansAtTime)
             
@@ -702,22 +869,22 @@ class UserState: ObservableObject {
             }
         }
         
-        // 从 energyPlans 中移除这些预规划
+        // 从 plannedEnergyPlans 中移除这些预规划
         for planToRemove in plansToRemove {
-            if let index = energyPlans.firstIndex(where: { plan in
+            if let index = plannedEnergyPlans.firstIndex(where: { plan in
                 calendar.isDate(plan.date, inSameDayAs: planToRemove.date) &&
-                plan.hour == planToRemove.hour &&
-                plan.minute == planToRemove.minute &&
-                plan.energyLevel == planToRemove.energyLevel
+                plan.energyLevel == planToRemove.energyLevel &&
+                plan.id == planToRemove.id
             }) {
-                energyPlans.remove(at: index)
+                plannedEnergyPlans.remove(at: index)
             }
         }
         
         print("🎯 手动结束预规划遮罩，已清除 \(plansToRemove.count) 个预规划数据（\(currentHour):\(currentMinute) - \(endHour):\(endMinute)）")
         
         // 记录预规划状态结束，切换到基础状态
-        recordEnergyLevelChange(to: energyLevel)
+        let baseLevel = currentBaseEnergyLevel
+        recordEnergyLevelChange(to: baseLevel)
         
         // 结束预规划状态
         isPlannedStateActive = false
@@ -725,7 +892,7 @@ class UserState: ObservableObject {
         currentPlannedStateStartTime = nil
         currentPlannedStateEndTime = nil
         
-        print("🎯 手动结束预规划遮罩，记录状态切换为: \(energyLevel.description)")
+        print("🎯 手动结束预规划遮罩，记录状态切换为: \(baseLevel.description)")
     }
     
     /// 获取今天第一次设置非灰色状态的时间（分钟）
@@ -746,10 +913,9 @@ class UserState: ObservableObject {
         return nil // 今天还没有设置过非灰色状态
     }
 
-    /// 记录状态切换（用于刷子逻辑）
+    /// 记录状态切换（用于统计分析）
     func recordEnergyLevelChange(to newLevel: EnergyLevel) {
         let changeTime = Date()
-        lastEnergyLevelChangeTime = changeTime
 
         // 添加到状态切换历史记录
         let change = EnergyLevelChange(changeTime: changeTime, newEnergyLevel: newLevel)
@@ -760,64 +926,75 @@ class UserState: ObservableObject {
         energyLevelChangeHistory = energyLevelChangeHistory.filter {
             calendar.isDate($0.changeTime, inSameDayAs: Date())
         }
+
+        print("🎯 记录状态切换：\(newLevel.description) at \(changeTime)")
     }
 
-    /// 获取实际记录的能量状态（用于已记录部分的统计和显示）
+    /// 获取过去时间的能量状态（简化版：移除刷子逻辑）
     func getActualRecordedEnergyLevel(for date: Date, hour: Int, minute: Int) -> EnergyLevel {
         let calendar = Calendar.current
         let targetDate = calendar.startOfDay(for: date)
-        let currentTime = Date()
-        let targetTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) ?? date
 
-        // 如果查询的是未来时间，返回待规划状态
-        if targetTime > currentTime {
-            return .unplanned
+        // 🎯 过去时间：简化逻辑，只检查临时状态和基础状态
+        // 1. 临时状态优先级最高 - 检查所有临时状态规划
+        if let tempLevel = getTemporaryStateEnergyLevel(for: date, hour: hour, minute: minute) {
+            return tempLevel
         }
-
-        // 优先级从高到低检查（只检查实际记录的状态）
-        // 1. 临时状态 (最高优先级) - 只对当前时间到结束时间有效
-        if isTemporaryStateActive,
-           let tempType = temporaryStateType,
-           let startTime = temporaryStateStartTime,
-           let endTime = temporaryStateEndTime,
-           targetTime >= startTime && targetTime <= endTime {
-            return tempType.energyLevel
-        }
-
-        // 2. 能量预规划 (中优先级) - 精确匹配分钟
-        if let plan = energyPlans.first(where: {
-            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.hour == hour && $0.minute == minute
+        
+        // 🎯
+        //2.预规划状态优先级次之：检查预规划状态
+        if let plan = plannedEnergyPlans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.containsTime(hour: hour, minute: minute)
         }) {
             return plan.energyLevel
         }
 
-        // 3. 默认状态处理
-        let targetTotalMinutes = hour * 60 + minute
-        let currentTotalMinutes = calendar.component(.hour, from: currentTime) * 60 + calendar.component(.minute, from: currentTime)
-
-        // 如果是当前时间点，显示顶部状态栏颜色（刷子逻辑）
-        if targetTotalMinutes == currentTotalMinutes {
-            return displayEnergyLevel
+        // 3. 基础状态（实际发生的历史记录）
+        if let basePlan = baseEnergyPlans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: targetDate) && $0.containsTime(hour: hour, minute: minute)
+        }) {
+            return basePlan.energyLevel
         }
 
-        // 刷子逻辑：基于状态切换历史记录确定每个时间段的颜色
-        // 按时间倒序排列状态切换历史，找到目标时间对应的状态
-        let sortedHistory = energyLevelChangeHistory.sorted { $0.changeTime > $1.changeTime }
-
-        for change in sortedHistory {
-            let changeTotalMinutes = calendar.component(.hour, from: change.changeTime) * 60 + calendar.component(.minute, from: change.changeTime)
-
-            // 如果查询的时间在这次状态切换之后（或等于），使用这次切换后的状态
-            if targetTotalMinutes >= changeTotalMinutes {
-                return change.newEnergyLevel
-            }
-        }
-
-        // 对于所有过去时间段，如果没有其他状态，返回基础状态
-        // 这样预规划状态结束后，会显示基础状态而不是灰色
-        return energyLevel
+        //return currentBaseEnergyLevel
+        // 4. 默认返回未规划状态
+        return .unplanned
     }
     
+    
+    /// 获取当前临时状态（如果激活）
+    var currentTemporaryEnergyLevel: EnergyLevel? {
+        return currentTemporaryStateType?.energyLevel
+    }
+
+    /// 检查指定时间是否在任意临时状态时间段内
+    func isInTemporaryStateTime(hour: Int, minute: Int) -> Bool {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        return temporaryStatePlans.contains { plan in
+            guard calendar.isDate(plan.date, inSameDayAs: today) else { return false }
+
+            return plan.timeSlots.contains { slot in
+                let targetTotalMinutes = hour * 60 + minute
+                let startTotalMinutes = slot.startHour * 60 + slot.startMinute
+                let endTotalMinutes = slot.endHour * 60 + slot.endMinute
+                return targetTotalMinutes >= startTotalMinutes && targetTotalMinutes <= endTotalMinutes
+            }
+        }
+    }
+
+    /// 检查指定时间是否在基础状态时间段内
+    func isInBaseStateTime(hour: Int, minute: Int) -> Bool {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        return baseEnergyPlans.contains { plan in
+            calendar.isDate(plan.date, inSameDayAs: today) &&
+            plan.containsTime(hour: hour, minute: minute)
+        }
+    }
+
     /// 获取今天剩余时间（秒）
     func getTodayRemainingTime() -> TimeInterval {
         let calendar = Calendar.current
@@ -840,16 +1017,143 @@ class UserState: ObservableObject {
         
         return TimeInterval(roundedMinutes * 60)
     }
-    
+
+    /// 获取当前基础状态详细信息（调试用）
+    func printCurrentBaseStateInfo() {
+        print("\n🎯 ===== 当前基础状态详细信息 =====")
+        print("🔄 实时状态: \(currentBaseEnergyLevel.description)")
+        print("📝 最后处理分钟: \(lastProcessedMinute?.description ?? "未设置")")
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        let todayBasePlans = baseEnergyPlans.filter {
+            calendar.isDate($0.date, inSameDayAs: today)
+        }
+
+        if !todayBasePlans.isEmpty {
+            print("⏱️ 今日基础状态规划: \(todayBasePlans.count) 个能量等级")
+
+            for (planIndex, plan) in todayBasePlans.enumerated() {
+                print("  🎯 能量等级 \(planIndex + 1): \(plan.energyLevel.description) - \(plan.timeSlots.count) 个时间段")
+
+                for (slotIndex, slot) in plan.timeSlots.enumerated() {
+                    print("    📍 段落 \(slotIndex + 1): \(String(format: "%02d:%02d", slot.startHour, slot.startMinute)) - \(String(format: "%02d:%02d", slot.endHour, slot.endMinute))")
+                }
+
+                let totalMinutes = plan.totalDurationMinutes
+                print("    📊 总时长: \(totalMinutes) 分钟 (\(String(format: "%.1f", Double(totalMinutes) / 60.0)) 小时)")
+            }
+        } else {
+            print("❌ 今日还没有基础状态记录")
+        }
+
+        print("========================================\n")
+    }
+
     /// 获取临时状态剩余时间（秒）
     func getTemporaryStateRemainingTime() -> TimeInterval {
-        guard isTemporaryStateActive, let endTime = temporaryStateEndTime else { return 0 }
+        guard isTemporaryStateActive, let endTime = currentTemporaryStateEndTime else { return 0 }
         return max(0, endTime.timeIntervalSince(Date()))
     }
     
     /// 获取临时状态剩余时间（分钟）
     func getTemporaryStateRemainingMinutes() -> Int {
         return Int(getTemporaryStateRemainingTime() / 60)
+    }
+
+    /// 获取指定时间的临时状态能量等级
+    func getTemporaryStateEnergyLevel(for date: Date, hour: Int, minute: Int) -> EnergyLevel? {
+        let calendar = Calendar.current
+        let targetDate = calendar.startOfDay(for: date)
+
+        // 🎯 遍历所有匹配日期的临时状态规划（支持多个不同能量等级的规划）
+        for plan in temporaryStatePlans {
+            guard calendar.isDate(plan.date, inSameDayAs: targetDate) else { continue }
+
+            // 检查是否在该规划的任意时间段内
+            for slot in plan.timeSlots {
+                let targetTotalMinutes = hour * 60 + minute
+                let startTotalMinutes = slot.startHour * 60 + slot.startMinute
+                let endTotalMinutes = slot.endHour * 60 + slot.endMinute
+
+                if targetTotalMinutes >= startTotalMinutes && targetTotalMinutes <= endTotalMinutes {
+                    return plan.energyLevel
+                }
+            }
+        }
+
+        return nil
+    }
+
+    /// 添加或整合预规划状态（用户的计划）
+    /// - Parameters:
+    ///   - date: 规划日期
+    ///   - timeSlot: 时间段
+    ///   - energyLevel: 能量等级
+    func addOrMergePlannedEnergyPlan(date: Date, timeSlot: TimeSlot, energyLevel: EnergyLevel) {
+        let calendar = Calendar.current
+
+        // 🎯 查找是否有相同能量等级的EnergyPlan可以合并
+        if let existingPlan = plannedEnergyPlans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: date) && $0.energyLevel == energyLevel
+        }) {
+            // 找到相同能量等级的EnergyPlan，添加新的TimeSlot
+            var updatedPlan = existingPlan
+            updatedPlan.timeSlots.append(timeSlot)
+
+            // 更新数组中的对应项
+            if let index = plannedEnergyPlans.firstIndex(where: { $0.id == existingPlan.id }) {
+                plannedEnergyPlans[index] = updatedPlan
+                print("🎯 合并到现有预规划状态: \(energyLevel.rawValue), 现有\(updatedPlan.timeSlots.count)个时间段")
+            }
+        } else {
+            // 没有找到相同能量等级的EnergyPlan，创建新的
+            let newPlan = EnergyPlan(
+                date: date,
+                timeSlots: [timeSlot],
+                energyLevel: energyLevel
+            )
+
+            // 添加到预规划状态数组中
+            plannedEnergyPlans.append(newPlan)
+            print("🎯 创建新的预规划状态: \(energyLevel.rawValue)")
+        }
+    }
+
+    /// 添加或整合基础状态（实际发生的历史）
+    /// - Parameters:
+    ///   - date: 日期
+    ///   - timeSlot: 时间段
+    ///   - energyLevel: 能量等级
+    func addOrMergeBaseEnergyPlan(date: Date, timeSlot: TimeSlot, energyLevel: EnergyLevel) {
+        let calendar = Calendar.current
+
+        // 🎯 查找是否有相同能量等级的EnergyPlan可以合并
+        if let existingPlan = baseEnergyPlans.first(where: {
+            calendar.isDate($0.date, inSameDayAs: date) && $0.energyLevel == energyLevel
+        }) {
+            // 找到相同能量等级的EnergyPlan，添加新的TimeSlot
+            var updatedPlan = existingPlan
+            updatedPlan.timeSlots.append(timeSlot)
+
+            // 更新数组中的对应项
+            if let index = baseEnergyPlans.firstIndex(where: { $0.id == existingPlan.id }) {
+                baseEnergyPlans[index] = updatedPlan
+                print("🎯 合并到现有基础状态: \(energyLevel.rawValue), 现有\(updatedPlan.timeSlots.count)个时间段")
+            }
+        } else {
+            // 没有找到相同能量等级的EnergyPlan，创建新的
+            let newPlan = EnergyPlan(
+                date: date,
+                timeSlots: [timeSlot],
+                energyLevel: energyLevel
+            )
+
+            // 添加到基础状态数组中
+            baseEnergyPlans.append(newPlan)
+            print("🎯 创建新的基础状态: \(energyLevel.rawValue)")
+        }
     }
 }
 
@@ -973,39 +1277,97 @@ struct MoodRecord: Identifiable, Codable {
     }
 }
 
-// MARK: - 能量预规划模型
+// MARK: - 时间段结构
+struct TimeSlot: Codable, Equatable {
+    let startHour: Int
+    let startMinute: Int
+    let endHour: Int
+    let endMinute: Int
+
+    init(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int) {
+        self.startHour = startHour
+        self.startMinute = startMinute
+        self.endHour = endHour
+        self.endMinute = endMinute
+    }
+
+    // 检查指定时间是否在时间段内
+    func contains(hour: Int, minute: Int) -> Bool {
+        let totalMinutes = hour * 60 + minute
+        let startTotalMinutes = startHour * 60 + startMinute
+        let endTotalMinutes = endHour * 60 + endMinute
+
+        return totalMinutes >= startTotalMinutes && totalMinutes <= endTotalMinutes
+    }
+
+    // 获取时间段的总分钟数
+    var durationMinutes: Int {
+        let startTotalMinutes = startHour * 60 + startMinute
+        let endTotalMinutes = endHour * 60 + endMinute
+        return endTotalMinutes - startTotalMinutes + 1
+    }
+}
+
+// MARK: - 能量预规划模型（方案三：混合模型）
 struct EnergyPlan: Identifiable, Codable {
     let id: UUID
-    let date: Date // 规划日期
-    let hour: Int // 小时 (0-23)
-    let minute: Int // 分钟 (0-59)，支持分钟级精度
-    let energyLevel: EnergyLevel // 规划的能量状态
+    let date: Date // 规划日期（仅存储日期部分，时间为00:00:00）
+    var timeSlots: [TimeSlot] // 时间段数组（支持多个分散时间段）
+    var energyLevel: EnergyLevel // 统一能量状态（支持修改）
     let createdAt: Date // 创建时间
-    
-    init(date: Date, hour: Int, energyLevel: EnergyLevel, createdAt: Date = Date()) {
+
+    init(date: Date, timeSlots: [TimeSlot], energyLevel: EnergyLevel, createdAt: Date = Date()) {
         self.id = UUID()
-        self.date = date
-        self.hour = hour
-        self.minute = 0 // 默认整点
+        self.date = Calendar.current.startOfDay(for: date)
+        self.timeSlots = timeSlots
         self.energyLevel = energyLevel
         self.createdAt = createdAt
     }
-    
-    // 分钟级初始化器
-    init(date: Date, hour: Int, minute: Int, energyLevel: EnergyLevel, createdAt: Date = Date()) {
-        self.id = UUID()
-        self.date = date
-        self.hour = hour
-        self.minute = minute
-        self.energyLevel = energyLevel
-        self.createdAt = createdAt
+
+    // 便捷初始化器：单个时间段
+    init(date: Date, startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, energyLevel: EnergyLevel, createdAt: Date = Date()) {
+        let timeSlot = TimeSlot(startHour: startHour, startMinute: startMinute, endHour: endHour, endMinute: endMinute)
+        self.init(date: date, timeSlots: [timeSlot], energyLevel: energyLevel, createdAt: createdAt)
+    }
+
+    // 检查指定时间是否在任一时间段内
+    func containsTime(hour: Int, minute: Int) -> Bool {
+        return timeSlots.contains { $0.contains(hour: hour, minute: minute) }
+    }
+
+    // 获取所有时间点的数组（用于兼容现有渲染逻辑）
+    func getAllMinutePoints() -> [(hour: Int, minute: Int)] {
+        var allPoints: [(hour: Int, minute: Int)] = []
+
+        for slot in timeSlots {
+            var currentHour = slot.startHour
+            var currentMinute = slot.startMinute
+
+            while currentHour < slot.endHour || (currentHour == slot.endHour && currentMinute <= slot.endMinute) {
+                allPoints.append((hour: currentHour, minute: currentMinute))
+
+                // 下一分钟
+                currentMinute += 1
+                if currentMinute >= 60 {
+                    currentMinute = 0
+                    currentHour += 1
+                }
+            }
+        }
+
+        return allPoints.sorted { $0.hour < $1.hour || ($0.hour == $1.hour && $0.minute < $1.minute) }
+    }
+
+    // 计算总规划时长（分钟）
+    var totalDurationMinutes: Int {
+        return timeSlots.reduce(0) { $0 + $1.durationMinutes }
     }
 }
 
 // MARK: - 实际能量记录模型
 struct ActualEnergyRecord: Identifiable, Codable {
     let id: UUID
-    let date: Date // 记录日期
+    let date: Date // 记录日期（仅存储日期部分，时间为00:00:00）
     let hour: Int // 小时 (0-23)
     let energyLevel: EnergyLevel // 实际经历的能量状态
     let recordedAt: Date // 记录时间
@@ -1013,7 +1375,7 @@ struct ActualEnergyRecord: Identifiable, Codable {
 
     init(date: Date, hour: Int, energyLevel: EnergyLevel, recordedAt: Date = Date(), note: String? = nil) {
         self.id = UUID()
-        self.date = date
+        self.date = Calendar.current.startOfDay(for: date)
         self.hour = hour
         self.energyLevel = energyLevel
         self.recordedAt = recordedAt

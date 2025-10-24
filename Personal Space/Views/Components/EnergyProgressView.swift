@@ -14,6 +14,7 @@ struct EnergyRecordMinuteBlock: View {
     let height: CGFloat
     @ObservedObject var userState: UserState
     let selectedDate: Date
+    @State private var hasLoggedBaseState = false // 控制日志输出频率
     
     // 合并后的块信息
     struct MergedBlock: Identifiable {
@@ -29,7 +30,10 @@ struct EnergyRecordMinuteBlock: View {
     
     var body: some View {
         let mergedBlocks = getMergedBlocks()
-        
+
+        // 输出基础状态日志（每个小时块只输出一次）
+        logBaseStateInfo()
+
         return HStack(spacing: 0) {
             ForEach(mergedBlocks) { block in
                 Rectangle()
@@ -84,13 +88,58 @@ struct EnergyRecordMinuteBlock: View {
         
         if targetTime > currentTime {
             // 未来时间：使用预规划状态
-            let energyLevel = userState.getFinalEnergyLevel(for: selectedDate, hour: hour, minute: minute)
+            let energyLevel = userState.getPlannedEnergyLevel(for: selectedDate, hour: hour, minute: minute)
             return energyLevel.color
         } else {
-            // 过去时间：使用实际记录状态（刷子逻辑）
+            // 过去时间：使用实际记录状态
             let actualLevel = userState.getActualRecordedEnergyLevel(for: selectedDate, hour: hour, minute: minute)
             return actualLevel.color
         }
+    }
+
+    // 输出基础状态信息日志
+    private func logBaseStateInfo() {
+        // 避免重复输出，每次渲染只输出一次
+        guard !hasLoggedBaseState else { return }
+        hasLoggedBaseState = true
+
+        let calendar = Calendar.current
+        let now = Date()
+        let currentHour = calendar.component(.hour, from: now)
+        let currentMinute = calendar.component(.minute, from: now)
+
+        print("\n🎯 ===== 能量条渲染日志 (\(hour):00 时间块) =====")
+        print("🕒 当前时间: \(currentHour):\(String(format: "%02d", currentMinute))")
+        print("🔄 实时基础状态: \(userState.currentBaseEnergyLevel.description)")
+
+        let today = calendar.startOfDay(for: Date())
+
+        let todayBasePlans = userState.baseEnergyPlans.filter {
+            calendar.isDate($0.date, inSameDayAs: today)
+        }
+
+        if !todayBasePlans.isEmpty {
+            print("📊 今日基础状态规划: \(todayBasePlans.count) 个能量等级")
+
+            for (planIndex, plan) in todayBasePlans.enumerated() {
+                print("  🎯 能量等级 \(planIndex + 1): \(plan.energyLevel.description) - \(plan.timeSlots.count) 个时间段")
+
+                for (slotIndex, slot) in plan.timeSlots.enumerated() {
+                    let startStr = "\(String(format: "%02d", slot.startHour)):\(String(format: "%02d", slot.startMinute))"
+                    let endStr = "\(String(format: "%02d", slot.endHour)):\(String(format: "%02d", slot.endMinute))"
+                    print("    📍 段落 \(slotIndex + 1): \(startStr) - \(endStr)")
+                }
+
+                let totalMinutes = plan.totalDurationMinutes
+                print("    📏 总时长: \(totalMinutes) 分钟 (\(String(format: "%.1f", Double(totalMinutes) / 60.0)) 小时)")
+            }
+        } else {
+            print("❌ 今日还没有基础状态记录")
+        }
+
+        // 🎯 基础状态追加逻辑已启用，每分钟自动检查并更新
+
+        print("=====================================\n")
     }
 }
 
@@ -278,7 +327,7 @@ struct EnergyProgressView: View {
             return userState.displayEnergyLevel.color
         } else {
             // 未来时间：显示预规划状态
-            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
+            let finalLevel = userState.getPlannedEnergyLevel(for: Date(), hour: hour, minute: 0)
             return finalLevel.color
         }
     }
@@ -434,7 +483,7 @@ struct EnergyProgressView: View {
         var unplannedCount = 0
         
         for hour in hours {
-            let finalLevel = userState.getFinalEnergyLevel(for: Date(), hour: hour, minute: 0)
+            let finalLevel = userState.getPlannedEnergyLevel(for: Date(), hour: hour, minute: 0)
             switch finalLevel {
             case .high:
                 highCount += 1
@@ -457,6 +506,9 @@ struct EnergyProgressView: View {
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
             currentTime = Date()
+
+            // 🎯 每分钟检查并追加基础状态时间段
+            userState.checkAndAppendBaseStateTimeSlot()
         }
     }
     
