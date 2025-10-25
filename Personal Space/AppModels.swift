@@ -732,6 +732,19 @@ class UserState: ObservableObject {
 
         print("结束临时状态: \(currentTemporaryStateType?.rawValue ?? "未知")")
 
+        // 🎯 截断当前临时状态的TimeSlot到当前时间的上一分钟
+        if let tempType = currentTemporaryStateType {
+            let modified = truncateCurrentTimeSlot(
+                for: tempType.energyLevel,
+                in: &temporaryStatePlans,
+                isTemporaryState: true
+            )
+
+            if modified {
+                print("🎯 临时状态TimeSlot已截断")
+            }
+        }
+
         // 🎯 记录临时状态的结束到历史记录中
         if let original = originalEnergyLevel {
             recordEnergyLevelChange(to: original)
@@ -741,6 +754,9 @@ class UserState: ObservableObject {
         if let original = originalEnergyLevel {
             updateCurrentBaseEnergyLevel(to: original)
         }
+
+        // 🎯 立即执行一次主定时器内的逻辑
+        checkAndAppendBaseStateTimeSlot()
 
         // 清除当前临时状态
         isTemporaryStateActive = false
@@ -909,67 +925,39 @@ class UserState: ObservableObject {
     }
     
     /// 手动结束预规划状态（用户点击了倒计时）
-    /// 会清除当前时刻到预规划结束时刻的所有预规划数据
+    /// 会截断当前预规划状态的TimeSlot到当前时间的上一分钟
     func endPlannedStateManually() {
         guard isPlannedStateActive,
-              let _ = currentPlannedStateStartTime,
-              let endTime = currentPlannedStateEndTime else {
+              let plannedLevel = currentPlannedStateLevel else {
             return
         }
-        
-        let calendar = Calendar.current
-        let now = Date()
-        let currentHour = calendar.component(.hour, from: now)
-        let currentMinute = calendar.component(.minute, from: now)
-        let endHour = calendar.component(.hour, from: endTime)
-        let endMinute = calendar.component(.minute, from: endTime)
-        let today = calendar.startOfDay(for: now)
-        
-        // 计算需要清除的时间范围：从当前时刻到预规划结束时刻
-        var plansToRemove: [EnergyPlan] = []
-        
-        var hour = currentHour
-        var minute = currentMinute
-        
-        while hour < endHour || (hour == endHour && minute < endMinute) {
-            // 查找并标记要删除的预规划
-            let plansAtTime = plannedEnergyPlans.filter { plan in
-                calendar.isDate(plan.date, inSameDayAs: today) &&
-                plan.containsTime(hour: hour, minute: minute)
-            }
-            plansToRemove.append(contentsOf: plansAtTime)
-            
-            // 下一分钟
-            minute += 1
-            if minute >= 60 {
-                minute = 0
-                hour += 1
-            }
+
+        print("🎯 手动结束预规划遮罩，能量等级: \(plannedLevel.description)")
+
+        // 🎯 截断当前预规划状态的TimeSlot到当前时间的上一分钟
+        let modified = truncateCurrentTimeSlot(
+            for: plannedLevel,
+            in: &plannedEnergyPlans,
+            isTemporaryState: false
+        )
+
+        if modified {
+            print("🎯 预规划状态TimeSlot已截断")
         }
-        
-        // 从 plannedEnergyPlans 中移除这些预规划
-        for planToRemove in plansToRemove {
-            if let index = plannedEnergyPlans.firstIndex(where: { plan in
-                calendar.isDate(plan.date, inSameDayAs: planToRemove.date) &&
-                plan.energyLevel == planToRemove.energyLevel &&
-                plan.id == planToRemove.id
-            }) {
-                plannedEnergyPlans.remove(at: index)
-            }
-        }
-        
-        print("🎯 手动结束预规划遮罩，已清除 \(plansToRemove.count) 个预规划数据（\(currentHour):\(currentMinute) - \(endHour):\(endMinute)）")
-        
+
         // 记录预规划状态结束，切换到基础状态
         let baseLevel = currentBaseEnergyLevel
         recordEnergyLevelChange(to: baseLevel)
-        
+
+        // 🎯 立即执行一次主定时器内的逻辑
+        checkAndAppendBaseStateTimeSlot()
+
         // 结束预规划状态
         isPlannedStateActive = false
         currentPlannedStateLevel = nil
         currentPlannedStateStartTime = nil
         currentPlannedStateEndTime = nil
-        
+
         print("🎯 手动结束预规划遮罩，记录状态切换为: \(baseLevel.description)")
     }
     
@@ -1138,6 +1126,94 @@ class UserState: ObservableObject {
     /// 获取临时状态剩余时间（分钟）
     func getTemporaryStateRemainingMinutes() -> Int {
         return Int(getTemporaryStateRemainingTime() / 60)
+    }
+
+    // MARK: - TimeSlot截断辅助方法
+
+    /// 截断指定能量状态类型中包含当前时间的TimeSlot
+    /// - Parameters:
+    ///   - energyLevel: 能量等级
+    ///   - plans: 要修改的EnergyPlan数组
+    ///   - isTemporaryState: 是否为临时状态（true: 临时状态, false: 预规划状态）
+    /// - Returns: 是否成功截断
+    @discardableResult
+    private func truncateCurrentTimeSlot(
+        for energyLevel: EnergyLevel,
+        in plans: inout [EnergyPlan],
+        isTemporaryState: Bool
+    ) -> Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        let currentHour = calendar.component(.hour, from: now)
+        let currentMinute = calendar.component(.minute, from: now)
+
+        // 计算当前时间的上一分钟
+        let previousTime = calendar.date(byAdding: .minute, value: -1, to: now)!
+        let prevHour = calendar.component(.hour, from: previousTime)
+        let prevMinute = calendar.component(.minute, from: previousTime)
+
+        print("🎯 截断TimeSlot: 当前时间 \(currentHour):\(String(format: "%02d", currentMinute)), 截断到 \(prevHour):\(String(format: "%02d", prevMinute))")
+
+        // 查找包含当前时间的EnergyPlan
+        guard let planIndex = plans.firstIndex(where: { plan in
+            calendar.isDate(plan.date, inSameDayAs: today) &&
+            plan.energyLevel == energyLevel &&
+            plan.containsTime(hour: currentHour, minute: currentMinute)
+        }) else {
+            print("❌ 未找到包含当前时间的EnergyPlan")
+            return false
+        }
+
+        var plan = plans[planIndex]
+        var modified = false
+
+        // 查找包含当前时间的TimeSlot
+        for (slotIndex, slot) in plan.timeSlots.enumerated() {
+            if slot.contains(hour: currentHour, minute: currentMinute) {
+                let slotStartMinutes = slot.startHour * 60 + slot.startMinute
+                let slotEndMinutes = slot.endHour * 60 + slot.endMinute
+                let currentMinutes = currentHour * 60 + currentMinute
+                let prevMinutes = prevHour * 60 + prevMinute
+
+                print("🎯 找到TimeSlot: \(slot.startHour):\(String(format: "%02d", slot.startMinute)) - \(slot.endHour):\(String(format: "%02d", slot.endMinute))")
+
+                // 检查是否当前时间等于TimeSlot的开始时间
+                if currentMinutes == slotStartMinutes {
+                    // 直接删除这个TimeSlot
+                    plan.timeSlots.remove(at: slotIndex)
+                    print("🎯 删除TimeSlot（当前时间等于开始时间）")
+                    modified = true
+                } else if prevMinutes >= slotStartMinutes {
+                    // 截断TimeSlot的结束时间到上一分钟
+                    let newSlot = TimeSlot(
+                        startHour: slot.startHour,
+                        startMinute: slot.startMinute,
+                        endHour: prevHour,
+                        endMinute: prevMinute
+                    )
+                    plan.timeSlots[slotIndex] = newSlot
+                    print("🎯 截断TimeSlot: \(newSlot.startHour):\(String(format: "%02d", newSlot.startMinute)) - \(newSlot.endHour):\(String(format: "%02d", newSlot.endMinute))")
+                    modified = true
+                } else {
+                    print("❌ 截断时间早于TimeSlot开始时间，不进行截断")
+                }
+
+                break // 只处理第一个匹配的TimeSlot
+            }
+        }
+
+        // 如果TimeSlot数组为空，移除整个EnergyPlan
+        if plan.timeSlots.isEmpty {
+            plans.remove(at: planIndex)
+            print("🎯 删除空的EnergyPlan")
+            modified = true
+        } else if modified {
+            plans[planIndex] = plan
+            print("🎯 更新EnergyPlan")
+        }
+
+        return modified
     }
 
     /// 获取指定时间的临时状态能量等级
