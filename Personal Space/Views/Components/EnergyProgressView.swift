@@ -164,7 +164,7 @@ struct EnergyRecordHourBlock: View {
             
             // 过去时间的灰色覆盖层
             Rectangle()
-                .fill(Color.black.opacity(0.6))
+                .fill(Color.black.opacity(0.4))
                 .frame(width: width, height: height)
                 .cornerRadius(2)
                 .opacity(isHourSelectable(hour) ? 0 : 1)
