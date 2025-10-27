@@ -16,26 +16,20 @@ struct TemporaryStateOverlay: View {
     @State private var showWarning: Bool = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            // 空白区域，让遮罩往下挪20像素
-            Spacer()
-                .frame(height: 16)
-            
-            // 灰色遮罩区域 - 只覆盖顶部状态卡片区域
-            ZStack {
-                // 灰色遮罩背景 - 添加渐变效果
-                LinearGradient(
-                    colors: [
-                        Color.black.opacity(0.4),
-                        Color.black.opacity(0.2)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 180) // 限制高度，只覆盖状态卡片区域
-                .frame(maxWidth: .infinity)
-                
-                // 倒计时框 - 在遮罩中央，添加更好的视觉效果
+        ZStack {
+            // 灰色遮罩背景 - 适应卡片大小
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.4),
+                    Color.black.opacity(0.2)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // 倒计时框 - 居中显示
+            VStack(spacing: 8) {
                 HStack(spacing: 10) {
                     // 状态图标 - 添加脉冲动画
                     Image(systemName: stateType == .fastCharge ? "bolt.fill" : "battery.25")
@@ -74,9 +68,6 @@ struct TemporaryStateOverlay: View {
                     }
                 }
             }
-            
-            // 空白区域，让下方内容正常显示
-            Spacer()
         }
         .onAppear {
             // 设置分钟级倒计时（将秒转换为分钟，向上取整）

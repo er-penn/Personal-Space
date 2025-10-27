@@ -155,46 +155,6 @@ struct MySpaceView: View {
                         .animation(.easeInOut(duration: 0.3), value: showingTimePicker)
                     }
                 }
-                
-                // 临时状态遮罩 - 添加动画效果
-                if showingTemporaryStateOverlay && userState.isTemporaryStateActive {
-                    TemporaryStateOverlay(
-                        stateType: userState.currentTemporaryStateType ?? .fastCharge,
-                        remainingTime: userState.getTemporaryStateRemainingTime(),
-                        onEnd: {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                userState.endTemporaryState()
-                                showingTemporaryStateOverlay = false
-                                // 🎯 手动触发一次UI刷新，让能量条立即显示新的状态
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    userState.objectWillChange.send()
-                                }
-                            }
-                        }
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                    .animation(.easeInOut(duration: 0.3), value: showingTemporaryStateOverlay)
-                }
-                
-                // 预规划状态遮罩 - 当不在临时状态且处于预规划状态时显示
-                if !userState.isTemporaryStateActive && userState.isPlannedStateActive,
-                   let plannedLevel = userState.currentPlannedStateLevel {
-                    PlannedStateOverlay(
-                        energyLevel: plannedLevel,
-                        remainingTime: userState.getPlannedStateRemainingTime(),
-                        onEnd: {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                userState.endPlannedStateManually()
-                                // 🎯 手动触发一次UI刷新，让能量条立即显示新的状态
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    userState.objectWillChange.send()
-                                }
-                            }
-                        }
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                    .animation(.easeInOut(duration: 0.3), value: userState.isPlannedStateActive)
-                }
             }
             .navigationBarHidden(true)
         }
@@ -238,7 +198,7 @@ struct MySpaceView: View {
     
     // MARK: - 顶部状态区
     private var statusSection: some View {
-        VStack(spacing: 0) {
+        ZStack {
             // 主卡片区域 - 固定高度
             VStack(spacing: AppTheme.Spacing.lg) {
                 // 顶部：能量状态 + 快速操作
@@ -529,6 +489,47 @@ struct MySpaceView: View {
                 x: 0,
                 y: 2
             )
+
+            // 🎯 状态遮罩 - 跟随卡片一起滚动
+            // 临时状态遮罩
+            if showingTemporaryStateOverlay && userState.isTemporaryStateActive {
+                TemporaryStateOverlay(
+                    stateType: userState.currentTemporaryStateType ?? .fastCharge,
+                    remainingTime: userState.getTemporaryStateRemainingTime(),
+                    onEnd: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            userState.endTemporaryState()
+                            showingTemporaryStateOverlay = false
+                            // 🎯 手动触发一次UI刷新，让能量条立即显示新的状态
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                userState.objectWillChange.send()
+                            }
+                        }
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                .animation(.easeInOut(duration: 0.3), value: showingTemporaryStateOverlay)
+            }
+
+            // 预规划状态遮罩
+            if !userState.isTemporaryStateActive && userState.isPlannedStateActive,
+               let plannedLevel = userState.currentPlannedStateLevel {
+                PlannedStateOverlay(
+                    energyLevel: plannedLevel,
+                    remainingTime: userState.getPlannedStateRemainingTime(),
+                    onEnd: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            userState.endPlannedStateManually()
+                            // 🎯 手动触发一次UI刷新，让能量条立即显示新的状态
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                userState.objectWillChange.send()
+                            }
+                        }
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                .animation(.easeInOut(duration: 0.3), value: userState.isPlannedStateActive)
+            }
         }
     }
     
