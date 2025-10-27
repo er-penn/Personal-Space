@@ -49,7 +49,7 @@ struct PlannedStateOverlay: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.primary)
                         
-                        Text(formatRemainingTime(TimeInterval(userState.plannedStateCountdown)))
+                        Text(formatRemainingMinutes(userState.plannedStateCountdown))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(showWarning ? .red : .secondary)
                             .monospacedDigit()
@@ -79,16 +79,15 @@ struct PlannedStateOverlay: View {
             Spacer()
         }
         .onAppear {
-            // 设置统一倒计时
-            userState.setPlannedStateCountdown(Int(remainingTime))
+            // 设置分钟级倒计时（将秒转换为分钟，向上取整）
+            let minutes = max(1, Int(ceil(remainingTime / 60.0)))
+            userState.setPlannedStateCountdown(minutes)
             checkWarning()
         }
-        .onDisappear {
-            // 停止统一倒计时
-            userState.stopUnifiedCountdownTimer()
-        }
         .onChange(of: remainingTime) { newValue in
-            userState.setPlannedStateCountdown(Int(newValue))
+            // 更新分钟级倒计时（将秒转换为分钟，向上取整）
+            let minutes = max(1, Int(ceil(newValue / 60.0)))
+            userState.setPlannedStateCountdown(minutes)
             checkWarning()
         }
     }
@@ -106,22 +105,23 @@ struct PlannedStateOverlay: View {
         }
     }
     
-    // 🎯 Timer已移除：使用统一倒计时管理
-    
+    // 🎯 Timer已移除：使用分钟级倒计时管理
+
     private func checkWarning() {
-        showWarning = userState.plannedStateCountdown <= 300 && userState.plannedStateCountdown > 0 // 最后5分钟显示警告
+        showWarning = userState.plannedStateCountdown <= 5 && userState.plannedStateCountdown > 0 // 最后5分钟显示警告
     }
-    
-    private func formatRemainingTime(_ time: TimeInterval) -> String {
-        let totalSeconds = Int(time)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+
+    private func formatRemainingMinutes(_ minutes: Int) -> String {
+        if minutes >= 60 {
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            if remainingMinutes == 0 {
+                return "\(hours)小时"
+            } else {
+                return "\(hours)小时\(remainingMinutes)分钟"
+            }
         } else {
-            return String(format: "%02d:%02d", minutes, seconds)
+            return "\(minutes)分钟"
         }
     }
 }

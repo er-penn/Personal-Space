@@ -95,10 +95,10 @@ class UserState: ObservableObject {
     @Published var currentPlannedStateStartTime: Date? = nil // 当前预规划状态的开始时间
     @Published var currentPlannedStateEndTime: Date? = nil // 当前预规划状态的结束时间
     
-    // MARK: - 统一倒计时管理
-    @Published var plannedStateCountdown: Int = 0 // 预规划状态倒计时（秒）
-    @Published var temporaryStateCountdown: Int = 0 // 临时状态倒计时（秒）
-    private var unifiedCountdownTimer: Timer? // 统一倒计时Timer
+    // MARK: - 统一倒计时管理（分钟级）
+    @Published var plannedStateCountdown: Int = 0 // 预规划状态倒计时（分钟）
+    @Published var temporaryStateCountdown: Int = 0 // 临时状态倒计时（分钟）
+    // 注意：改为分钟级倒计时，使用主Timer进行更新，无需独立Timer
     
     // MARK: - 状态切换历史记录（用于统计）
     @Published var energyLevelChangeHistory: [EnergyLevelChange] = [] // 状态切换历史记录
@@ -165,63 +165,35 @@ class UserState: ObservableObject {
     
     // MARK: - 统一倒计时管理方法
     
-    /// 启动统一倒计时Timer
-    func startUnifiedCountdownTimer() {
-        // 如果已经有Timer在运行，先停止
-        stopUnifiedCountdownTimer()
-        
-        unifiedCountdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            self.updateCountdowns()
-        }
-        
-        print("🎯 启动统一倒计时Timer")
-    }
-    
-    /// 停止统一倒计时Timer
-    func stopUnifiedCountdownTimer() {
-        unifiedCountdownTimer?.invalidate()
-        unifiedCountdownTimer = nil
-        print("🎯 停止统一倒计时Timer")
-    }
-    
-    /// 更新所有倒计时
-    private func updateCountdowns() {
-        // 更新预规划状态倒计时
+  // MARK: - 分钟级倒计时管理（集成到主Timer）
+
+    /// 分钟级倒计时更新（由主Timer每分钟调用一次）
+    func updateMinuteCountdowns() {
+        // 更新预规划状态倒计时（分钟级）
         if isPlannedStateActive && plannedStateCountdown > 0 {
             plannedStateCountdown -= 1
             if plannedStateCountdown <= 0 {
                 endPlannedStateNaturally()
             }
         }
-        
-        // 更新临时状态倒计时
+
+        // 更新临时状态倒计时（分钟级）
         if isTemporaryStateActive && temporaryStateCountdown > 0 {
             temporaryStateCountdown -= 1
             if temporaryStateCountdown <= 0 {
                 endTemporaryState()
             }
         }
-        
-        // 如果没有任何倒计时，停止Timer
-        if !isPlannedStateActive && !isTemporaryStateActive {
-            stopUnifiedCountdownTimer()
-        }
     }
-    
-    /// 设置预规划状态倒计时
-    func setPlannedStateCountdown(_ seconds: Int) {
-        plannedStateCountdown = seconds
-        if seconds > 0 {
-            startUnifiedCountdownTimer()
-        }
+
+    /// 设置预规划状态倒计时（分钟）
+    func setPlannedStateCountdown(_ minutes: Int) {
+        plannedStateCountdown = minutes
     }
-    
-    /// 设置临时状态倒计时
-    func setTemporaryStateCountdown(_ seconds: Int) {
-        temporaryStateCountdown = seconds
-        if seconds > 0 {
-            startUnifiedCountdownTimer()
-        }
+
+    /// 设置临时状态倒计时（分钟）
+    func setTemporaryStateCountdown(_ minutes: Int) {
+        temporaryStateCountdown = minutes
     }
 
     /// 每分钟检查并追加基础状态时间段
@@ -724,6 +696,12 @@ class UserState: ObservableObject {
 
         print("启动临时状态: \(type.rawValue), 持续时间: \(duration/60)分钟, 结束时间: \(endTime)")
         print("🎯 临时状态时间段: \(startHour):\(String(format: "%02d", startMinute)) - \(endHour):\(String(format: "%02d", endMinute))")
+
+        // 🎯 设置分钟级倒计时
+        let remainingMinutes = max(1, Int(ceil(duration / 60.0)))
+        setTemporaryStateCountdown(remainingMinutes)
+
+        print("🎯 设置临时状态倒计时: \(remainingMinutes)分钟")
     }
     
     /// 结束临时状态，恢复到原始状态（使用混合模型）
@@ -889,13 +867,18 @@ class UserState: ObservableObject {
     private func startPlannedState(level: EnergyLevel, startTime: Date, endTime: Date) {
         // 记录预规划状态开始
         recordEnergyLevelChange(to: level)
-        
+
         isPlannedStateActive = true
         currentPlannedStateLevel = level
         currentPlannedStateStartTime = startTime
         currentPlannedStateEndTime = endTime
-        
-        print("🎯 启动预规划遮罩: \(level.description), 开始: \(startTime), 结束: \(endTime)")
+
+        // 🎯 设置分钟级倒计时
+        let remainingSeconds = max(0, endTime.timeIntervalSince(Date()))
+        let remainingMinutes = max(1, Int(ceil(remainingSeconds / 60.0)))
+        setPlannedStateCountdown(remainingMinutes)
+
+        print("🎯 启动预规划遮罩: \(level.description), 开始: \(startTime), 结束: \(endTime), 倒计时: \(remainingMinutes)分钟")
     }
     
     /// 自然结束预规划状态（时间到了）

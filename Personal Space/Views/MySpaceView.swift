@@ -220,7 +220,10 @@ struct MySpaceView: View {
             // 3. 检查并更新预规划状态
             userState.checkAndUpdatePlannedState()
 
-            // 4. 触发UI更新，让所有子组件自动响应状态变化
+            // 4. 🎯 新增：分钟级倒计时更新
+            userState.updateMinuteCountdowns()
+
+            // 5. 触发UI更新，让所有子组件自动响应状态变化
             userState.objectWillChange.send()
         }
 
