@@ -30,12 +30,13 @@ struct TemporaryStateTimePicker: View {
                     onCancel()
                     isPresented = false
                 }
+                .font(.system(size: AppTheme.FontSize.body))
                 .foregroundColor(.secondary)
                 
                 Spacer()
                 
                 Text("设置持续时间")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
                 
                 Spacer()
                 
@@ -44,62 +45,54 @@ struct TemporaryStateTimePicker: View {
                     onConfirm(duration)
                     isPresented = false
                 }
+                .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
                 .foregroundColor(.blue)
-                .font(.system(size: 17, weight: .semibold))
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.horizontal, AppTheme.Spacing.xl)
+            .padding(.vertical, AppTheme.Spacing.lg)
             
             Divider()
             
-            // 时间选择器
-            VStack(spacing: 16) {
+            // 时间选择器 - 紧凑布局
+            VStack(spacing: AppTheme.Spacing.md) {
                 Text("选择持续时间")
-                    .font(.subheadline)
+                    .font(.system(size: AppTheme.FontSize.subheadline))
                     .foregroundColor(.secondary)
-                    .padding(.top, 16)
+                    .padding(.top, AppTheme.Spacing.lg)
                 
-                // 时间选择轮盘
+                // 时间选择轮盘 - 减少高度
                 Picker("持续时间", selection: $selectedMinutes) {
                     ForEach(timeOptions, id: \.self) { minutes in
                         Text(formatTime(minutes))
+                            .font(.system(size: AppTheme.FontSize.body))
                             .tag(minutes)
                     }
                 }
                 .pickerStyle(WheelPickerStyle())
-                .frame(height: 120) // 进一步减少高度
+                .frame(height: 80) // 大幅减少高度
                 .onChange(of: selectedMinutes) { newValue in
                     selectedDuration = TimeInterval(newValue * 60)
                 }
                 
-                // 底部区域 - "已选择"部分显示在导航栏上方
-                VStack(spacing: 0) {
-                    // 空白区域，让"已选择"部分显示在导航栏上方
-                    Spacer()
-                        .frame(height: 0)
+                // "已选择"部分 - 紧凑显示
+                HStack(spacing: AppTheme.Spacing.xs) {
+                    Text("已选择")
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(.secondary)
                     
-                    // "已选择"部分 - 显示在导航栏上方，一行显示
-                    HStack(spacing: 4) {
-                        Text("已选择")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text(formatTime(selectedMinutes))
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.primary)
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 12)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                    
-                    // 底部安全区域 - 确保完全覆盖导航栏
-                    Spacer()
-                        .frame(height: 100) // 减少高度，为"已选择"部分留出空间
+                    Text(formatTime(selectedMinutes))
+                        .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
+                        .foregroundColor(.primary)
                 }
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .background(Color(.systemGray6))
+                .cornerRadius(AppTheme.Radius.small)
+                .padding(.bottom, AppTheme.Spacing.lg)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppTheme.Spacing.xl)
         }
+        .frame(maxHeight: 280) // 限制最大高度，确保弹窗不会太高
         .background(Color(.systemBackground))
         .onAppear {
             // 初始化选择值，限制在最大时间内

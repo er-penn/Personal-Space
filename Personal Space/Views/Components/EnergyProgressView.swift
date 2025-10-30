@@ -31,15 +31,16 @@ struct EnergyRecordMinuteBlock: View {
     var body: some View {
         let mergedBlocks = getMergedBlocks()
 
-        // 输出基础状态日志（每个小时块只输出一次）
-        logBaseStateInfo()
-
         return HStack(spacing: 0) {
             ForEach(mergedBlocks) { block in
                 Rectangle()
                     .fill(block.color)
                     .frame(width: width * CGFloat(block.minuteCount) / 60.0, height: height)
             }
+        }
+        .onAppear {
+            // 将日志输出移动到 onAppear，避免在视图更新期间修改状态
+            logBaseStateInfo()
         }
         .cornerRadius(2)
     }

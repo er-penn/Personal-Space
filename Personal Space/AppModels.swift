@@ -1155,7 +1155,7 @@ class UserState: ObservableObject {
         for (slotIndex, slot) in plan.timeSlots.enumerated() {
             if slot.contains(hour: currentHour, minute: currentMinute) {
                 let slotStartMinutes = slot.startHour * 60 + slot.startMinute
-                let slotEndMinutes = slot.endHour * 60 + slot.endMinute
+                //let slotEndMinutes = slot.endHour * 60 + slot.endMinute
                 let currentMinutes = currentHour * 60 + currentMinute
                 let prevMinutes = prevHour * 60 + prevMinute
 
