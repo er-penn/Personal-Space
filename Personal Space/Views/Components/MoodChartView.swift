@@ -13,6 +13,7 @@ struct MoodChartView: View {
     @State private var showingRecordButton = false
     @State private var moodNote: String = ""
     @State private var showingMoodRecordPage = false
+    @State private var selectedRecord: MoodRecord? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
@@ -100,11 +101,9 @@ struct MoodChartView: View {
             // 心情趋势图
             if !userState.moodRecords.isEmpty {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                    Text("心情趋势")
-                        .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.text)
-                    
-                    MoodTrendChart(moodRecords: userState.moodRecords)
+                    MoodTrendHeader(moodRecords: userState.moodRecords, selectedRecord: $selectedRecord)
+
+                    MoodTrendChart(moodRecords: userState.moodRecords, selectedRecord: $selectedRecord)
                         .frame(height: 120)
                         .background(AppTheme.Colors.bgMain)
                         .cornerRadius(AppTheme.Radius.medium)
@@ -164,7 +163,7 @@ struct MoodDataPoint: Identifiable {
 
 struct MoodTrendChart: View {
     let moodRecords: [MoodRecord]
-    @State private var selectedRecord: MoodRecord? = nil
+    @Binding var selectedRecord: MoodRecord?
     
     var body: some View {
         GeometryReader { geometry in
@@ -172,7 +171,7 @@ struct MoodTrendChart: View {
                 ZStack {
                     // 绘制曲线
                     MoodPath(moodRecords: moodRecords, geometry: geometry)
-                    
+
                     // 绘制数据点
                     MoodDataPoints(moodRecords: moodRecords, geometry: geometry, selectedRecord: $selectedRecord)
                 }
@@ -181,40 +180,6 @@ struct MoodTrendChart: View {
                     .font(.system(size: AppTheme.FontSize.body))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .overlay(
-            // 备注提示框
-            Group {
-                if let record = selectedRecord, let note = record.note {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(formatTime(record.timestamp))
-                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                    .foregroundColor(.white)
-                                
-                                Text(note)
-                                    .font(.system(size: AppTheme.FontSize.caption))
-                                    .foregroundColor(.white)
-                                    .lineLimit(3)
-                            }
-                            .padding(8)
-                            .background(Color.black.opacity(0.8))
-                            .cornerRadius(8)
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 20)
-                        }
-                    }
-                    .transition(.opacity.combined(with: .scale))
-                }
-            }
-        )
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedRecord = nil
             }
         }
     }
@@ -311,6 +276,128 @@ struct MoodDataPoints: View {
         let x = padding + CGFloat(index) * xStep
         let y = height - padding - (CGFloat(record.value - 1) * yStep)
         return CGPoint(x: x, y: y)
+    }
+}
+
+// MARK: - 心情趋势标题头部
+struct MoodTrendHeader: View {
+    let moodRecords: [MoodRecord]
+    @Binding var selectedRecord: MoodRecord?
+    @State private var showFullNote = false
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.sm) {
+            Text("心情趋势")
+                .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                .foregroundColor(AppTheme.Colors.text)
+
+            // 显示选中的备注信息
+            if let record = selectedRecord, let note = record.note {
+                HStack(spacing: 4) {
+                    Text(formatTime(record.timestamp))
+                        .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+
+                    Text(truncateNote(note))
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
+
+                    if note.count > 20 {
+                        Text("...")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(AppTheme.Colors.bgMain.opacity(0.8))
+                .cornerRadius(AppTheme.Radius.small)
+                .onTapGesture {
+                    showFullNote.toggle()
+                }
+                .sheet(isPresented: $showFullNote) {
+                    MoodNoteSheet(
+                        timeText: formatTime(record.timestamp),
+                        note: note,
+                        onClose: { showFullNote = false }
+                    )
+                    .applyMoodSheetModifiers()
+                }
+            }
+
+            Spacer()
+        }
+    }
+
+    private func truncateNote(_ note: String) -> String {
+        let maxLength = 20
+        if note.count > maxLength {
+            return String(note.prefix(maxLength))
+        }
+        return note
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - 心情备注底部弹窗（参考“快充”弹窗样式）
+private struct MoodNoteSheet: View {
+    let timeText: String
+    let note: String
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // 标题栏
+            HStack {
+                Text(timeText)
+                    .font(.system(size: AppTheme.FontSize.headline, weight: .medium))
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: AppTheme.FontSize.headline, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.xl)
+            .padding(.vertical, AppTheme.Spacing.lg)
+
+            Divider()
+
+            // 内容（限制高度但支持滚动）
+            ScrollView {
+                Text(note)
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, AppTheme.Spacing.md)
+            }
+            .padding(.horizontal, AppTheme.Spacing.xl)
+            .padding(.bottom, AppTheme.Spacing.lg)
+        }
+        .background(Color(.systemBackground))
+    }
+}
+
+// iOS15 兼容：为 sheet 提供条件性修饰符
+private extension View {
+    @ViewBuilder
+    func applyMoodSheetModifiers() -> some View {
+        if #available(iOS 16.0, *) {
+            self
+                .presentationDetents([.height(280)])
+                .presentationDragIndicator(.visible)
+        } else {
+            self
+        }
     }
 }
 
@@ -549,7 +636,8 @@ struct MoodRecordCalendarView: View {
 struct DailyMoodRecords: View {
     let date: Date
     let moodRecords: [MoodRecord]
-    
+    @State private var selectedRecord: MoodRecord? = nil
+
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM月dd日"
@@ -571,7 +659,7 @@ struct DailyMoodRecords: View {
                     .padding(.vertical, AppTheme.Spacing.xl)
             } else {
                 // 心情趋势图
-                MoodTrendChart(moodRecords: moodRecords)
+                MoodTrendChart(moodRecords: moodRecords, selectedRecord: $selectedRecord)
                     .frame(height: 120)
                     .background(AppTheme.Colors.bgMain)
                     .cornerRadius(AppTheme.Radius.medium)
