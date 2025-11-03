@@ -1696,3 +1696,231 @@ extension Array where Element: Equatable {
         return result
     }
 }
+
+// MARK: - 知行合一数据模型
+struct Knowledge: Identifiable, Codable {
+    let id: UUID
+    var title: String
+    var content: String
+    var createdAt: Date
+    var updatedAt: Date
+    var hasAction: Bool
+    var actionType: ActionType?
+    var actionConfig: ActionConfig?
+
+    init(title: String, content: String, hasAction: Bool = false, actionType: ActionType? = nil, actionConfig: ActionConfig? = nil) {
+        self.id = UUID()
+        self.title = title
+        self.content = content
+        self.hasAction = hasAction
+        self.actionType = actionType
+        self.actionConfig = actionConfig
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    // 计算相关联的行动统计
+    var actionStats: ActionStats {
+        // 这里需要从数据源获取相关actions来计算
+        return ActionStats(total: 0, completed: 0, suspended: 0, completionRate: 0)
+    }
+}
+
+struct ActionStats {
+    let total: Int
+    let completed: Int
+    let suspended: Int
+    let completionRate: Double
+
+    var completionPercentage: String {
+        return "\(Int(completionRate * 100))%"
+    }
+}
+
+enum ActionType: String, CaseIterable, Codable {
+    case daily = "daily"
+    case scenario = "scenario"
+
+    var displayName: String {
+        switch self {
+        case .daily:
+            return "日常打卡"
+        case .scenario:
+            return "场景触发"
+        }
+    }
+}
+
+struct ActionConfig: Codable {
+    var dailyTime: Date? // 日常打卡时间
+    var scenarioCondition: String? // 场景触发条件
+    var isActive: Bool = true // 是否激活
+}
+
+struct ActionRecord: Identifiable, Codable {
+    let id: UUID
+    let knowledgeId: UUID
+    var date: Date
+    var isCompleted: Bool
+    var isSuspended: Bool // 挂起状态
+    var notes: String? // 心得备注
+    var scenarioTriggered: Bool // 场景是否已触发
+    var attachments: [String] = [] // 图片/附件路径
+
+    init(knowledgeId: UUID, date: Date = Date()) {
+        self.id = UUID()
+        self.knowledgeId = knowledgeId
+        self.date = date
+        self.isCompleted = false
+        self.isSuspended = false
+        self.scenarioTriggered = false
+    }
+}
+
+// MARK: - 知行合一管理器
+class KnowledgeActionManager: ObservableObject {
+    @Published var knowledges: [Knowledge] = []
+    @Published var actions: [ActionRecord] = []
+
+    init() {
+        loadSampleData()
+    }
+
+    // MARK: - 认知管理
+    func addKnowledge(_ knowledge: Knowledge) {
+        knowledges.append(knowledge)
+        saveData()
+    }
+
+    func updateKnowledge(_ knowledge: Knowledge) {
+        if let index = knowledges.firstIndex(where: { $0.id == knowledge.id }) {
+            knowledges[index] = knowledge
+            saveData()
+        }
+    }
+
+    func deleteKnowledge(_ knowledge: Knowledge) {
+        knowledges.removeAll { $0.id == knowledge.id }
+        // 同时删除相关的行动记录
+        actions.removeAll { $0.knowledgeId == knowledge.id }
+        saveData()
+    }
+
+    // MARK: - 行动管理
+    func createAction(for knowledgeId: UUID, date: Date = Date()) -> ActionRecord {
+        let action = ActionRecord(knowledgeId: knowledgeId, date: date)
+        actions.append(action)
+        saveData()
+        return action
+    }
+
+    func completeAction(_ action: ActionRecord, notes: String? = nil) {
+        if let index = actions.firstIndex(where: { $0.id == action.id }) {
+            actions[index].isCompleted = true
+            actions[index].notes = notes
+            actions[index].isSuspended = false
+            saveData()
+        }
+    }
+
+    func suspendAction(_ action: ActionRecord) {
+        if let index = actions.firstIndex(where: { $0.id == action.id }) {
+            actions[index].isSuspended = true
+            actions[index].isCompleted = false
+            saveData()
+        }
+    }
+
+    func getActionsForKnowledge(_ knowledgeId: UUID) -> [ActionRecord] {
+        return actions.filter { $0.knowledgeId == knowledgeId }
+    }
+
+    func getTodayActions() -> [ActionRecord] {
+        let today = Calendar.current.startOfDay(for: Date())
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+
+        return actions.filter { action in
+            let actionDate = Calendar.current.startOfDay(for: action.date)
+            return actionDate >= today && actionDate < tomorrow
+        }
+    }
+
+    func getActionStats(for knowledgeId: UUID) -> ActionStats {
+        let knowledgeActions = getActionsForKnowledge(knowledgeId)
+        let total = knowledgeActions.count
+        let completed = knowledgeActions.filter { $0.isCompleted }.count
+        let suspended = knowledgeActions.filter { $0.isSuspended }.count
+        let completionRate = total > 0 ? Double(completed) / Double(total) : 0
+
+        return ActionStats(total: total, completed: completed, suspended: suspended, completionRate: completionRate)
+    }
+
+    // MARK: - 数据持久化
+    private func saveData() {
+        // TODO: 实现Core Data或UserDefaults保存
+    }
+
+    private func loadData() {
+        // TODO: 实现数据加载
+    }
+
+    private func loadSampleData() {
+        // 加载示例数据
+        let sampleKnowledges = [
+            Knowledge(
+                title: "保持内心平静",
+                content: "无论外界环境如何变化，都要保持内心的平静和专注。遇到困难时深呼吸，专注于当下可以控制的事情。",
+                hasAction: true,
+                actionType: .daily,
+                actionConfig: ActionConfig(
+                    dailyTime: Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: Date()),
+                    scenarioCondition: nil
+                )
+            ),
+            Knowledge(
+                title: "有效沟通",
+                content: "在沟通中先倾听对方，理解对方的立场和需求。表达自己的想法时要温和而坚定，避免指责和批评。",
+                hasAction: true,
+                actionType: .scenario,
+                actionConfig: ActionConfig(
+                    dailyTime: nil,
+                    scenarioCondition: "与他人发生分歧或需要表达不同意见时"
+                )
+            ),
+            Knowledge(
+                title: "学习新技能",
+                content: "每月至少学习一项新技能或知识，保持好奇心和成长心态。",
+                hasAction: false
+            )
+        ]
+
+        knowledges = sampleKnowledges
+
+        // 创建一些示例行动记录
+        let today = Date()
+        var sampleActions: [ActionRecord] = []
+
+        for knowledge in knowledges.filter({ $0.hasAction }) {
+            for i in 0..<7 {
+                let actionDate = Calendar.current.date(byAdding: .day, value: -i, to: today)!
+                let action = ActionRecord(knowledgeId: knowledge.id, date: actionDate)
+
+                // 模拟一些已完成的数据
+                if i > 0 && Double.random(in: 0...1) > 0.3 {
+                    var completedAction = action
+                    completedAction.isCompleted = true
+                    completedAction.notes = "今天做得不错，继续保持。"
+                    sampleActions.append(completedAction)
+                } else if Double.random(in: 0...1) > 0.8 {
+                    var suspendedAction = action
+                    suspendedAction.isSuspended = true
+                    sampleActions.append(suspendedAction)
+                } else {
+                    sampleActions.append(action)
+                }
+            }
+        }
+
+        actions = sampleActions
+    }
+}

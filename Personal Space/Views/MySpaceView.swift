@@ -64,10 +64,8 @@ struct MySpaceView: View {
         }
     }
     
-    private let functionCards = [
-        FunctionCard(title: "知行合一", icon: "target", color: .green, content: "今日目标：冥想15分钟 ✓", action: { }),
-        FunctionCard(title: "焦虑平复指南", icon: "cross.case.fill", color: .orange, content: "推荐：深呼吸练习", action: { })
-    ]
+    private let anxietyGuideCard = FunctionCard(title: "焦虑平复指南", icon: "cross.case.fill", color: .orange, content: "推荐：深呼吸练习", action: { })
+    private let knowledgeActionContent = "今日目标：冥想15分钟 ✓"
     
     var body: some View {
         NavigationView {
@@ -90,13 +88,45 @@ struct MySpaceView: View {
                             .environmentObject(userState)
                         
                         // 知行合一卡片
-                        FunctionCardView(card: functionCards[0])
+                        NavigationLink(destination: KnowledgeActionUnityView()) {
+                            HStack(spacing: AppTheme.Spacing.lg) {
+                                // 左侧图标区域
+                                VStack {
+                                    Image(systemName: "target")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(.green)
+                                        .shadow(color: .green.opacity(0.3), radius: 4, x: 0, y: 2)
+                                        .frame(width: 60, height: 60)
+                                        .background(.green.opacity(0.1))
+                                        .clipShape(Circle())
+                                }
+
+                                // 中间内容区域
+                                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                                    Text("知行合一")
+                                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.text)
+
+                                    Text(knowledgeActionContent)
+                                        .font(.system(size: AppTheme.FontSize.caption))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                        .lineLimit(2)
+                                }
+
+                                Spacer()
+                            }
+                            .padding(AppTheme.Spacing.lg)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(AppTheme.Radius.medium)
+                            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                         
                         // 我的瞬间内容部分
                         MyMomentSection()
                         
                         // 焦虑平复指南卡片（放在最后）
-                        FunctionCardView(card: functionCards[1])
+                        FunctionCardView(card: anxietyGuideCard)
                         
                         Spacer(minLength: 120) // 为FAB留出更多空间
                     }
@@ -538,16 +568,6 @@ struct MySpaceView: View {
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 .animation(.easeInOut(duration: 0.3), value: userState.isPlannedStateActive)
-            }
-        }
-    }
-    
-    
-    // MARK: - 功能卡片区
-    private var functionCardsSection: some View {
-        VStack(spacing: AppTheme.Spacing.lg) {
-            ForEach(functionCards) { card in
-                FunctionCardView(card: card)
             }
         }
     }
