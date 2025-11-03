@@ -275,7 +275,8 @@ struct MaybeListPickerView: View {
     var body: some View {
         NavigationView {
             List {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                ForEach(0..<items.count, id: \.self) { index in
+                    let item = items[index]
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(item.title)

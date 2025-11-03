@@ -583,39 +583,47 @@ struct PartnerInfoCard: View {
 
 // MARK: - Maybe清单卡片
 struct MaybeListCard: View {
-    @State private var maybeItems = [
-        "一起去海边看日落",
-        "学习做一道新菜",
-        "看一场音乐会",
-        "整理相册"
-    ]
-    
+    @State private var maybeListItems: [(title: String, description: String, location: String)] = []
+    @State private var showingEditor = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "list.bullet")
                     .foregroundColor(.blue)
-                
+
                 Text("Maybe清单")
                     .font(.subheadline)
                     .font(.subheadline.weight(.medium))
-                
+
                 Spacer()
-                
+
                 Button("编辑") {
-                    // TODO: 编辑清单
+                    showingEditor = true
                 }
                 .font(.caption)
                 .foregroundColor(.blue)
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(maybeItems, id: \.self) { item in
+                ForEach(0..<min(5, maybeListItems.count), id: \.self) { index in
+                    let item = maybeListItems[index]
                     HStack {
                         Text("•")
                             .foregroundColor(.secondary)
-                        Text(item)
+                        Text(item.title)
                             .font(.subheadline)
+                        Spacer()
+                    }
+                }
+
+                if maybeListItems.count > 5 {
+                    HStack {
+                        Text("...")
+                            .foregroundColor(.secondary)
+                        Text("还有 \(maybeListItems.count - 5) 项")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                         Spacer()
                     }
                 }
@@ -624,6 +632,222 @@ struct MaybeListCard: View {
         .padding()
         .background(Color(.systemBackground))
         .cornerRadius(12)
+        .onAppear {
+            loadMaybeList()
+        }
+        .sheet(isPresented: $showingEditor) {
+            MaybeListEditorView(items: $maybeListItems, isPresented: $showingEditor)
+        }
+    }
+
+    private func loadMaybeList() {
+        maybeListItems = [
+            ("周末看电影", "一起去看最新上映的电影，然后吃晚饭", "万达影城"),
+            ("公园散步", "在附近公园散步，呼吸新鲜空气", "中山公园"),
+            ("咖啡店聊天", "找个安静的咖啡店，好好聊聊天", "星巴克"),
+            ("一起做饭", "在家一起准备晚餐，享受烹饪乐趣", "家里"),
+            ("去海边", "去海边看日落，听听海浪声", "海边栈道"),
+            ("逛书店", "在书店里慢慢翻书，找找感兴趣的读物", "西西弗书店"),
+            ("打保龄球", "来一场有趣的保龄球比赛，看谁得分更高", "汤姆熊保龄球馆"),
+            ("看画展", "一起去看艺术展览，感受文化的熏陶", "市美术馆"),
+            ("爬山运动", "周末去爬爬山，锻炼身体，亲近自然", "西山公园"),
+            ("桌游吧", "玩各种有趣的桌面游戏，增进彼此默契", "欢乐桌游吧"),
+            ("DIY烘焙", "一起制作美味的糕点，享受甜蜜时光", "手工烘焙坊"),
+            ("骑单车", "沿着河边骑行，感受微风和阳光", "滨江路自行车道"),
+            ("听音乐会", "一起去听现场音乐会，享受音乐的魅力", "音乐厅"),
+            ("游乐园", "去游乐园玩各种刺激的项目，释放压力", "欢乐谷"),
+            ("博物馆参观", "参观历史博物馆，学习新知识", "市博物馆")
+        ]
+    }
+}
+
+// MARK: - Maybe清单编辑数据（符合Identifiable）
+struct MaybeListEditingData: Identifiable {
+    let id = UUID()
+    let index: Int
+    let item: (title: String, description: String, location: String)
+}
+
+// MARK: - Maybe清单编辑器
+struct MaybeListEditorView: View {
+    @Binding var items: [(title: String, description: String, location: String)]
+    @Binding var isPresented: Bool
+    @State private var showingAddItem = false
+    @State private var editingItem: MaybeListEditingData? = nil
+    @State private var showingDeleteAlert = false
+    @State private var itemToDelete: Int? = nil
+
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(0..<items.count, id: \.self) { index in
+                    let item = items[index]
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(item.title)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+
+                        Text(item.description)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+
+                        HStack {
+                            Image(systemName: "location")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Text(item.location)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .background(Color.clear)
+                    .contextMenu {
+                        Button(action: {
+                            editingItem = MaybeListEditingData(index: index, item: item)
+                        }) {
+                            Label("编辑", systemImage: "pencil")
+                        }
+
+                        Button(role: .destructive, action: {
+                            itemToDelete = index
+                            showingDeleteAlert = true
+                        }) {
+                            Label("删除", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Maybe清单-编辑")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        isPresented = false
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingAddItem = true
+                    }) {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingAddItem) {
+            MaybeItemEditView(
+                item: ("", "", ""),
+                onSave: { newItem in
+                    items.append(newItem)
+                    showingAddItem = false
+                },
+                onCancel: {
+                    showingAddItem = false
+                }
+            )
+        }
+        .sheet(item: $editingItem) { editingData in
+            MaybeItemEditView(
+                item: editingData.item,
+                onSave: { updatedItem in
+                    items[editingData.index] = updatedItem
+                    editingItem = nil
+                },
+                onCancel: {
+                    editingItem = nil
+                }
+            )
+        }
+        .alert("确认删除", isPresented: $showingDeleteAlert) {
+            Button("取消", role: .cancel) { }
+            Button("删除", role: .destructive) {
+                if let index = itemToDelete {
+                    items.remove(at: index)
+                    itemToDelete = nil
+                }
+            }
+        } message: {
+            Text("确定要删除这个活动吗？")
+        }
+    }
+}
+
+// MARK: - Maybe活动编辑器
+struct MaybeItemEditView: View {
+    let item: (title: String, description: String, location: String)
+    let onSave: ((title: String, description: String, location: String)) -> Void
+    let onCancel: () -> Void
+
+    @State private var title: String
+    @State private var description: String
+    @State private var location: String
+
+    init(item: (title: String, description: String, location: String), onSave: @escaping ((title: String, description: String, location: String)) -> Void, onCancel: @escaping () -> Void) {
+        self.item = item
+        self.onSave = onSave
+        self.onCancel = onCancel
+
+        _title = State(initialValue: item.title)
+        _description = State(initialValue: item.description)
+        _location = State(initialValue: item.location)
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("活动内容 *")) {
+                    TextField("请输入活动内容", text: $title)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+
+                Section(header: Text("活动描述 (选填)")) {
+                    if #available(iOS 16.0, *) {
+                        TextField("请描述活动内容", text: $description, axis: .vertical)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .lineLimit(3...6)
+                    } else {
+                        TextEditor(text: $description)
+                            .frame(minHeight: 80, maxHeight: 120)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                }
+
+                Section(header: Text("活动地点 (选填)")) {
+                    TextField("请输入活动地点", text: $location)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+            }
+            .navigationTitle(item.title.isEmpty ? "新增活动" : "编辑活动")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        onCancel()
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("保存") {
+                        onSave((
+                            title.trimmingCharacters(in: .whitespacesAndNewlines),
+                            description.trimmingCharacters(in: .whitespacesAndNewlines),
+                            location.trimmingCharacters(in: .whitespacesAndNewlines)
+                        ))
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
     }
 }
 
