@@ -142,6 +142,7 @@ struct NegotiationView: View {
             NavigationView {
                 DatePicker("选择时间", selection: $tempSelectedDate, displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(GraphicalDatePickerStyle())
+                    .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
                     .padding()
                     .navigationTitle("选择时间")
                     .navigationBarTitleDisplayMode(.inline)

@@ -95,14 +95,26 @@ struct CollaborationInvitationView: View {
                 }
 
                 // 时间选择
-                Section(header: Text("活动时间")) {
+                Section(header: Text("活动时间及持续时间")) {
                     // 日期选择
-                    DatePicker("日期", selection: $selectedDate, displayedComponents: .date)
-                        .datePickerStyle(GraphicalDatePickerStyle())
+                    VStack(alignment: .leading, spacing: 8) {
+                        DatePicker("日期", selection: $selectedDate, in: (Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())..., displayedComponents: .date)
+                            .datePickerStyle(GraphicalDatePickerStyle())
+                            .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
+
+                        HStack {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                            Text("今天是 \(formatTodayDate())，不可选择")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                        }
+                    }
 
                     // 时间选择
                     HStack {
-                        Text("时间")
+                        Text("开始时间")
                         Spacer()
                         Button(action: {
                             showingTimePicker = true
@@ -232,6 +244,12 @@ struct CollaborationInvitationView: View {
         return formatter.string(from: date)
     }
 
+    private func formatTodayDate() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM月dd日"
+        return formatter.string(from: Date())
+    }
+
     // 加载Maybe清单数据（临时硬编码，实际应该从数据源获取）
     private func loadMaybeList() -> [(title: String, description: String, location: String)] {
         return [
@@ -255,6 +273,7 @@ struct CollaborationTimePickerView: View {
                 DatePicker("选择时间", selection: $selectedTime, displayedComponents: .hourAndMinute)
                     .datePickerStyle(WheelDatePickerStyle())
                     .labelsHidden()
+                    .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
 
                 Spacer()
             }
