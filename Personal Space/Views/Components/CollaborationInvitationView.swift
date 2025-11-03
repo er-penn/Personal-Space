@@ -19,7 +19,6 @@ struct CollaborationInvitationView: View {
     @State private var selectedTime: Date = Date()
     @State private var durationHours: Int = 1
     @State private var durationMinutes: Int = 0
-    @State private var showingTimePicker = false
 
     // 表单验证
     @State private var showingAlert = false
@@ -29,20 +28,20 @@ struct CollaborationInvitationView: View {
     @State private var showingMaybeList = false
     @State private var maybeListItems: [(title: String, description: String, location: String)] = []
 
-    init() {
-        // 初始化Maybe清单数据（临时硬编码，实际应该从数据源获取）
-        self.maybeListItems = loadMaybeList()
-    }
-
     var body: some View {
         NavigationView {
             Form {
                 // 活动内容
                 Section(header:
                     HStack {
-                        Text("活动内容")
-                            .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.primary)
+                        HStack(spacing: 4) {
+                            Text("活动内容")
+                                .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.primary)
+                            Text("*")
+                                .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                                .foregroundColor(.red)
+                        }
 
                         Spacer()
 
@@ -60,7 +59,15 @@ struct CollaborationInvitationView: View {
                 }
 
                 // 活动描述
-                Section(header: Text("活动描述")) {
+                Section(header:
+                    HStack {
+                        Text("活动描述")
+                            .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                        Text("(选填)")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(.gray)
+                    }
+                ) {
                     if #available(iOS 16.0, *) {
                         TextField("请描述活动内容", text: $description, axis: .vertical)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -89,7 +96,15 @@ struct CollaborationInvitationView: View {
                 }
 
                 // 活动地点
-                Section(header: Text("活动地点")) {
+                Section(header:
+                    HStack {
+                        Text("活动地点")
+                            .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                        Text("(选填)")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(.gray)
+                    }
+                ) {
                     TextField("请输入活动地点", text: $location)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                 }
@@ -113,16 +128,9 @@ struct CollaborationInvitationView: View {
                     }
 
                     // 时间选择
-                    HStack {
-                        Text("开始时间")
-                        Spacer()
-                        Button(action: {
-                            showingTimePicker = true
-                        }) {
-                            Text(formatTime(selectedTime))
-                                .foregroundColor(.blue)
-                        }
-                    }
+                    DatePicker("开始时间", selection: $selectedTime, displayedComponents: .hourAndMinute)
+                        .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
 
                     // 持续时间
                     HStack {
@@ -168,12 +176,9 @@ struct CollaborationInvitationView: View {
             selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
             selectedTime = Calendar.current.date(bySettingHour: 14, minute: 0, second: 0, of: selectedDate) ?? selectedDate
         }
-        .sheet(isPresented: $showingTimePicker) {
-            CollaborationTimePickerView(selectedTime: $selectedTime, isPresented: $showingTimePicker)
-        }
-        .sheet(isPresented: $showingMaybeList) {
+            .sheet(isPresented: $showingMaybeList) {
             MaybeListPickerView(
-                items: maybeListItems,
+                items: maybeListItems.isEmpty ? loadMaybeList() : maybeListItems,
                 onItemSelected: { item in
                     title = item.title
                     description = item.description
@@ -190,23 +195,12 @@ struct CollaborationInvitationView: View {
 
     private var isFormValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         durationHours > 0 || durationMinutes > 0
     }
 
     private func sendInvitation() {
-        // 检查24小时限制
+        // 计算开始时间和持续时间
         let startTime = combineDateTime(date: selectedDate, time: selectedTime)
-        let timeUntilStart = startTime.timeIntervalSinceNow
-
-        if timeUntilStart < 24 * 60 * 60 {
-            alertMessage = "无法发起24小时内的邀请，请选择更晚的时间"
-            showingAlert = true
-            return
-        }
-
-        // 计算持续时间
         let duration = TimeInterval(durationHours * 3600 + durationMinutes * 60)
 
         // 创建邀请
@@ -257,43 +251,18 @@ struct CollaborationInvitationView: View {
             ("公园散步", "在附近公园散步，呼吸新鲜空气", "中山公园"),
             ("咖啡店聊天", "找个安静的咖啡店，好好聊聊天", "星巴克"),
             ("一起做饭", "在家一起准备晚餐，享受烹饪乐趣", "家里"),
-            ("去海边", "去海边看日落，听听海浪声", "海边栈道")
+            ("去海边", "去海边看日落，听听海浪声", "海边栈道"),
+            ("逛书店", "在书店里慢慢翻书，找找感兴趣的读物", "西西弗书店"),
+            ("打保龄球", "来一场有趣的保龄球比赛，看谁得分更高", "汤姆熊保龄球馆"),
+            ("看画展", "一起去看艺术展览，感受文化的熏陶", "市美术馆"),
+            ("爬山运动", "周末去爬爬山，锻炼身体，亲近自然", "西山公园"),
+            ("桌游吧", "玩各种有趣的桌面游戏，增进彼此默契", "欢乐桌游吧"),
+            ("DIY烘焙", "一起制作美味的糕点，享受甜蜜时光", "手工烘焙坊"),
+            ("骑单车", "沿着河边骑行，感受微风和阳光", "滨江路自行车道"),
+            ("听音乐会", "一起去听现场音乐会，享受音乐的魅力", "音乐厅"),
+            ("游乐园", "去游乐园玩各种刺激的项目，释放压力", "欢乐谷"),
+            ("博物馆参观", "参观历史博物馆，学习新知识", "市博物馆")
         ]
-    }
-}
-
-// MARK: - 协作邀请时间选择器（重命名避免与EnergyPlanningView冲突）
-struct CollaborationTimePickerView: View {
-    @Binding var selectedTime: Date
-    @Binding var isPresented: Bool
-
-    var body: some View {
-        NavigationView {
-            VStack {
-                DatePicker("选择时间", selection: $selectedTime, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(WheelDatePickerStyle())
-                    .labelsHidden()
-                    .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
-
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("选择时间")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") {
-                        isPresented = false
-                    }
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("确定") {
-                        isPresented = false
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -307,30 +276,30 @@ struct MaybeListPickerView: View {
         NavigationView {
             List {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                    VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(item.title)
-                                .font(.system(size: AppTheme.FontSize.body, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.text)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.primary)
                             Spacer()
                         }
 
                         Text(item.description)
-                            .font(.system(size: AppTheme.FontSize.caption))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
                             .lineLimit(2)
 
                         HStack {
                             Image(systemName: "location")
-                                .font(.system(size: AppTheme.FontSize.caption2))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
                             Text(item.location)
-                                .font(.system(size: AppTheme.FontSize.caption))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
                             Spacer()
                         }
                     }
-                    .padding(.vertical, AppTheme.Spacing.sm)
+                    .padding(.vertical, 8)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         onItemSelected(item)
