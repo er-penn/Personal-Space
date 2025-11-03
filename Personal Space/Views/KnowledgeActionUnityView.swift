@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct KnowledgeActionUnityView: View {
-    @Environment(\.presentationMode) var presentationMode
     @StateObject private var knowledgeActionManager = KnowledgeActionManager()
     @State private var selectedTab: TabType = .knowledge
 
@@ -28,25 +27,6 @@ struct KnowledgeActionUnityView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部导航栏（只有标题）
-            HStack {
-                Spacer()
-
-                VStack(spacing: 2) {
-                    Text("知行合一")
-                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.text)
-                    Text("将想法转化为行动，让目标成为现实")
-                        .font(.system(size: AppTheme.FontSize.caption))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, AppTheme.Spacing.lg)
-            .padding(.vertical, AppTheme.Spacing.md)
-            .background(Color(.systemBackground))
-
             // Tab切换区域
             HStack(spacing: 0) {
                 ForEach(TabType.allCases, id: \.self) { tab in
@@ -90,7 +70,8 @@ struct KnowledgeActionUnityView: View {
             .animation(.easeInOut(duration: 0.3), value: selectedTab)
         }
         .background(AppGradient.background)
-            .ignoresSafeArea(edges: .bottom)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("知行合一")
     }
 }
 
@@ -167,7 +148,7 @@ struct KnowledgeView: View {
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.lg)
-            .padding(.vertical, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.xs)
 
             // 认知列表
             ScrollView {
@@ -183,7 +164,7 @@ struct KnowledgeView: View {
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.lg)
-                .padding(.top, AppTheme.Spacing.md)
+                .padding(.top, AppTheme.Spacing.xs)
                 .padding(.bottom, AppTheme.Spacing.xl)
             }
         }
@@ -398,7 +379,7 @@ struct ActionView: View {
                 Spacer(minLength: 100)
             }
             .padding(.horizontal, AppTheme.Spacing.lg)
-            .padding(.top, AppTheme.Spacing.md)
+            .padding(.top, AppTheme.Spacing.xs)
         }
         .background(AppGradient.background)
     }
