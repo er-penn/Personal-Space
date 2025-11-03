@@ -50,6 +50,9 @@ struct MySpaceView: View {
     @State private var selectedTemporaryStateType: TemporaryStateType? = nil
     @State private var selectedDuration: TimeInterval = 7200 // 默认2小时
     @State private var showingTemporaryStateOverlay = false
+
+    // MARK: - FAB功能相关状态变量
+    @State private var showingCollaborationInvitation = false
     
     init() {
         // 每天第一次打开app时重置状态
@@ -106,7 +109,10 @@ struct MySpaceView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        FABMenuView(isShowing: $showingFABMenu)
+                        FABMenuView(
+                            isShowing: $showingFABMenu,
+                            onAction: handleFABAction
+                        )
                     }
                     .padding(.trailing, AppTheme.Spacing.xl)
                     .padding(.bottom, AppTheme.Spacing.xl)
@@ -163,6 +169,9 @@ struct MySpaceView: View {
         }
         .onDisappear {
             stopTimer()
+        }
+        .sheet(isPresented: $showingCollaborationInvitation) {
+            CollaborationInvitationView()
         }
     }
     
@@ -624,6 +633,28 @@ struct MySpaceView: View {
             hasSwitchedFromUnplanned = true
         }
     }
+    
+    // MARK: - FAB功能处理
+    private func handleFABAction(_ action: String) {
+        switch action {
+        case "发起邀请":
+            showingCollaborationInvitation = true
+        case "安心确认":
+            // TODO: 实现安心确认功能
+            print("安心确认功能")
+        case "赠送心意":
+            // TODO: 实现赠送心意功能
+            print("赠送心意功能")
+        case "分享碎片":
+            // TODO: 实现分享碎片功能
+            print("分享碎片功能")
+        case "发布瞬间":
+            // TODO: 实现发布瞬间功能
+            print("发布瞬间功能")
+        default:
+            break
+        }
+    }
 }
 
 // MARK: - 我的瞬间部分
@@ -759,6 +790,7 @@ struct FunctionCardView: View {
 // MARK: - FAB菜单视图
 struct FABMenuView: View {
     @Binding var isShowing: Bool
+    let onAction: (String) -> Void
     
     private let fabItems = [
         ("发起邀请", "envelope", Color.blue),
@@ -778,7 +810,7 @@ struct FABMenuView: View {
                             icon: item.1,
                             color: item.2,
                             action: {
-                                // TODO: 实现具体功能
+                                onAction(item.0)
                                 isShowing = false
                             }
                         )

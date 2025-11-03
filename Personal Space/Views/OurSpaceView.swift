@@ -16,13 +16,15 @@ struct OurSpaceView: View {
     
     // 模拟数据
     @State private var pendingItems: [Any] = [
-        CollaborationInvitation(title: "周末一起看电影", content: "最近上映了一部不错的电影，要不要一起去看？", createdAt: Date(), isFromMe: false, status: .pending),
+        // CollaborationInvitation 使用新的初始化方法
+        // CollaborationInvitation(title: "周末一起看电影", description: "最近上映了一部不错的电影，要不要一起去看？", location: "电影院", startTime: Date(), duration: 7200, createdBy: "partner1"),
         PeacefulClosure(item: "钥匙", location: "门口鞋柜", estimatedTime: "晚上8点", createdAt: Date(), isFromMe: false, isAcknowledged: false),
         GiftBox(item: "小礼物", time: "明天", location: "家里", createdAt: Date(), expiresAt: Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date(), isFromMe: false, isReceived: false)
     ]
     
     @State private var myItems: [Any] = [
-        CollaborationInvitation(title: "一起去公园散步", content: "天气不错，要不要去公园走走？", createdAt: Date(), isFromMe: true, status: .accepted),
+        // CollaborationInvitation 使用新的初始化方法
+        // CollaborationInvitation(title: "一起去公园散步", description: "天气不错，要不要去公园走走？", location: "公园", startTime: Date(), duration: 3600, createdBy: "user1"),
         Fragment(content: "今天看到一只很可爱的小猫", imageURL: nil, linkURL: nil, createdAt: Date(), isFromMe: true)
     ]
     
@@ -313,6 +315,7 @@ struct OurSpaceView: View {
 // MARK: - 协作邀请卡片
 struct CollaborationInvitationCard: View {
     let invitation: CollaborationInvitation
+    @EnvironmentObject var userState: UserState
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -326,22 +329,42 @@ struct CollaborationInvitationCard: View {
                 
                 Spacer()
                 
-                Text(invitation.isFromMe ? "我发起的" : "待处理")
+                // 使用 status 属性显示状态
+                Text(invitation.status.rawValue)
                     .font(.caption)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(invitation.isFromMe ? Color.blue.opacity(0.2) : Color.orange.opacity(0.2))
+                    .background(invitation.status.color.opacity(0.2))
                     .cornerRadius(8)
             }
             
             Text(invitation.title)
                 .font(.headline)
             
-            Text(invitation.content)
+            // 使用 description 属性替代 content
+            Text(invitation.description)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
-            if !invitation.isFromMe {
+            // 显示地点和时间信息
+            HStack(spacing: 8) {
+                Image(systemName: "mappin.circle")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(invitation.location)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Image(systemName: "clock")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(formatTime(invitation.startTime))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            // 只有待处理状态才显示操作按钮
+            if invitation.status == InvitationStatus.pending {
                 HStack(spacing: 12) {
                     Button("好") {
                         // TODO: 处理接受
@@ -371,6 +394,12 @@ struct CollaborationInvitationCard: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+    
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM月dd日 HH:mm"
+        return formatter.string(from: date)
     }
 }
 

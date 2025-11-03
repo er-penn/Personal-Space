@@ -1310,22 +1310,7 @@ struct FunctionCard: Identifiable {
     let action: () -> Void
 }
 
-// MARK: - 协作邀请模型
-struct CollaborationInvitation: Identifiable {
-    let id = UUID()
-    let title: String
-    let content: String
-    let createdAt: Date
-    let isFromMe: Bool
-    let status: InvitationStatus
-}
-
-enum InvitationStatus {
-    case pending
-    case accepted
-    case declined
-    case discuss
-}
+// MARK: - 旧的协作邀请模型已移除，使用下方完整版本
 
 // MARK: - 安心闭环模型
 struct PeacefulClosure: Identifiable {
@@ -1533,6 +1518,169 @@ class GrowthGarden: ObservableObject {
         if waterLevel >= 5 && plantLevel < 5 {
             plantLevel += 1
         }
+    }
+}
+
+// MARK: - 协作邀请相关模型
+
+enum InvitationStatus: String, CaseIterable, Codable {
+    case pending = "待处理"
+    case accepted = "好呀"
+    case negotiating = "商量下呗"
+    case postponed = "以后看"
+    case wechatNegotiating = "微信商量"
+
+    var color: Color {
+        switch self {
+        case .pending: return .orange
+        case .accepted: return .green
+        case .negotiating: return .blue
+        case .postponed: return .gray
+        case .wechatNegotiating: return .purple
+        }
+    }
+}
+
+struct CollaborationInvitation: Identifiable, Codable {
+    let id: UUID
+    let title: String
+    let description: String
+    let location: String
+    let startTime: Date
+    let duration: TimeInterval // 持续时间（秒）
+    let createdBy: String // 创建者ID
+    let createdAt: Date
+    var status: InvitationStatus
+    var lastModified: Date
+
+    // 协商相关字段
+    var negotiationHistory: [NegotiationRecord] = []
+    var multipleTimeOptions: [Date] = []
+    var multipleContentOptions: [String] = []
+
+    init(title: String, description: String, location: String, startTime: Date, duration: TimeInterval, createdBy: String) {
+        self.id = UUID()
+        self.title = title
+        self.description = description
+        self.location = location
+        self.startTime = startTime
+        self.duration = duration
+        self.createdBy = createdBy
+        self.createdAt = Date()
+        self.status = .pending
+        self.lastModified = Date()
+    }
+}
+
+struct NegotiationRecord: Identifiable, Codable {
+    let id: UUID
+    let proposedBy: String
+    let proposedAt: Date
+    let newStartTime: Date?
+    let newDuration: TimeInterval?
+    let newLocation: String?
+    let newDescription: String?
+    let timeOptions: [Date]?
+    let contentOptions: [String]?
+
+    init(proposedBy: String, newStartTime: Date? = nil, newDuration: TimeInterval? = nil, newLocation: String? = nil, newDescription: String? = nil, timeOptions: [Date]? = nil, contentOptions: [String]? = nil) {
+        self.id = UUID()
+        self.proposedBy = proposedBy
+        self.proposedAt = Date()
+        self.newStartTime = newStartTime
+        self.newDuration = newDuration
+        self.newLocation = newLocation
+        self.newDescription = newDescription
+        self.timeOptions = timeOptions
+        self.contentOptions = contentOptions
+    }
+}
+
+// 协作邀请管理器
+class CollaborationInvitationManager: ObservableObject {
+    @Published var invitations: [CollaborationInvitation] = []
+    
+    // 计算属性不能使用@Published
+    var pendingInvitations: [CollaborationInvitation] {
+        invitations.filter { $0.status == .pending }
+    }
+    
+    var myInvitations: [CollaborationInvitation] {
+        invitations.filter { $0.createdBy == getCurrentUserID() }
+    }
+
+    private func getCurrentUserID() -> String {
+        // TODO: 实现用户ID获取逻辑
+        return "user1" // 临时硬编码
+    }
+
+    // 创建新邀请
+    func createInvitation(title: String, description: String, location: String, startTime: Date, duration: TimeInterval) {
+        let invitation = CollaborationInvitation(
+            title: title,
+            description: description,
+            location: location,
+            startTime: startTime,
+            duration: duration,
+            createdBy: getCurrentUserID()
+        )
+
+        invitations.append(invitation)
+    }
+
+    // 响应邀请
+    func respondToInvitation(_ invitation: CollaborationInvitation, status: InvitationStatus) {
+        if let index = invitations.firstIndex(where: { $0.id == invitation.id }) {
+            invitations[index].status = status
+            invitations[index].lastModified = Date()
+
+            // 如果选择了"好呀"，创建待办事项
+            if status == .accepted {
+                createTodoItem(for: invitations[index])
+            }
+
+            // 如果选择了"以后看"，添加到Maybe清单
+            if status == .postponed {
+                addToMaybeList(invitation: invitations[index])
+            }
+        }
+    }
+
+    // 创建协商记录
+    func createNegotiation(for invitation: CollaborationInvitation, timeOptions: [Date]? = nil, contentOptions: [String]? = nil, newLocation: String? = nil, newDuration: TimeInterval? = nil) {
+        let negotiation = NegotiationRecord(
+            proposedBy: getCurrentUserID(),
+            newStartTime: timeOptions?.first,
+            newDuration: newDuration,
+            newLocation: newLocation,
+            newDescription: nil,
+            timeOptions: timeOptions,
+            contentOptions: contentOptions
+        )
+
+        if let index = invitations.firstIndex(where: { $0.id == invitation.id }) {
+            invitations[index].negotiationHistory.append(negotiation)
+            invitations[index].status = .negotiating
+            invitations[index].lastModified = Date()
+
+            // 如果提供了多选项，添加到邀请中
+            if let timeOptions = timeOptions {
+                invitations[index].multipleTimeOptions = timeOptions
+            }
+            if let contentOptions = contentOptions {
+                invitations[index].multipleContentOptions = contentOptions
+            }
+        }
+    }
+
+    private func createTodoItem(for invitation: CollaborationInvitation) {
+        // TODO: 实现待办事项创建逻辑
+        print("创建待办事项: \(invitation.title)")
+    }
+
+    private func addToMaybeList(invitation: CollaborationInvitation) {
+        // TODO: 实现Maybe清单添加逻辑
+        print("添加到Maybe清单: \(invitation.title) - 地点: \(invitation.location)")
     }
 }
 
