@@ -344,19 +344,26 @@ struct EnergyProgressView: View {
     
     private func getCurrentTimeOffset(width: CGFloat) -> CGFloat {
         let currentTime = getCurrentTime()
-        let hourIndex = max(0, min(currentTime.hour - 7, hours.count - 1))
+
+        // 只在7:00-23:00范围内显示黑色竖线
+        guard currentTime.hour >= 7 && currentTime.hour <= 23 else {
+            // 在0:00-6:59时间段，将竖线移到视野外（最左边）
+            return -10 // 移到可见区域外
+        }
+
+        let hourIndex = currentTime.hour - 7
         let blockWidth = width / CGFloat(hours.count)
         let spacing: CGFloat = 0.5 // 块之间的间距，与能量预规划页面保持一致
-        
+
         // 计算指针应该位于的时间块边界位置
         // 考虑块之间的间距
         let blockStartOffset = blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
-        
+
         // 计算在当前小时内的分钟偏移
         let minuteOffset = (CGFloat(currentTime.minute) / 60.0) * blockWidth
-        
+
         let totalOffset = blockStartOffset + minuteOffset
-        
+
         // 确保指针精确对齐到像素边界
         return round(totalOffset)
     }
