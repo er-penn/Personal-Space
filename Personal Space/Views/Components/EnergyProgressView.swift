@@ -270,18 +270,20 @@ struct EnergyProgressView: View {
                         .background(Color.gray.opacity(0.2))
                         .cornerRadius(4)
                         
-                        // 当前时间指示器
-                        Rectangle()
-                            .fill(AppTheme.Colors.text)
-                            .frame(width: 2, height: 20)
-                            .offset(x: getCurrentTimeOffset(width: geometry.size.width))
+                        // 当前时间指示器 - 只在7:00-23:00显示
+                        if getCurrentTime().hour >= 7 && getCurrentTime().hour <= 23 {
+                            Rectangle()
+                                .fill(AppTheme.Colors.text)
+                                .frame(width: 2, height: 20)
+                                .offset(x: getCurrentTimeOffset(width: geometry.size.width))
+                        }
                     }
                     .frame(height: 20)
                     
                     // 当前时间指示器文本
                     HStack {
                         Spacer()
-                        Text("当前：\(getCurrentTimeString())")
+                        Text(getCurrentTimeDisplayText())
                             .font(.system(size: AppTheme.FontSize.caption))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                         Spacer()
@@ -345,11 +347,8 @@ struct EnergyProgressView: View {
     private func getCurrentTimeOffset(width: CGFloat) -> CGFloat {
         let currentTime = getCurrentTime()
 
-        // 只在7:00-23:00范围内显示黑色竖线
-        guard currentTime.hour >= 7 && currentTime.hour <= 23 else {
-            // 在0:00-6:59时间段，将竖线移到视野外（最左边）
-            return -10 // 移到可见区域外
-        }
+        // 注意：此函数现在只在7:00-23:00范围内被调用
+        // 不需要处理其他时间段
 
         let hourIndex = currentTime.hour - 7
         let blockWidth = width / CGFloat(hours.count)
@@ -382,6 +381,23 @@ struct EnergyProgressView: View {
         let hour = calendar.component(.hour, from: userState.currentTime)
         let minute = calendar.component(.minute, from: userState.currentTime)
         return String(format: "%02d:%02d", hour, minute)
+    }
+
+    // 获取当前时间显示文本，根据时间段显示不同内容
+    private func getCurrentTimeDisplayText() -> String {
+        let currentTime = getCurrentTime()
+
+        if currentTime.hour >= 7 && currentTime.hour <= 23 {
+            // 活跃时间段：显示当前时间
+            return "当前：\(getCurrentTimeString())"
+        } else {
+            // 非活跃时间段：显示友好提示
+            if currentTime.hour < 7 {
+                return "早安 \(getCurrentTimeString()) - 能量记录7:00开始"
+            } else {
+                return "夜深了 \(getCurrentTimeString()) - 能量记录明日7:00开始"
+            }
+        }
     }
     
     private func formatMinutesToHours(_ minutes: Int) -> String {
