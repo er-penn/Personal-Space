@@ -53,6 +53,7 @@ struct MySpaceView: View {
 
     // MARK: - FAB功能相关状态变量
     @State private var showingCollaborationInvitation = false
+    @State private var showingPeacefulClosureCreate = false
     
     init() {
         // 每天第一次打开app时重置状态
@@ -196,12 +197,24 @@ struct MySpaceView: View {
         }
         .onAppear {
             startTimer()
+
+            // 加载示例安心确认数据
+            if userState.peacefulClosures.isEmpty {
+                userState.loadSamplePeacefulClosures()
+            }
+
+            // 更新待处理列表
+            userState.updatePendingClosures()
         }
         .onDisappear {
             stopTimer()
         }
         .sheet(isPresented: $showingCollaborationInvitation) {
             CollaborationInvitationView()
+        }
+        .sheet(isPresented: $showingPeacefulClosureCreate) {
+            PeacefulClosureCreateView()
+                .environmentObject(userState)
         }
     }
     
@@ -222,7 +235,10 @@ struct MySpaceView: View {
             // 4. 🎯 新增：分钟级倒计时更新
             userState.updateMinuteCountdowns()
 
-            // 5. 触发UI更新，让所有子组件自动响应状态变化
+            // 5. 检查过期的安心确认
+            userState.checkExpiredClosures()
+
+            // 6. 触发UI更新，让所有子组件自动响应状态变化
             userState.objectWillChange.send()
         }
 
@@ -660,8 +676,7 @@ struct MySpaceView: View {
         case "发起邀请":
             showingCollaborationInvitation = true
         case "安心确认":
-            // TODO: 实现安心确认功能
-            print("安心确认功能")
+            showingPeacefulClosureCreate = true
         case "赠送心意":
             // TODO: 实现赠送心意功能
             print("赠送心意功能")

@@ -1292,6 +1292,200 @@ class UserState: ObservableObject {
             print("🎯 创建新的基础状态: \(energyLevel.rawValue)")
         }
     }
+
+    // MARK: - 安心确认相关属性
+    @Published var peacefulClosures: [PeacefulClosure] = [] // 安心确认列表
+    @Published var myClosures: [PeacefulClosure] = [] // 我发起的安心确认
+    @Published var pendingClosures: [PeacefulClosure] = [] // 待我处理的安心确认
+
+    // MARK: - 安心确认方法
+
+    /// 创建新的安心确认
+    func createPeacefulClosure(type: PeacefulClosureType, title: String, content: String,
+                              itemDetails: ItemDetails? = nil, targetUserId: String = "partner",
+                              expiresAt: Date? = nil, hasExpiration: Bool = false) {
+        let newClosure = PeacefulClosure(
+            type: type,
+            title: title,
+            content: content,
+            itemDetails: itemDetails,
+            createdBy: "me",
+            targetUser: targetUserId,
+            expiresAt: expiresAt,
+            hasExpiration: hasExpiration
+        )
+
+        peacefulClosures.append(newClosure)
+        myClosures.append(newClosure)
+
+        print("✅ 创建安心确认: \(type.rawValue) - \(title)")
+
+        if hasExpiration, let expiresAt = expiresAt {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MM月dd日 HH:mm"
+            print("⏰ 设置过期时间: \(formatter.string(from: expiresAt))")
+        }
+    }
+
+    /// 响应安心确认
+    func respondToClosure(_ closure: PeacefulClosure, response: String) {
+        guard let index = peacefulClosures.firstIndex(where: { $0.id == closure.id }) else { return }
+
+        let responseObj = PeacefulClosureResponse(content: response)
+
+        // 更新原确认记录
+        peacefulClosures[index] = PeacefulClosure(
+            id: closure.id,
+            type: closure.type,
+            title: closure.title,
+            content: closure.content,
+            itemDetails: closure.itemDetails,
+            timestamp: closure.timestamp,
+            status: .completed,
+            createdBy: closure.createdBy,
+            targetUser: closure.targetUser,
+            response: responseObj,
+            expiresAt: closure.expiresAt,
+            hasExpiration: closure.hasExpiration
+        )
+
+        // 从待处理列表中移除
+        pendingClosures.removeAll { $0.id == closure.id }
+
+        print("✅ 响应安心确认: \(response)")
+
+        // 5分钟后自动归档
+        DispatchQueue.main.asyncAfter(deadline: .now() + 300) {
+            self.archiveClosure(closure.id)
+        }
+    }
+
+    /// 归档安心确认
+    private func archiveClosure(_ closureId: UUID) {
+        guard let index = peacefulClosures.firstIndex(where: { $0.id == closureId }) else { return }
+
+        peacefulClosures[index] = PeacefulClosure(
+            id: peacefulClosures[index].id,
+            type: peacefulClosures[index].type,
+            title: peacefulClosures[index].title,
+            content: peacefulClosures[index].content,
+            itemDetails: peacefulClosures[index].itemDetails,
+            timestamp: peacefulClosures[index].timestamp,
+            status: .archived,
+            createdBy: peacefulClosures[index].createdBy,
+            targetUser: peacefulClosures[index].targetUser,
+            response: peacefulClosures[index].response
+        )
+
+        print("📦 安心确认已归档: \(peacefulClosures[index].title)")
+    }
+
+    /// 撤销安心确认
+    func cancelClosure(_ closure: PeacefulClosure) {
+        guard let index = peacefulClosures.firstIndex(where: { $0.id == closure.id }) else { return }
+
+        // 更新状态为已撤销
+        peacefulClosures[index] = PeacefulClosure(
+            id: closure.id,
+            type: closure.type,
+            title: closure.title,
+            content: closure.content,
+            itemDetails: closure.itemDetails,
+            timestamp: closure.timestamp,
+            status: .cancelled,
+            createdBy: closure.createdBy,
+            targetUser: closure.targetUser,
+            response: closure.response,
+            expiresAt: closure.expiresAt,
+            hasExpiration: closure.hasExpiration
+        )
+
+        // 从待处理列表中移除
+        pendingClosures.removeAll { $0.id == closure.id }
+
+        print("🚫 撤销安心确认: \(closure.title)")
+    }
+
+    /// 检查并处理过期的安心确认
+    func checkExpiredClosures() {
+        for (index, closure) in peacefulClosures.enumerated() {
+            if closure.status == .pending && closure.isExpired {
+                // 标记为已过期
+                peacefulClosures[index] = PeacefulClosure(
+                    id: closure.id,
+                    type: closure.type,
+                    title: closure.title,
+                    content: closure.content,
+                    itemDetails: closure.itemDetails,
+                    timestamp: closure.timestamp,
+                    status: .expired,
+                    createdBy: closure.createdBy,
+                    targetUser: closure.targetUser,
+                    response: closure.response,
+                    expiresAt: closure.expiresAt,
+                    hasExpiration: closure.hasExpiration
+                )
+
+                print("⏰ 安心确认已过期: \(closure.title)")
+            }
+        }
+
+        // 更新待处理列表
+        updatePendingClosures()
+    }
+
+    /// 更新待处理列表
+    func updatePendingClosures() {
+        pendingClosures = peacefulClosures.filter { closure in
+            closure.status == .pending && closure.targetUser == "me" && !closure.isExpired
+        }
+    }
+
+    /// 获取示例数据
+    func loadSamplePeacefulClosures() {
+        let sample1 = PeacefulClosure(
+            type: .item,
+            title: "包裹在前台",
+            content: "快递员王师傅已将包裹放在前台，取件码8567",
+            itemDetails: ItemDetails(
+                itemName: "快递包裹",
+                location: "前台",
+                expectedTime: nil,
+                extraInfo: "取件码：8567"
+            ),
+            createdBy: "partner",
+            targetUser: "me"
+        )
+
+        let sample2 = PeacefulClosure(
+            type: .affair,
+            title: "我已安全到家",
+            content: "已经到家了，请放心",
+            createdBy: "partner",
+            targetUser: "me"
+        )
+
+        let sample3 = PeacefulClosure(
+            id: UUID(),
+            type: .item,
+            title: "药品买回来了",
+            content: "你需要的维生素已经买好了",
+            itemDetails: ItemDetails(
+                itemName: "维生素",
+                location: "餐桌",
+                expectedTime: nil,
+                extraInfo: "记得按时服用"
+            ),
+            timestamp: Date().addingTimeInterval(-3600),
+            status: .completed,
+            createdBy: "partner",
+            targetUser: "me",
+            response: PeacefulClosureResponse(content: "拿到啦 🙌")
+        )
+
+        peacefulClosures = [sample1, sample2, sample3]
+        updatePendingClosures()
+    }
 }
 
 // MARK: - 伴侣状态模型
@@ -1312,15 +1506,126 @@ struct FunctionCard: Identifiable {
 
 // MARK: - 旧的协作邀请模型已移除，使用下方完整版本
 
-// MARK: - 安心闭环模型
-struct PeacefulClosure: Identifiable {
-    let id = UUID()
-    let item: String
-    let location: String
-    let estimatedTime: String
-    let createdAt: Date
-    let isFromMe: Bool
-    let isAcknowledged: Bool
+// MARK: - 安心确认模型
+
+enum PeacefulClosureType: String, CaseIterable, Codable {
+    case item = "物品"
+    case affair = "事务"
+}
+
+struct PeacefulClosure: Identifiable, Codable {
+    let id: UUID
+    let type: PeacefulClosureType
+    let title: String
+    let content: String
+    let itemDetails: ItemDetails? // 仅物品类使用
+    let timestamp: Date
+    let status: ClosureStatus
+    let createdBy: String // 创建者ID
+    let targetUser: String // 目标用户ID
+    let response: PeacefulClosureResponse?
+    let expiresAt: Date? // 过期时间（仅事务类可选）
+    let hasExpiration: Bool // 是否有过期时间
+
+    init(id: UUID = UUID(), type: PeacefulClosureType, title: String, content: String,
+         itemDetails: ItemDetails? = nil, createdBy: String, targetUser: String,
+         expiresAt: Date? = nil, hasExpiration: Bool = false) {
+        self.id = id
+        self.type = type
+        self.title = title
+        self.content = content
+        self.itemDetails = itemDetails
+        self.timestamp = Date()
+        self.status = .pending
+        self.createdBy = createdBy
+        self.targetUser = targetUser
+        self.response = nil
+        self.expiresAt = expiresAt
+        self.hasExpiration = hasExpiration
+    }
+
+    // 用于从已有数据创建（包含响应）
+    init(id: UUID, type: PeacefulClosureType, title: String, content: String,
+         itemDetails: ItemDetails? = nil, timestamp: Date, status: ClosureStatus,
+         createdBy: String, targetUser: String, response: PeacefulClosureResponse? = nil,
+         expiresAt: Date? = nil, hasExpiration: Bool = false) {
+        self.id = id
+        self.type = type
+        self.title = title
+        self.content = content
+        self.itemDetails = itemDetails
+        self.timestamp = timestamp
+        self.status = status
+        self.createdBy = createdBy
+        self.targetUser = targetUser
+        self.response = response
+        self.expiresAt = expiresAt
+        self.hasExpiration = hasExpiration
+    }
+
+    // 检查是否过期
+    var isExpired: Bool {
+        guard let expiresAt = expiresAt, hasExpiration else { return false }
+        return Date() > expiresAt
+    }
+}
+
+struct ItemDetails: Codable {
+    let itemName: String      // 物品名称
+    let location: String?     // 地点（可选）
+    let expectedTime: Date?   // 预计时间（可选）
+    let extraInfo: String?    // 补充信息（可选）
+}
+
+struct PeacefulClosureResponse: Codable {
+    let content: String       // 具体回复内容
+    let timestamp: Date
+    let isFinal: Bool         // 标记为最终状态
+
+    init(content: String) {
+        self.content = content
+        self.timestamp = Date()
+        self.isFinal = true
+    }
+}
+
+enum ClosureStatus: String, Codable {
+    case pending = "待确认"
+    case completed = "已完成"
+    case archived = "已归档"
+    case expired = "已过期"
+    case cancelled = "已撤销"
+}
+
+// MARK: - 物品类响应选项
+enum ItemResponseType: String, CaseIterable {
+    case noted = "知道啦"
+    case gotIt = "拿到啦"
+    case later = "等下去拿"
+
+    var icon: String {
+        switch self {
+        case .noted: return "💙"
+        case .gotIt: return "🙌"
+        case .later: return "⏰"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .noted: return "收到信息，不用管我"
+        case .gotIt: return "已经取回来了"
+        case .later: return "忙完就去取"
+        }
+    }
+
+    var confirmationMessage: String {
+        switch self {
+        case .noted: return "对方已知悉信息"
+        case .gotIt: return "物品已取回，事情办结"
+        case .later: return "对方稍后处理，无需提醒"
+        }
+    }
 }
 
 // MARK: - 心意盒模型

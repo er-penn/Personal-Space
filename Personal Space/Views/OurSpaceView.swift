@@ -14,13 +14,8 @@ struct OurSpaceView: View {
     @State private var showingPartnerInfo = true
     @State private var showingCommonRecords = true
     
-    // 模拟数据
-    @State private var pendingItems: [Any] = [
-        // CollaborationInvitation 使用新的初始化方法
-        // CollaborationInvitation(title: "周末一起看电影", description: "最近上映了一部不错的电影，要不要一起去看？", location: "电影院", startTime: Date(), duration: 7200, createdBy: "partner1"),
-        PeacefulClosure(item: "钥匙", location: "门口鞋柜", estimatedTime: "晚上8点", createdAt: Date(), isFromMe: false, isAcknowledged: false),
-        GiftBox(item: "小礼物", time: "明天", location: "家里", createdAt: Date(), expiresAt: Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date(), isFromMe: false, isReceived: false)
-    ]
+    // 模拟数据 - 将使用UserState中的数据
+    @State private var pendingItems: [Any] = []
     
     @State private var myItems: [Any] = [
         // CollaborationInvitation 使用新的初始化方法
@@ -139,27 +134,56 @@ struct OurSpaceView: View {
             Text("待处理事项")
                 .font(.headline)
                 .foregroundColor(.secondary)
-            
+
             LazyVStack(spacing: 12) {
+                // 显示待处理的安心确认
+                ForEach(userState.pendingClosures) { closure in
+                    PendingPeacefulClosureCardView(closure: closure) { response in
+                        userState.respondToClosure(closure, response: response)
+                    }
+                }
+
+                // 显示其他待处理事项（从模拟数据）
                 ForEach(Array(pendingItems.enumerated()), id: \.offset) { index, item in
                     if let invitation = item as? CollaborationInvitation {
                         CollaborationInvitationCard(invitation: invitation)
-                    } else if let closure = item as? PeacefulClosure {
-                        PeacefulClosureCard(closure: closure)
                     } else if let giftBox = item as? GiftBox {
                         GiftBoxCard(giftBox: giftBox)
                     }
                 }
             }
-            
+
+            if userState.pendingClosures.isEmpty && pendingItems.isEmpty {
+                Text("暂无待处理事项")
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.xl)
+            }
+
             Divider()
                 .padding(.vertical, 8)
-            
+
             Text("我发起的")
                 .font(.headline)
                 .foregroundColor(.secondary)
-            
+
             LazyVStack(spacing: 12) {
+                // 显示我发起的安心确认
+                ForEach(userState.myClosures.filter { $0.status != .archived && $0.status != .cancelled }) { closure in
+                    PeacefulClosureCardView(
+                        closure: closure,
+                        onTap: {
+                            // 可以点击查看详情，但暂时为空
+                        },
+                        onCancel: { closureToCancel in
+                            userState.cancelClosure(closureToCancel)
+                        },
+                        isMyClosure: true
+                    )
+                }
+
+                // 显示我发起的其他事项
                 ForEach(Array(myItems.enumerated()), id: \.offset) { index, item in
                     if let invitation = item as? CollaborationInvitation {
                         CollaborationInvitationCard(invitation: invitation)
@@ -167,6 +191,14 @@ struct OurSpaceView: View {
                         FragmentCard(fragment: fragment)
                     }
                 }
+            }
+
+            if userState.myClosures.filter({ $0.status != .archived }).isEmpty && myItems.isEmpty {
+                Text("暂无发起事项")
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.xl)
             }
         }
         .padding(AppTheme.Spacing.lg)
@@ -182,6 +214,9 @@ struct OurSpaceView: View {
             RoundedRectangle(cornerRadius: AppTheme.Radius.card)
                 .stroke(AppTheme.Colors.border, lineWidth: 1)
         )
+        .onAppear {
+            userState.updatePendingClosures()
+        }
     }
     
     // MARK: - 伴侣信息区
@@ -403,59 +438,7 @@ struct CollaborationInvitationCard: View {
     }
 }
 
-// MARK: - 安心闭环卡片
-struct PeacefulClosureCard: View {
-    let closure: PeacefulClosure
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "checkmark.circle")
-                    .foregroundColor(.green)
-                
-                Text("安心闭环")
-                    .font(.subheadline)
-                    .font(.subheadline.weight(.medium))
-                
-                Spacer()
-                
-                Text(closure.isFromMe ? "我发起的" : "待确认")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(closure.isFromMe ? Color.blue.opacity(0.2) : Color.orange.opacity(0.2))
-                    .cornerRadius(8)
-            }
-            
-            Text("物品：\(closure.item)")
-                .font(.headline)
-            
-            Text("地点：\(closure.location)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            Text("预计时间：\(closure.estimatedTime)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            if !closure.isFromMe && !closure.isAcknowledged {
-                Button("已知悉") {
-                    // TODO: 处理确认
-                }
-                .font(.subheadline)
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.green)
-                .cornerRadius(8)
-            }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-    }
-}
+// 旧的PeacefulClosureCard已移除，使用新的PeacefulClosureCardView组件
 
 // MARK: - 心意盒卡片
 struct GiftBoxCard: View {
