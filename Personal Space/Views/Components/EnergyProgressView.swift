@@ -270,7 +270,7 @@ struct EnergyProgressView: View {
                         .background(Color.gray.opacity(0.2))
                         .cornerRadius(4)
                         
-                        // 当前时间指示器 - 只在7:00-23:00显示
+                        // 当前时间指示器 - 在7:00-23:59显示
                         if getCurrentTime().hour >= 7 && getCurrentTime().hour <= 23 {
                             Rectangle()
                                 .fill(AppTheme.Colors.text)
@@ -388,15 +388,11 @@ struct EnergyProgressView: View {
         let currentTime = getCurrentTime()
 
         if currentTime.hour >= 7 && currentTime.hour <= 23 {
-            // 活跃时间段：显示当前时间
+            // 活跃时间段（7:00-23:59）：显示当前时间
             return "当前：\(getCurrentTimeString())"
         } else {
-            // 非活跃时间段：显示友好提示
-            if currentTime.hour < 7 {
-                return "早安 \(getCurrentTimeString()) - 能量记录7:00开始"
-            } else {
-                return "夜深了 \(getCurrentTimeString()) - 能量记录明日7:00开始"
-            }
+            // 非活跃时间段（0:00-6:59）：显示简洁提示
+            return "当前 \(getCurrentTimeString()) - 能量记录7:00开始"
         }
     }
     
