@@ -13,6 +13,9 @@ struct OurSpaceView: View {
     @EnvironmentObject var growthGarden: GrowthGarden
     @State private var showingPartnerInfo = true
     @State private var showingCommonRecords = true
+
+    // MARK: - 焦虑平复指南相关状态变量
+    @State private var showingAnxietySoothingGuide = false
     
     // 模拟数据 - 将使用UserState中的数据
     @State private var pendingItems: [Any] = []
@@ -49,6 +52,9 @@ struct OurSpaceView: View {
                 }
             }
             .navigationBarHidden(true)
+        }
+        .sheet(isPresented: $showingAnxietySoothingGuide) {
+            AnxietySoothingGuideView()
         }
     }
     
@@ -90,7 +96,7 @@ struct OurSpaceView: View {
                 // 右侧：平复按钮（与我的空间样式一致）
                 VStack(spacing: 4) {
                     Button(action: {
-                        // 平复功能
+                        showingAnxietySoothingGuide = true
                     }) {
                         ZStack {
                             Circle()

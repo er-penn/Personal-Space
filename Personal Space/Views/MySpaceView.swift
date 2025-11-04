@@ -54,6 +54,9 @@ struct MySpaceView: View {
     // MARK: - FAB功能相关状态变量
     @State private var showingCollaborationInvitation = false
     @State private var showingPeacefulClosureCreate = false
+
+    // MARK: - 焦虑平复指南相关状态变量
+    @State private var showingAnxietySoothingGuide = false
     
     init() {
         // 每天第一次打开app时重置状态
@@ -65,7 +68,11 @@ struct MySpaceView: View {
         }
     }
     
-    private let anxietyGuideCard = FunctionCard(title: "焦虑平复指南", icon: "cross.case.fill", color: .orange, content: "推荐：深呼吸练习", action: { })
+    private var anxietyGuideCard: FunctionCard {
+        FunctionCard(title: "焦虑平复指南", icon: "cross.case.fill", color: .orange, content: "推荐：深呼吸练习", action: {
+            showingAnxietySoothingGuide = true
+        })
+    }
     private let knowledgeActionContent = "今日目标：冥想15分钟 ✓"
     
     var body: some View {
@@ -215,6 +222,9 @@ struct MySpaceView: View {
         .sheet(isPresented: $showingPeacefulClosureCreate) {
             PeacefulClosureCreateView()
                 .environmentObject(userState)
+        }
+        .sheet(isPresented: $showingAnxietySoothingGuide) {
+            AnxietySoothingGuideView()
         }
     }
     
@@ -421,7 +431,7 @@ struct MySpaceView: View {
                             // 平复按钮 - 可点击，向右偏移与快充按钮对齐
                             VStack(spacing: 4) {
                                 Button(action: {
-                                    // 焦虑平复功能
+                                    showingAnxietySoothingGuide = true
                                 }) {
                                     ZStack {
                                         Circle()
