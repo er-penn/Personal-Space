@@ -88,7 +88,7 @@ class UserState: ObservableObject {
     @Published var currentBaseEnergyLevel: EnergyLevel = .unplanned // 实时基础状态（用于UI显示）
     @Published var lastProcessedMinute: Date? = nil // 最后处理的分钟（用于检测分钟变化）
     @Published var currentTime: Date = Date() // 全局当前时间（统一管理）
-
+    
     // MARK: - 预规划状态遮罩相关属性
     @Published var isPlannedStateActive: Bool = false // 是否处于预规划状态遮罩
     @Published var currentPlannedStateLevel: EnergyLevel? = nil // 当前预规划状态的能量等级
@@ -112,7 +112,7 @@ class UserState: ObservableObject {
 
         // 初始化基础状态为未规划，覆盖7:00-23:59
         initializeBaseEnergyPlan()
-
+        
         // 临时启用示例数据来测试预规划状态切换功能
         setupSampleEnergyPlans()
         // setupSampleActualEnergyRecords()
@@ -292,12 +292,12 @@ class UserState: ObservableObject {
             print("🎯 创建新的基础状态规划：\(currentBaseEnergyLevel.description), 时间段：\(currentHour):\(String(format: "%02d", currentMinute))")
         }
     }
-
+    
     /// 检查是否是今天第一次打开app
     private func checkFirstOpenToday() {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-
+        
         // 如果今天还没有打开过app，或者是第一次打开app
         if lastAppOpenDate == nil || !calendar.isDate(lastAppOpenDate!, inSameDayAs: today) {
             // 重置为未规划状态（使用新的追加逻辑）
@@ -311,10 +311,10 @@ class UserState: ObservableObject {
             // 清除预规划和基础状态
             plannedEnergyPlans.removeAll()
             baseEnergyPlans.removeAll()
-
+            
             print("今天第一次打开app，重置为未规划状态")
         }
-
+        
         // 更新最后打开app的日期
         lastAppOpenDate = Date()
     }
@@ -459,7 +459,7 @@ class UserState: ObservableObject {
         }
         
         // 有遮罩状态激活时，按优先级检查：临时状态 > 预规划状态 > 基础状态
-        
+
         // 1. 临时状态优先级最高
         if isTemporaryStateActive, let tempType = currentTemporaryStateType {
             return tempType.energyLevel
@@ -505,7 +505,7 @@ class UserState: ObservableObject {
         }
 
         // 没有预规划则显示未规划状态
-        return .unplanned
+            return .unplanned
     }
     
     // MARK: - 能量规划相关方法
@@ -769,7 +769,7 @@ class UserState: ObservableObject {
         guard isTemporaryStateActive else { return "" }
         let remainingTime = getTemporaryStateRemainingTime()
         let minutes = Int(remainingTime / 60)
-
+        
         if minutes <= 0 {
             return "即将结束"
         } else if minutes < 60 {
@@ -845,13 +845,13 @@ class UserState: ObservableObject {
         
         // 查找包含当前时间的预规划
         let currentPlans = plannedEnergyPlans.filter { plan in
-            calendar.isDate(plan.date, inSameDayAs: today) &&
+                calendar.isDate(plan.date, inSameDayAs: today) &&
             plan.containsTime(hour: startHour, minute: startMinute) &&
-            plan.energyLevel == energyLevel
-        }
-        
+                plan.energyLevel == energyLevel
+            }
+            
         guard let currentPlan = currentPlans.first else { return nil }
-        
+            
         // 找到包含当前时间的 TimeSlot
         for slot in currentPlan.timeSlots {
             if slot.contains(hour: startHour, minute: startMinute) {
@@ -867,12 +867,12 @@ class UserState: ObservableObject {
     private func startPlannedState(level: EnergyLevel, startTime: Date, endTime: Date) {
         // 记录预规划状态开始
         recordEnergyLevelChange(to: level)
-
+        
         isPlannedStateActive = true
         currentPlannedStateLevel = level
         currentPlannedStateStartTime = startTime
         currentPlannedStateEndTime = endTime
-
+        
         // 🎯 设置分钟级倒计时
         let remainingSeconds = max(0, endTime.timeIntervalSince(Date()))
         let remainingMinutes = max(1, Int(ceil(remainingSeconds / 60.0)))
@@ -914,9 +914,9 @@ class UserState: ObservableObject {
               let plannedLevel = currentPlannedStateLevel else {
             return
         }
-
+        
         print("🎯 手动结束预规划遮罩，能量等级: \(plannedLevel.description)")
-
+        
         // 🎯 截断当前预规划状态的TimeSlot到当前时间的上一分钟
         let modified = truncateCurrentTimeSlot(
             for: plannedLevel,
@@ -927,20 +927,20 @@ class UserState: ObservableObject {
         if modified {
             print("🎯 预规划状态TimeSlot已截断")
         }
-
+        
         // 记录预规划状态结束，切换到基础状态
         let baseLevel = currentBaseEnergyLevel
         recordEnergyLevelChange(to: baseLevel)
 
         // 🎯 立即执行一次主定时器内的逻辑
         checkAndAppendBaseStateTimeSlot()
-
+        
         // 结束预规划状态
         isPlannedStateActive = false
         currentPlannedStateLevel = nil
         currentPlannedStateStartTime = nil
         currentPlannedStateEndTime = nil
-
+        
         print("🎯 手动结束预规划遮罩，记录状态切换为: \(baseLevel.description)")
     }
     
@@ -989,7 +989,7 @@ class UserState: ObservableObject {
         if let tempLevel = getTemporaryStateEnergyLevel(for: date, hour: hour, minute: minute) {
             return tempLevel
         }
-        
+
         // 🎯
         //2.预规划状态优先级次之：检查预规划状态
         if let plan = plannedEnergyPlans.first(where: {
@@ -1043,7 +1043,7 @@ class UserState: ObservableObject {
             plan.containsTime(hour: hour, minute: minute)
         }
     }
-
+    
     /// 获取今天剩余时间（秒）
     func getTodayRemainingTime() -> TimeInterval {
         let calendar = Calendar.current
@@ -1099,7 +1099,7 @@ class UserState: ObservableObject {
 
         print("========================================\n")
     }
-
+    
     /// 获取临时状态剩余时间（秒）
     func getTemporaryStateRemainingTime() -> TimeInterval {
         guard isTemporaryStateActive, let endTime = currentTemporaryStateEndTime else { return 0 }

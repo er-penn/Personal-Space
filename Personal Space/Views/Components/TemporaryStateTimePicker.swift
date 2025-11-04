@@ -76,17 +76,17 @@ struct TemporaryStateTimePicker: View {
                 
                 // "已选择"部分 - 紧凑显示
                 HStack(spacing: AppTheme.Spacing.xs) {
-                    Text("已选择")
+                        Text("已选择")
                         .font(.system(size: AppTheme.FontSize.caption))
-                        .foregroundColor(.secondary)
-                    
-                    Text(formatTime(selectedMinutes))
+                            .foregroundColor(.secondary)
+                        
+                        Text(formatTime(selectedMinutes))
                         .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
-                        .foregroundColor(.primary)
-                }
+                            .foregroundColor(.primary)
+                    }
                 .padding(.vertical, AppTheme.Spacing.sm)
                 .padding(.horizontal, AppTheme.Spacing.md)
-                .background(Color(.systemGray6))
+                    .background(Color(.systemGray6))
                 .cornerRadius(AppTheme.Radius.small)
                 .padding(.bottom, AppTheme.Spacing.lg)
             }

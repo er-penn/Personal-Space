@@ -26,52 +26,52 @@ struct KnowledgeActionUnityView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+            VStack(spacing: 0) {
             // Tab切换区域
-            HStack(spacing: 0) {
-                ForEach(TabType.allCases, id: \.self) { tab in
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            selectedTab = tab
-                        }
-                    }) {
-                        VStack(spacing: 8) {
-                            HStack(spacing: 8) {
-                                Image(systemName: tab.systemImage)
-                                    .font(.system(size: 18, weight: .medium))
-                                Text(tab.rawValue)
-                                    .font(.system(size: 18, weight: .semibold))
+                HStack(spacing: 0) {
+                    ForEach(TabType.allCases, id: \.self) { tab in
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                selectedTab = tab
                             }
-                            .foregroundColor(selectedTab == tab ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                        }) {
+                            VStack(spacing: 8) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: tab.systemImage)
+                                        .font(.system(size: 18, weight: .medium))
+                                    Text(tab.rawValue)
+                                        .font(.system(size: 18, weight: .semibold))
+                                }
+                                .foregroundColor(selectedTab == tab ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
 
-                            // 下划线
-                            Rectangle()
-                                .fill(selectedTab == tab ? AppTheme.Colors.primary : Color.clear)
-                                .frame(height: 2)
-                                .animation(.easeInOut(duration: 0.3), value: selectedTab)
+                                // 下划线
+                                Rectangle()
+                                    .fill(selectedTab == tab ? AppTheme.Colors.primary : Color.clear)
+                                    .frame(height: 2)
+                                    .animation(.easeInOut(duration: 0.3), value: selectedTab)
+                            }
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppTheme.Spacing.md)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppTheme.Spacing.md)
                 }
-            }
-            .padding(.horizontal, AppTheme.Spacing.lg)
-            .background(Color(.systemBackground))
+                .padding(.horizontal, AppTheme.Spacing.lg)
+                .background(Color(.systemBackground))
 
-            // 内容区域
-            TabView(selection: $selectedTab) {
-                KnowledgeView(manager: knowledgeActionManager)
-                    .tag(TabType.knowledge)
+                // 内容区域
+                TabView(selection: $selectedTab) {
+                    KnowledgeView(manager: knowledgeActionManager)
+                        .tag(TabType.knowledge)
 
-                ActionView(manager: knowledgeActionManager)
-                    .tag(TabType.action)
+                    ActionView(manager: knowledgeActionManager)
+                        .tag(TabType.action)
+                }
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                .animation(.easeInOut(duration: 0.3), value: selectedTab)
             }
-            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-            .animation(.easeInOut(duration: 0.3), value: selectedTab)
-        }
-        .background(AppGradient.background)
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle("知行合一")
+            .background(AppGradient.background)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("知行合一")
     }
 }
 

@@ -585,26 +585,26 @@ struct PartnerInfoCard: View {
 struct MaybeListCard: View {
     @State private var maybeListItems: [(title: String, description: String, location: String)] = []
     @State private var showingEditor = false
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "list.bullet")
                     .foregroundColor(.blue)
-
+                
                 Text("Maybe清单")
                     .font(.subheadline)
                     .font(.subheadline.weight(.medium))
-
+                
                 Spacer()
-
+                
                 Button("编辑") {
                     showingEditor = true
                 }
                 .font(.caption)
                 .foregroundColor(.blue)
             }
-
+            
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(0..<min(5, maybeListItems.count), id: \.self) { index in
                     let item = maybeListItems[index]

@@ -69,9 +69,9 @@ struct CollaborationInvitationView: View {
                     }
                 ) {
                     if #available(iOS 16.0, *) {
-                        TextField("请描述活动内容", text: $description, axis: .vertical)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .lineLimit(3...6)
+                    TextField("请描述活动内容", text: $description, axis: .vertical)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .lineLimit(3...6)
                     } else {
                         // iOS 15 兼容：使用传统的多行文本输入
                         TextEditor(text: $description)
@@ -114,10 +114,10 @@ struct CollaborationInvitationView: View {
                     // 日期选择
                     VStack(alignment: .leading, spacing: 8) {
                         DatePicker("日期", selection: $selectedDate, in: (Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())..., displayedComponents: .date)
-                            .datePickerStyle(GraphicalDatePickerStyle())
+                        .datePickerStyle(GraphicalDatePickerStyle())
                             .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
 
-                        HStack {
+                    HStack {
                             Image(systemName: "info.circle")
                                 .font(.system(size: 12))
                                 .foregroundColor(.gray)
@@ -297,8 +297,8 @@ struct MaybeListPickerView: View {
                             Text(item.location)
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
-                            Spacer()
-                        }
+                Spacer()
+            }
                     }
                     .padding(.vertical, 8)
                     .contentShape(Rectangle())
