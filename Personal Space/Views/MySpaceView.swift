@@ -54,6 +54,7 @@ struct MySpaceView: View {
     // MARK: - FAB功能相关状态变量
     @State private var showingCollaborationInvitation = false
     @State private var showingPeacefulClosureCreate = false
+    @State private var showingGiftBoxCreate = false
 
     // MARK: - 焦虑平复指南相关状态变量
     @State private var showingAnxietySoothingGuide = false
@@ -223,6 +224,10 @@ struct MySpaceView: View {
             PeacefulClosureCreateView()
                 .environmentObject(userState)
         }
+        .sheet(isPresented: $showingGiftBoxCreate) {
+            GiftBoxCreateView()
+                .environmentObject(userState)
+        }
         .sheet(isPresented: $showingAnxietySoothingGuide) {
             AnxietySoothingGuideView()
         }
@@ -247,8 +252,9 @@ struct MySpaceView: View {
 
             // 5. 检查过期的安心确认
             userState.checkExpiredClosures()
-
-            // 6. 触发UI更新，让所有子组件自动响应状态变化
+            // 6. 检查过期的心意盒
+            userState.checkExpiredGiftBoxes()
+            // 7. 触发UI更新，让所有子组件自动响应状态变化
             userState.objectWillChange.send()
         }
 
@@ -688,8 +694,7 @@ struct MySpaceView: View {
         case "安心确认":
             showingPeacefulClosureCreate = true
         case "赠送心意":
-            // TODO: 实现赠送心意功能
-            print("赠送心意功能")
+            showingGiftBoxCreate = true
         case "分享碎片":
             // TODO: 实现分享碎片功能
             print("分享碎片功能")

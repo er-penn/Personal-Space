@@ -175,6 +175,13 @@ struct OurSpaceView: View {
                 .foregroundColor(.secondary)
 
             LazyVStack(spacing: 12) {
+                // 显示待处理的心意盒
+                ForEach(userState.pendingGiftBoxes) { giftBox in
+                    PendingGiftBoxCardView(giftBox: giftBox) { response in
+                        userState.respondToGiftBox(giftBox, response: response)
+                    }
+                }
+
                 // 显示我发起的安心确认
                 ForEach(userState.myClosures.filter { $0.status != .archived && $0.status != .cancelled }) { closure in
                     PeacefulClosureCardView(
@@ -187,6 +194,11 @@ struct OurSpaceView: View {
                         },
                         isMyClosure: true
                     )
+                }
+
+                // 显示我发起的心意盒
+                ForEach(userState.myGiftBoxes.prefix(3)) { giftBox in
+                    MyGiftBoxCardView(giftBox: giftBox)
                 }
 
                 // 显示我发起的其他事项
@@ -328,12 +340,15 @@ struct OurSpaceView: View {
                 VStack(spacing: 16) {
                     // 连接计划（协作邀请记录）
                     ConnectionPlanCard()
-                    
+
                     // Maybe清单
                     MaybeListCard()
-                    
+
                     // 成长花园
                     GrowthGardenCard()
+
+                    // 我的心意盒
+                    MyGiftBoxSection()
                 }
             }
         }
@@ -350,6 +365,225 @@ struct OurSpaceView: View {
             RoundedRectangle(cornerRadius: AppTheme.Radius.card)
                 .stroke(AppTheme.Colors.border, lineWidth: 1)
         )
+    }
+}
+
+// MARK: - 我的心意盒部分
+struct MyGiftBoxSection: View {
+    @EnvironmentObject var userState: UserState
+    @State private var showingManageView = false
+    @State private var isExpanded = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isExpanded.toggle()
+                }
+            }) {
+                HStack {
+                    Image(systemName: "gift.fill")
+                        .font(.title3)
+                        .foregroundColor(.pink)
+
+                    Text("我的心意盒")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            if isExpanded {
+                if userState.myGiftBoxes.isEmpty {
+                    Text("暂无心意盒")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppTheme.Spacing.xl)
+                } else {
+                    // 显示前3个心意盒
+                    VStack(spacing: 8) {
+                        ForEach(Array(userState.myGiftBoxes.prefix(3)), id: \.id) { giftBox in
+                            HStack {
+                                Image(systemName: "gift.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.pink)
+
+                                Text(giftBox.item)
+                                    .font(.subheadline)
+                                    .lineLimit(1)
+
+                                Spacer()
+
+                                Text(giftBox.status.displayText)
+                                    .font(.caption)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(giftBox.status.color.opacity(0.2))
+                                    .cornerRadius(4)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(8)
+                        }
+
+                        if userState.myGiftBoxes.count > 3 {
+                            Button("查看全部 (\(userState.myGiftBoxes.count) 个)") {
+                                showingManageView = true
+                            }
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .sheet(isPresented: $showingManageView) {
+            GiftBoxManageView()
+                .environmentObject(userState)
+        }
+    }
+}
+
+// MARK: - 待处理心意盒卡片
+struct PendingGiftBoxCardView: View {
+    let giftBox: GiftBox
+    let onResponse: (GiftBoxResponse) -> Void
+
+    @State private var showingResponseView = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "gift.fill")
+                    .foregroundColor(.pink)
+
+                Text("心意盒")
+                    .font(.subheadline)
+                    .font(.subheadline.weight(.medium))
+
+                Spacer()
+
+                Text("待处理")
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.2))
+                    .cornerRadius(8)
+            }
+
+            Text(giftBox.item)
+                .font(.headline)
+
+            Text("建议地点: \(giftBox.suggestedLocation)")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            if let note = giftBox.note, !note.isEmpty {
+                Text("备注: \(note)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            HStack(spacing: 12) {
+                Button("好滴收下啦🥰") {
+                    showingResponseView = true
+                }
+                .font(.subheadline)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.green)
+                .cornerRadius(8)
+
+                Button("不太想要😅") {
+                    onResponse(.rejected)
+                }
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(8)
+
+                Spacer()
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .sheet(isPresented: $showingResponseView) {
+            GiftBoxResponseView(giftBox: giftBox)
+                .environmentObject(UserState())
+        }
+    }
+}
+
+// MARK: - 我的心意盒卡片
+struct MyGiftBoxCardView: View {
+    let giftBox: GiftBox
+    @State private var showingManageView = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "gift.fill")
+                    .foregroundColor(.pink)
+
+                Text("心意盒")
+                    .font(.subheadline)
+                    .font(.subheadline.weight(.medium))
+
+                Spacer()
+
+                Text(giftBox.status.displayText)
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(giftBox.status.color.opacity(0.2))
+                    .cornerRadius(8)
+            }
+
+            Text(giftBox.item)
+                .font(.headline)
+
+            Text("建议地点: \(giftBox.suggestedLocation)")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            HStack {
+                Text("查看详情")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+
+                Spacer()
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .onTapGesture {
+            showingManageView = true
+        }
+        .sheet(isPresented: $showingManageView) {
+            GiftBoxManageView()
+                .environmentObject(UserState())
+        }
     }
 }
 
@@ -446,14 +680,14 @@ struct CollaborationInvitationCard: View {
 
 // 旧的PeacefulClosureCard已移除，使用新的PeacefulClosureCardView组件
 
-// MARK: - 心意盒卡片
+// MARK: - 心意盒卡片（旧版本，已废弃）
 struct GiftBoxCard: View {
     let giftBox: GiftBox
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "gift")
+                Image(systemName: "gift.fill")
                     .foregroundColor(.pink)
                 
                 Text("心意盒")
@@ -462,28 +696,30 @@ struct GiftBoxCard: View {
                 
                 Spacer()
                 
-                Text(giftBox.isFromMe ? "我发起的" : "待接收")
+                Text(giftBox.status.displayText)
                     .font(.caption)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(giftBox.isFromMe ? Color.blue.opacity(0.2) : Color.orange.opacity(0.2))
+                    .background(giftBox.status.color.opacity(0.2))
                     .cornerRadius(8)
             }
             
-            Text("物品：\(giftBox.item)")
+            Text(giftBox.item)
                 .font(.headline)
             
-            Text("时间：\(giftBox.time)")
+            Text("建议地点: \(giftBox.suggestedLocation)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
-            Text("地点：\(giftBox.location)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            if let note = giftBox.note, !note.isEmpty {
+                Text("备注: \(note)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             
-            if !giftBox.isFromMe && !giftBox.isReceived {
-                Button("接收") {
-                    // TODO: 处理接收
+            if giftBox.status == .pending && !giftBox.isFromMe {
+                Button("查看详情") {
+                    // TODO: 打开响应页面
                 }
                 .font(.subheadline)
                 .foregroundColor(.white)

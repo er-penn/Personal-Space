@@ -119,6 +119,9 @@ class UserState: ObservableObject {
 
         // 调试：打印当前基础状态信息
         printCurrentBaseStateInfo()
+        
+        // 初始化心意盒列表
+        updateGiftBoxLists()
 
         // 🎯 初始化完成，基础状态追加逻辑已启用
     }
@@ -1298,6 +1301,14 @@ class UserState: ObservableObject {
     @Published var myClosures: [PeacefulClosure] = [] // 我发起的安心确认
     @Published var pendingClosures: [PeacefulClosure] = [] // 待我处理的安心确认
 
+    // MARK: - 心意盒相关属性
+    @Published var giftBoxes: [GiftBox] = [] // 所有心意盒
+    @Published var myGiftBoxes: [GiftBox] = [] // 我发起的心意盒
+    @Published var pendingGiftBoxes: [GiftBox] = [] // 待我处理的心意盒
+
+    // MARK: - 物品类型管理
+    @Published var itemTypeManager = ItemTypeManager()
+
     // MARK: - 安心确认方法
 
     /// 创建新的安心确认
@@ -1486,6 +1497,163 @@ class UserState: ObservableObject {
         peacefulClosures = [sample1, sample2, sample3]
         updatePendingClosures()
     }
+
+    // MARK: - 心意盒方法
+
+    /// 创建新的心意盒
+    func createGiftBox(item: String, note: String? = nil, suggestedLocation: String,
+                      preparationTime: TimeInterval, hasExpiration: Bool = false,
+                      expiresAt: Date? = nil) {
+        let newGiftBox = GiftBox(
+            item: item,
+            note: note,
+            suggestedLocation: suggestedLocation,
+            preparationTime: preparationTime,
+            hasExpiration: hasExpiration,
+            expiresAt: expiresAt,
+            isFromMe: true
+        )
+
+        giftBoxes.append(newGiftBox)
+        updateGiftBoxLists()
+        saveGiftBoxes()
+    }
+
+    /// 响应心意盒
+    func respondToGiftBox(_ giftBox: GiftBox, response: GiftBoxResponse,
+                          acceptedStartTime: Date? = nil,
+                          acceptedEndTime: Date? = nil,
+                          actualLocation: String? = nil) {
+        guard let index = giftBoxes.firstIndex(where: { $0.id == giftBox.id }) else { return }
+
+        var updatedGiftBox = giftBox
+        updatedGiftBox.response = response
+        updatedGiftBox.respondedAt = Date()
+
+        switch response {
+        case .accepted:
+            updatedGiftBox.status = .accepted
+            updatedGiftBox.acceptedStartTime = acceptedStartTime
+            updatedGiftBox.acceptedEndTime = acceptedEndTime
+            updatedGiftBox.actualLocation = actualLocation ?? giftBox.suggestedLocation
+
+        case .rejected:
+            updatedGiftBox.status = .rejected
+        }
+
+        giftBoxes[index] = updatedGiftBox
+        updateGiftBoxLists()
+        saveGiftBoxes()
+    }
+
+    /// 撤回心意盒
+    func withdrawGiftBox(_ giftBox: GiftBox) {
+        guard let index = giftBoxes.firstIndex(where: { $0.id == giftBox.id }) else { return }
+
+        var updatedGiftBox = giftBox
+        updatedGiftBox.status = .withdrawn
+        updatedGiftBox.isWithdrawn = true
+
+        giftBoxes[index] = updatedGiftBox
+        updateGiftBoxLists()
+        saveGiftBoxes()
+    }
+
+    /// 再次编辑发送心意盒
+    func editAndResendGiftBox(_ giftBox: GiftBox,
+                              newItem: String,
+                              newNote: String? = nil,
+                              newLocation: String,
+                              newPreparationTime: TimeInterval,
+                              newHasExpiration: Bool = false,
+                              newExpiresAt: Date? = nil) {
+        guard let index = giftBoxes.firstIndex(where: { $0.id == giftBox.id }) else { return }
+
+        let updatedGiftBox = GiftBox(
+            id: giftBox.id,
+            item: newItem,
+            note: newNote,
+            suggestedLocation: newLocation,
+            preparationTime: newPreparationTime,
+            hasExpiration: newHasExpiration,
+            expiresAt: newExpiresAt,
+            isFromMe: true,
+            status: .pending,
+            acceptedStartTime: nil,
+            acceptedEndTime: nil,
+            actualLocation: nil,
+            response: nil,
+            respondedAt: nil,
+            createdAt: giftBox.createdAt,
+            lastEditedAt: Date(),
+            isWithdrawn: false
+        )
+
+        giftBoxes[index] = updatedGiftBox
+        updateGiftBoxLists()
+        saveGiftBoxes()
+    }
+
+    /// 检查过期的心意盒
+    func checkExpiredGiftBoxes() {
+        for index in giftBoxes.indices {
+            if giftBoxes[index].isExpired && giftBoxes[index].status == .pending {
+                giftBoxes[index].status = .expired
+            }
+        }
+        updateGiftBoxLists()
+    }
+
+    /// 更新心意盒列表
+    private func updateGiftBoxLists() {
+        myGiftBoxes = giftBoxes.filter { $0.isFromMe }
+            .sorted { $0.lastActivityTime > $1.lastActivityTime }
+
+        pendingGiftBoxes = giftBoxes.filter {
+            $0.status == .pending && !$0.isFromMe && !$0.isExpired
+        }
+    }
+
+    /// 保存心意盒数据
+    private func saveGiftBoxes() {
+        // 这里可以添加数据持久化逻辑
+        // 目前先使用内存存储
+    }
+
+    /// 获取最早可接受时间
+    func getEarliestAcceptTime(for giftBox: GiftBox) -> Date {
+        return Date().addingTimeInterval(giftBox.preparationTime)
+    }
+
+    /// 验证接受时间
+    func validateAcceptTime(startTime: Date, endTime: Date?,
+                          preparationTime: TimeInterval) -> Bool {
+        let earliestTime = Date().addingTimeInterval(preparationTime)
+        if startTime < earliestTime { return false }
+
+        if let endTime = endTime {
+            return endTime > startTime
+        }
+        return true
+    }
+
+    /// 基于心意盒创建安心确认的初始数据
+    func createPeacefulClosureFromGiftBox(_ giftBox: GiftBox) -> PeacefulClosureInitialData {
+        return PeacefulClosureInitialData(
+            closureType: .item,
+            itemName: giftBox.item,
+            location: giftBox.actualLocation ?? giftBox.suggestedLocation,
+            relatedGiftBoxId: giftBox.id
+        )
+    }
+}
+
+// 安心确认初始数据结构
+struct PeacefulClosureInitialData {
+    let closureType: PeacefulClosureType  // 自动设为 .item
+    let itemName: String                  // 从心意盒继承的物品名称
+    let location: String?                 // 预填地点
+    let relatedGiftBoxId: UUID            // 关联的心意盒ID
 }
 
 // MARK: - 伴侣状态模型
@@ -1629,18 +1797,212 @@ enum ItemResponseType: String, CaseIterable {
 }
 
 // MARK: - 心意盒模型
-struct GiftBox: Identifiable {
-    let id = UUID()
-    let item: String
-    let time: String
-    let location: String
+struct GiftBox: Identifiable, Codable {
+    let id: UUID
+    let item: String                    // 物品
+    let note: String?                   // 备注（选填）
+    let suggestedLocation: String       // 建议地点
+    let preparationTime: TimeInterval   // 心意准备时间（分钟）
+    let hasExpiration: Bool            // 是否有有效期
+    let expiresAt: Date?               // 过期时间
+    let isFromMe: Bool                // 是否我发起的
+    var status: GiftBoxStatus         // 状态（改为 var 允许修改）
+
+    // 接收方填写的信息
+    var acceptedStartTime: Date?       // 接受开始时间
+    var acceptedEndTime: Date?         // 接受结束时间（可选）
+    var actualLocation: String?        // 实际接受地点
+    var response: GiftBoxResponse?     // 接收方响应
+    var respondedAt: Date?             // 响应时间
+
+    // 时间戳
     let createdAt: Date
-    let expiresAt: Date
-    let isFromMe: Bool
-    let isReceived: Bool
-    
+    var lastEditedAt: Date?           // 最后编辑时间
+    var isWithdrawn: Bool             // 是否已撤回
+
+    // 用于排序的时间
+    var lastActivityTime: Date {
+        if let respondedAt = respondedAt {
+            return respondedAt
+        }
+        if let lastEditedAt = lastEditedAt {
+            return lastEditedAt
+        }
+        return createdAt
+    }
+
     var isExpired: Bool {
-        Date() > expiresAt
+        guard hasExpiration, let expiresAt = expiresAt else { return false }
+        return Date() > expiresAt
+    }
+
+    init(item: String, note: String? = nil, suggestedLocation: String,
+         preparationTime: TimeInterval, hasExpiration: Bool = false,
+         expiresAt: Date? = nil, isFromMe: Bool = true) {
+        self.id = UUID()
+        self.item = item
+        self.note = note
+        self.suggestedLocation = suggestedLocation
+        self.preparationTime = preparationTime
+        self.hasExpiration = hasExpiration
+        self.expiresAt = expiresAt
+        self.isFromMe = isFromMe
+        self.status = .pending
+        self.createdAt = Date()
+        self.isWithdrawn = false
+    }
+
+    // 用于从已有数据创建（包含完整信息）
+    init(id: UUID, item: String, note: String?, suggestedLocation: String,
+         preparationTime: TimeInterval, hasExpiration: Bool, expiresAt: Date?,
+         isFromMe: Bool, status: GiftBoxStatus, acceptedStartTime: Date?,
+         acceptedEndTime: Date?, actualLocation: String?, response: GiftBoxResponse?,
+         respondedAt: Date?, createdAt: Date, lastEditedAt: Date?,
+         isWithdrawn: Bool) {
+        self.id = id
+        self.item = item
+        self.note = note
+        self.suggestedLocation = suggestedLocation
+        self.preparationTime = preparationTime
+        self.hasExpiration = hasExpiration
+        self.expiresAt = expiresAt
+        self.isFromMe = isFromMe
+        self.status = status
+        self.acceptedStartTime = acceptedStartTime
+        self.acceptedEndTime = acceptedEndTime
+        self.actualLocation = actualLocation
+        self.response = response
+        self.respondedAt = respondedAt
+        self.createdAt = createdAt
+        self.lastEditedAt = lastEditedAt
+        self.isWithdrawn = isWithdrawn
+    }
+}
+
+enum GiftBoxStatus: String, CaseIterable, Codable {
+    case pending = "待确认"
+    case accepted = "已接受"
+    case rejected = "不想要"
+    case expired = "已过期"
+    case withdrawn = "已撤回"
+
+    var displayText: String {
+        return self.rawValue
+    }
+
+    var color: Color {
+        switch self {
+        case .pending: return .orange
+        case .accepted: return .green
+        case .rejected: return .gray
+        case .expired: return .red
+        case .withdrawn: return .purple
+        }
+    }
+}
+
+enum GiftBoxResponse: String, CaseIterable, Codable {
+    case accepted = "好滴收下啦🥰"
+    case rejected = "不太想要😅"
+}
+
+// 可管理的物品类型选项（用于快速填入）
+struct ItemType: Codable, Identifiable {
+    let id: UUID
+    var name: String
+    var icon: String
+    var color: String // 用于标识颜色
+    var isDefault: Bool // 是否为默认类别
+    let createdAt: Date
+
+    init(name: String, icon: String, color: String = "primary", isDefault: Bool = false) {
+        self.id = UUID()
+        self.name = name
+        self.icon = icon
+        self.color = color
+        self.isDefault = isDefault
+        self.createdAt = Date()
+    }
+
+    // 用于更新的初始化方法
+    init(id: UUID, name: String, icon: String, color: String, isDefault: Bool, createdAt: Date) {
+        self.id = id
+        self.name = name
+        self.icon = icon
+        self.color = color
+        self.isDefault = isDefault
+        self.createdAt = createdAt
+    }
+}
+
+// 物品类型管理器
+class ItemTypeManager: ObservableObject {
+    @Published var itemTypes: [ItemType] = []
+
+    private let userDefaults = UserDefaults.standard
+    private let itemTypesKey = "giftBoxItemTypes"
+
+    init() {
+        loadItemTypes()
+    }
+
+    // 加载物品类型
+    func loadItemTypes() {
+        if let data = userDefaults.data(forKey: itemTypesKey),
+           let decoded = try? JSONDecoder().decode([ItemType].self, from: data) {
+            self.itemTypes = decoded
+        } else {
+            // 首次使用，加载默认类型
+            loadDefaultItemTypes()
+        }
+    }
+
+    // 加载默认物品类型
+    private func loadDefaultItemTypes() {
+        self.itemTypes = [
+            ItemType(name: "礼物", icon: "gift.fill", color: "primary", isDefault: true),
+            ItemType(name: "下午茶", icon: "cup.and.saucer.fill", color: "secondary", isDefault: true),
+            ItemType(name: "正餐", icon: "fork.knife", color: "tertiary", isDefault: true),
+            ItemType(name: "日常用品", icon: "house.fill", color: "quaternary", isDefault: true)
+        ]
+        saveItemTypes()
+    }
+
+    // 保存物品类型
+    func saveItemTypes() {
+        if let encoded = try? JSONEncoder().encode(itemTypes) {
+            userDefaults.set(encoded, forKey: itemTypesKey)
+        }
+    }
+
+    // 添加新的物品类型
+    func addItemType(_ itemType: ItemType) {
+        itemTypes.append(itemType)
+        saveItemTypes()
+    }
+
+    // 删除物品类型
+    func deleteItemType(at indexSet: IndexSet) {
+        itemTypes.remove(atOffsets: indexSet)
+        saveItemTypes()
+    }
+
+    // 更新物品类型
+    func updateItemType(_ itemType: ItemType) {
+        if let index = itemTypes.firstIndex(where: { $0.id == itemType.id }) {
+            itemTypes[index] = itemType
+            saveItemTypes()
+        }
+    }
+
+    // 获取所有类型（兼容旧代码）
+    var allTypes: [ItemType] {
+        return itemTypes
+    }
+
+    // 恢复默认设置
+    func resetToDefaults() {
+        loadDefaultItemTypes()
     }
 }
 
