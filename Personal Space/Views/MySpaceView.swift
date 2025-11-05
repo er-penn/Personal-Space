@@ -206,10 +206,12 @@ struct MySpaceView: View {
         .onAppear {
             startTimer()
 
-            // 加载示例安心确认数据
+            // 加载示例安心确认数据（仅DEBUG模式）
+            #if DEBUG
             if userState.peacefulClosures.isEmpty {
                 userState.loadSamplePeacefulClosures()
             }
+            #endif
 
             // 更新待处理列表
             userState.updatePendingClosures()

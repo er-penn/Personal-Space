@@ -113,9 +113,11 @@ class UserState: ObservableObject {
         // 初始化基础状态为未规划，覆盖7:00-23:59
         initializeBaseEnergyPlan()
         
-        // 临时启用示例数据来测试预规划状态切换功能
+        // 仅在DEBUG模式下启用示例数据
+        #if DEBUG
         setupSampleEnergyPlans()
         // setupSampleActualEnergyRecords()
+        #endif
 
         // 调试：打印当前基础状态信息
         printCurrentBaseStateInfo()
@@ -2450,7 +2452,9 @@ class KnowledgeActionManager: ObservableObject {
     @Published var actions: [ActionRecord] = []
 
     init() {
+        #if DEBUG
         loadSampleData()
+        #endif
     }
 
     // MARK: - 认知管理
