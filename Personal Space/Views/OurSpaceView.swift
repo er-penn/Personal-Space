@@ -16,6 +16,7 @@ struct OurSpaceView: View {
     // MARK: - 焦虑平复指南相关状态变量
     @State private var showingAnxietySoothingGuide = false
     @State private var showingDataDemo = false
+    @State private var showingMoodReport = false // 情绪报告弹窗
     
     // MARK: - Tab切换状态
     @State private var selectedTab: OurSpaceTab = .notifications
@@ -102,6 +103,9 @@ struct OurSpaceView: View {
             ComprehensiveDataDemoView()
                 .environmentObject(userState)
         }
+        .sheet(isPresented: $showingMoodReport) {
+            PartnerMoodReportDetailView()
+        }
     }
     
     // MARK: - 伴侣状态区（参考我的空间布局）
@@ -109,27 +113,11 @@ struct OurSpaceView: View {
         VStack(spacing: AppTheme.Spacing.lg) {
             // 主状态区域
             HStack(spacing: AppTheme.Spacing.lg) {
-                // 1. 伴侣能量状态（电池图标设计）
+                // 1. 伴侣能量状态（电池图标设计 - 无背景，不可点击）
                 VStack(spacing: AppTheme.Spacing.sm) {
-                    ZStack {
-                        // 背景圆形渐变
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        partnerState.energyLevel.color.opacity(0.2),
-                                        partnerState.energyLevel.color.opacity(0.1)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 90, height: 90) // 调小电池图标
-                        
-                        // 电池图标
-                        BatteryIconView(energyLevel: partnerState.energyLevel)
-                            .scaleEffect(0.75) // 进一步缩小电池图标
-                    }
+                    // 电池图标（去掉圆形背景）
+                    BatteryIconView(energyLevel: partnerState.energyLevel)
+                        .scaleEffect(0.75)
                     
                     Text(partnerState.energyLevel.description)
                         .font(.system(size: AppTheme.FontSize.subheadline, weight: .semibold))
@@ -139,25 +127,49 @@ struct OurSpaceView: View {
                 
                 Spacer()
                 
-                // 右侧：平复按钮（与我的空间样式一致）
-                VStack(spacing: 4) {
-                    Button(action: {
-                        showingAnxietySoothingGuide = true
-                    }) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.red.opacity(0.15))
-                                .frame(width: 50, height: 50)
-                            
-                            Image(systemName: "cross.case.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(.red)
+                // 右侧：快捷操作按钮
+                HStack(spacing: AppTheme.Spacing.md) {
+                    // 报告按钮
+                    VStack(spacing: 4) {
+                        Button(action: {
+                            showingMoodReport = true
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.pink.opacity(0.15))
+                                    .frame(width: 50, height: 50)
+                                
+                                Image(systemName: "heart.text.square.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.pink)
+                            }
                         }
+                        .buttonStyle(PlainButtonStyle())
+                        Text("报告")
+                            .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    Text("平复")
-                        .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    // 平复按钮
+                    VStack(spacing: 4) {
+                        Button(action: {
+                            showingAnxietySoothingGuide = true
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.red.opacity(0.15))
+                                    .frame(width: 50, height: 50)
+                                
+                                Image(systemName: "cross.case.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.red)
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        Text("平复")
+                            .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
                 }
             }
             
@@ -2224,6 +2236,131 @@ struct ViewHeightKey: PreferenceKey {
     
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
+    }
+}
+
+// MARK: - 伴侣情绪报告详情页
+struct PartnerMoodReportDetailView: View {
+    @Environment(\.presentationMode) var presentationMode
+    
+    // 模拟数据
+    @State private var pressureTotal: Double = 7.2
+    @State private var nonRelationshipPressure: Double = 4.1
+    @State private var relationshipPressure: Double = 3.1
+    @State private var nonRelationshipAnxiety: Double = 6.8
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+                    // 标题和更新时间
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        HStack {
+                            Image(systemName: "heart.text.square.fill")
+                                .font(.title)
+                                .foregroundColor(.pink)
+                            
+                            Text("TA的情绪报告")
+                                .font(.system(size: AppTheme.FontSize.title2, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.text)
+                        }
+                        
+                        Text("刚刚更新")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    
+                    Divider()
+                    
+                    // 压力总分
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        Text("压力总分")
+                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.text)
+                        
+                        PressureScoreView(
+                            title: "当前压力",
+                            score: pressureTotal,
+                            maxScore: 10.0,
+                            color: getPressureColor(pressureTotal),
+                            isMainScore: true
+                        )
+                        
+                        Text("压力来源分解")
+                            .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .padding(.top, AppTheme.Spacing.sm)
+                        
+                        VStack(spacing: AppTheme.Spacing.md) {
+                            PressureScoreView(
+                                title: "非关系压力",
+                                score: nonRelationshipPressure,
+                                maxScore: 5.0,
+                                color: getPressureColor(nonRelationshipPressure * 2),
+                                isMainScore: false
+                            )
+                            
+                            PressureScoreView(
+                                title: "关系压力",
+                                score: relationshipPressure,
+                                maxScore: 5.0,
+                                color: getPressureColor(relationshipPressure * 2),
+                                isMainScore: false
+                            )
+                        }
+                        .padding(.leading, AppTheme.Spacing.md)
+                    }
+                    
+                    Divider()
+                    
+                    // 非关系焦虑
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        Text("非关系焦虑")
+                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.text)
+                        
+                        PressureScoreView(
+                            title: "焦虑指数",
+                            score: nonRelationshipAnxiety,
+                            maxScore: 10.0,
+                            color: getAnxietyColor(nonRelationshipAnxiety),
+                            isMainScore: true
+                        )
+                    }
+                    
+                    Spacer()
+                }
+                .padding(AppTheme.Spacing.lg)
+            }
+            .background(AppGradient.background.ignoresSafeArea())
+            .navigationTitle("情绪报告")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("关闭") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func getPressureColor(_ score: Double) -> Color {
+        switch score {
+        case 0..<3: return .green
+        case 3..<6: return .yellow
+        case 6..<8: return .orange
+        default: return .red
+        }
+    }
+    
+    private func getAnxietyColor(_ score: Double) -> Color {
+        switch score {
+        case 0..<3: return .green
+        case 3..<6: return .yellow
+        case 6..<8: return .orange
+        default: return .red
+        }
     }
 }
 
