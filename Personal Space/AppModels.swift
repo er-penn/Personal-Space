@@ -136,6 +136,9 @@ class UserState: ObservableObject {
         
         // 加载示例心意盒数据
         loadSampleGiftBoxes()
+        
+        // 加载示例瞬间数据
+        loadSampleMoments()
 
         // 🎯 初始化完成，基础状态追加逻辑已启用
     }
@@ -1369,6 +1372,11 @@ class UserState: ObservableObject {
     
     // MARK: - 通知/信息相关属性
     @Published var notifications: [NotificationInfo] = [] // 所有通知/信息
+    
+    // MARK: - 瞬间相关属性
+    @Published var moments: [Moment] = [] // 所有瞬间
+    @Published var myMoments: [Moment] = [] // 我的瞬间
+    @Published var partnerMoments: [Moment] = [] // 伴侣的瞬间
 
     // MARK: - 物品类型管理
     @Published var itemTypeManager = ItemTypeManager()
@@ -2090,6 +2098,99 @@ class UserState: ObservableObject {
         lastFragmentSendDate = Date()
     }
     
+    // MARK: - 瞬间管理方法
+    
+    /// 创建瞬间
+    func createMoment(content: String, images: [String]) {
+        let moment = Moment(
+            content: content,
+            images: images,
+            isFromMe: true,
+            isTextHidden: true // 默认隐藏文案3天
+        )
+        
+        moments.append(moment)
+        updateMomentLists()
+        saveMoments()
+        
+        print("✅ 瞬间创建成功：\(content.prefix(20))...")
+    }
+    
+    /// 更新瞬间列表（分类）
+    func updateMomentLists() {
+        myMoments = moments.filter { $0.isFromMe }.sorted { $0.createdAt > $1.createdAt }
+        partnerMoments = moments.filter { !$0.isFromMe }.sorted { $0.createdAt > $1.createdAt }
+    }
+    
+    /// 保存瞬间（占位方法，后续实现持久化）
+    func saveMoments() {
+        // TODO: 实现Core Data持久化
+        print("💾 瞬间已保存")
+    }
+    
+    /// 删除瞬间
+    func deleteMoment(_ moment: Moment) {
+        moments.removeAll { $0.id == moment.id }
+        updateMomentLists()
+        saveMoments()
+    }
+    
+    func loadSampleMoments() {
+        let now = Date()
+        let sampleMoments = [
+            // 伴侣的瞬间
+            Moment(
+                content: "今天天气超级好，去了海边看日落 🌅 心情特别平静",
+                images: ["https://example.com/sunset1.jpg", "https://example.com/sunset2.jpg"],
+                createdAt: now.addingTimeInterval(-5 * 24 * 3600), // 5天前（文案可见）
+                isFromMe: false,
+                isTextHidden: true,
+                likes: 5,
+                comments: 2
+            ),
+            Moment(
+                content: "最近在学做面包，第一次做就成功了！好开心 🍞",
+                images: ["https://example.com/bread.jpg"],
+                createdAt: now.addingTimeInterval(-2 * 24 * 3600), // 2天前（文案隐藏）
+                isFromMe: false,
+                isTextHidden: true,
+                likes: 8,
+                comments: 3
+            ),
+            Moment(
+                content: "和朋友去爬山，累但很值得",
+                images: ["https://example.com/mountain1.jpg", "https://example.com/mountain2.jpg", "https://example.com/mountain3.jpg"],
+                createdAt: now.addingTimeInterval(-1 * 24 * 3600), // 1天前（文案隐藏）
+                isFromMe: false,
+                isTextHidden: true,
+                likes: 12,
+                comments: 5
+            ),
+            // 我的瞬间
+            Moment(
+                content: "今天完成了一个重要的项目，终于可以松口气了 💪",
+                images: ["https://example.com/work.jpg"],
+                createdAt: now.addingTimeInterval(-4 * 24 * 3600), // 4天前
+                isFromMe: true,
+                isTextHidden: true,
+                likes: 10,
+                comments: 4
+            ),
+            Moment(
+                content: "周末在家做了顿大餐，厨艺有进步！",
+                images: ["https://example.com/food1.jpg", "https://example.com/food2.jpg"],
+                createdAt: now.addingTimeInterval(-6 * 24 * 3600), // 6天前
+                isFromMe: true,
+                isTextHidden: true,
+                likes: 15,
+                comments: 6
+            )
+        ]
+        
+        self.moments = sampleMoments
+        updateMomentLists()
+    }
+    
     // MARK: - 通知/信息相关方法
     
     /// 创建通知
@@ -2592,18 +2693,39 @@ struct Fragment: Identifiable, Codable {
 }
 
 // MARK: - 瞬间模型
-struct Moment: Identifiable {
-    let id = UUID()
+struct Moment: Identifiable, Codable {
+    let id: UUID
     let content: String
     let images: [String]
     let createdAt: Date
     let isFromMe: Bool
     let isTextHidden: Bool
-    let likes: Int
-    let comments: Int
+    var likes: Int
+    var comments: Int
     
+    init(id: UUID = UUID(), content: String, images: [String], createdAt: Date = Date(), isFromMe: Bool, isTextHidden: Bool = true, likes: Int = 0, comments: Int = 0) {
+        self.id = id
+        self.content = content
+        self.images = images
+        self.createdAt = createdAt
+        self.isFromMe = isFromMe
+        self.isTextHidden = isTextHidden
+        self.likes = likes
+        self.comments = comments
+    }
+    
+    // 计算文案是否应该显示（3天规则）
     var shouldShowText: Bool {
+        // 如果文案未隐藏，或者已经超过3天，则显示
         !isTextHidden || Date().timeIntervalSince(createdAt) > 3 * 24 * 3600
+    }
+    
+    // 计算剩余隐藏天数
+    var remainingHiddenDays: Int {
+        if shouldShowText { return 0 }
+        let elapsed = Date().timeIntervalSince(createdAt)
+        let remaining = 3 * 24 * 3600 - elapsed
+        return max(0, Int(ceil(remaining / (24 * 3600))))
     }
 }
 

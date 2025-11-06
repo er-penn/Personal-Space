@@ -56,6 +56,8 @@ struct MySpaceView: View {
     @State private var showingPeacefulClosureCreate = false
     @State private var showingGiftBoxCreate = false
     @State private var showingFragmentCreate = false
+    @State private var showingMomentCreate = false
+    @State private var showingMyMoments = false
 
     // MARK: - 焦虑平复指南相关状态变量
     @State private var showingAnxietySoothingGuide = false
@@ -132,8 +134,9 @@ struct MySpaceView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         
-                        // 我的瞬间内容部分
-                        MyMomentSection()
+                        // 我的动态内容部分
+                        MyMomentSection(onTap: { showingMyMoments = true })
+                            .environmentObject(userState)
                         
                         // 焦虑平复指南卡片（放在最后）
                         FunctionCardView(card: anxietyGuideCard)
@@ -233,6 +236,14 @@ struct MySpaceView: View {
         }
         .sheet(isPresented: $showingFragmentCreate) {
             FragmentCreateView()
+                .environmentObject(userState)
+        }
+        .sheet(isPresented: $showingMomentCreate) {
+            MomentCreateView()
+                .environmentObject(userState)
+        }
+        .sheet(isPresented: $showingMyMoments) {
+            MyMomentsView()
                 .environmentObject(userState)
         }
         .sheet(isPresented: $showingAnxietySoothingGuide) {
@@ -737,36 +748,96 @@ struct MySpaceView: View {
         case "分享碎片":
             showingFragmentCreate = true
         case "发布瞬间":
-            // TODO: 实现发布瞬间功能
-            print("发布瞬间功能")
+            showingMomentCreate = true
         default:
             break
         }
     }
 }
 
-// MARK: - 我的瞬间部分
+// MARK: - 我的动态部分
 struct MyMomentSection: View {
+    @EnvironmentObject var userState: UserState
+    let onTap: () -> Void
+    
     var body: some View {
-        NavigationLink(destination: MyMomentDetailView()) {
+        Button(action: onTap) {
             VStack(spacing: AppTheme.Spacing.lg) {
                 // 标题行
                 HStack {
-                    Text("我的瞬间")
-                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.primary)
+                    HStack(spacing: AppTheme.Spacing.sm) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 20))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        
+                        Text("我的动态")
+                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.text)
+                    }
                     
                     Spacer()
                     
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: AppTheme.FontSize.caption))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    HStack(spacing: 4) {
+                        Text("\(userState.myMoments.count) 条瞬间")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
                 }
                 
-                // 只展示两条数据
-                VStack(spacing: AppTheme.Spacing.md) {
-                    ForEach(0..<2) { index in
-                        MomentItemView(index: index)
+                if userState.myMoments.isEmpty {
+                    // 空状态
+                    Text("点击右下角"+"按钮发布你的第一条瞬间")
+                        .font(.system(size: AppTheme.FontSize.body))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppTheme.Spacing.lg)
+                } else {
+                    // 显示最近2条
+                    VStack(spacing: AppTheme.Spacing.sm) {
+                        ForEach(userState.myMoments.prefix(2)) { moment in
+                            HStack(spacing: AppTheme.Spacing.sm) {
+                                // 缩略图
+                                if !moment.images.isEmpty {
+                                    RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                                        .fill(Color.gray.opacity(0.2))
+                                        .frame(width: 50, height: 50)
+                                        .overlay(
+                                            Image(systemName: "photo")
+                                                .foregroundColor(.gray.opacity(0.5))
+                                        )
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(moment.content)
+                                        .font(.system(size: AppTheme.FontSize.body))
+                                        .foregroundColor(AppTheme.Colors.text)
+                                        .lineLimit(2)
+                                    
+                                    HStack(spacing: AppTheme.Spacing.sm) {
+                                        Text(formatDate(moment.createdAt))
+                                            .font(.system(size: AppTheme.FontSize.caption))
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                        
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "heart")
+                                                .font(.system(size: 12))
+                                            Text("\(moment.likes)")
+                                                .font(.system(size: AppTheme.FontSize.caption))
+                                        }
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                    }
+                                }
+                                
+                                Spacer()
+                            }
+                            .padding(AppTheme.Spacing.sm)
+                            .background(AppTheme.Colors.bgMain)
+                            .cornerRadius(AppTheme.Radius.small)
+                        }
                     }
                 }
             }
@@ -776,6 +847,13 @@ struct MyMomentSection: View {
             .shadow(color: AppTheme.Shadows.card, radius: 6, x: 0, y: 3)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        formatter.locale = Locale(identifier: "zh_CN")
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

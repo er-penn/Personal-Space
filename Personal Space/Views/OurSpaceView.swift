@@ -18,6 +18,7 @@ struct OurSpaceView: View {
     @State private var showingDataDemo = false
     @State private var showingMoodReport = false // 情绪报告弹窗
     @State private var showingFragmentInbox = false // 碎片收件箱弹窗
+    @State private var showingPartnerMoments = false // TA的瞬间弹窗
     
     // MARK: - Tab切换状态
     @State private var selectedTab: OurSpaceTab = .notifications
@@ -109,6 +110,10 @@ struct OurSpaceView: View {
         }
         .sheet(isPresented: $showingFragmentInbox) {
             FragmentInboxView()
+                .environmentObject(userState)
+        }
+        .sheet(isPresented: $showingPartnerMoments) {
+            PartnerMomentsView()
                 .environmentObject(userState)
         }
     }
@@ -417,12 +422,25 @@ struct OurSpaceView: View {
             
             // TA的瞬间
             if userState.displayEnergyLevel != .low {
+                Button(action: {
+                    showingPartnerMoments = true
+                }) {
+                    PartnerInfoCard(
+                        title: "TA的瞬间",
+                        icon: "photo.on.rectangle.angled",
+                        color: .purple,
+                        content: userState.partnerMoments.isEmpty ? "暂无瞬间" : "有\(userState.partnerMoments.count)条瞬间"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
                 PartnerInfoCard(
                     title: "TA的瞬间",
-                    icon: "camera",
-                    color: .purple,
-                    content: "发布了1条新动态"
+                    icon: "photo.on.rectangle.angled",
+                    color: .gray,
+                    content: "🔴状态时不可访问"
                 )
+                .opacity(0.6)
             }
             
             Spacer() // 填充剩余空间
