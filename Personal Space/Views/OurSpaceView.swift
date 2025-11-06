@@ -120,7 +120,7 @@ struct OurSpaceView: View {
     
     // MARK: - 伴侣状态区（参考我的空间布局）
     private var partnerStatusSection: some View {
-        VStack(spacing: AppTheme.Spacing.lg) {
+        VStack(spacing: AppTheme.Spacing.md) {  // ✅ lg (16px) → md (12px)
             // 主状态区域
             HStack(spacing: AppTheme.Spacing.lg) {
                 // 1. 伴侣能量状态（电池图标设计 - 无背景，不可点击）
@@ -132,6 +132,9 @@ struct OurSpaceView: View {
                     Text(partnerState.energyLevel.description)
                         .font(.system(size: AppTheme.FontSize.subheadline, weight: .semibold))
                         .foregroundColor(partnerState.energyLevel.color)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity)
                 
@@ -187,7 +190,8 @@ struct OurSpaceView: View {
             PartnerEnergyRecordView()
                 .environmentObject(partnerState)
         }
-        .padding(AppTheme.Spacing.lg)
+        .frame(height: 140)  // ✅ 固定内容高度为140px（与"我的空间"一致）
+        .padding(AppTheme.Spacing.xl)  // ✅ 使用xl (20px)，与"我的空间"一致
         .background(AppGradient.cardBackground)
         .cornerRadius(AppTheme.Radius.card)
         .shadow(color: AppTheme.Shadows.card, radius: 8, x: 0, y: 4)
@@ -1305,7 +1309,7 @@ struct PartnerEnergyRecordView: View {
     private let hours = Array(7...23) // 7点到23点
     
     var body: some View {
-        VStack(spacing: AppTheme.Spacing.sm) {
+        VStack(spacing: 6) {  // ✅ 调整间距 8px → 6px
             // 时间标签和竖标 - 使用GeometryReader精确定位
             GeometryReader { geometry in
                 ZStack {
@@ -1355,15 +1359,6 @@ struct PartnerEnergyRecordView: View {
                 }
             }
             .frame(height: 20)
-            
-            // 当前时间指示器文本
-            HStack {
-                Spacer()
-                Text(getCurrentTimeDisplayText())
-                    .font(.system(size: AppTheme.FontSize.caption))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                Spacer()
-            }
         }
     }
     
@@ -1388,11 +1383,6 @@ struct PartnerEnergyRecordView: View {
         }
         
         return 0
-    }
-    
-    private func getCurrentTimeDisplayText() -> String {
-        let currentTime = getCurrentTime()
-        return String(format: "%d:%02d", currentTime.hour, currentTime.minute)
     }
     
     // 计算时间标签的位置
