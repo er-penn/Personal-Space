@@ -11,21 +11,34 @@ struct OurSpaceView: View {
     @EnvironmentObject var userState: UserState
     @EnvironmentObject var partnerState: PartnerState
     @EnvironmentObject var growthGarden: GrowthGarden
-    @State private var showingPartnerInfo = true
     @State private var showingCommonRecords = true
 
     // MARK: - 焦虑平复指南相关状态变量
     @State private var showingAnxietySoothingGuide = false
     @State private var showingDataDemo = false
     
-    // 模拟数据 - 将使用UserState中的数据
-    @State private var pendingItems: [Any] = []
+    // MARK: - Tab切换状态
+    @State private var selectedTab: OurSpaceTab = .notifications
+    @State private var tabContentHeight: CGFloat = 400 // 动态Tab内容高度
     
-    @State private var myItems: [Any] = [
-        // CollaborationInvitation 使用新的初始化方法
-        // CollaborationInvitation(title: "一起去公园散步", description: "天气不错，要不要去公园走走？", location: "公园", startTime: Date(), duration: 3600, createdBy: "user1"),
-        Fragment(content: "今天看到一只很可爱的小猫", imageURL: nil, linkURL: nil, createdAt: Date(), isFromMe: true)
-    ]
+    // Tab类型枚举
+    enum OurSpaceTab: Int, CaseIterable, Identifiable {
+        case notifications = 0  // 信息或提醒
+        case pending = 1        // 待处理事项
+        case myInitiated = 2    // 我发起的
+        case partnerInfo = 3    // TA的信息
+        
+        var id: Int { rawValue }
+        
+        var title: String {
+            switch self {
+            case .notifications: return "信息或提醒"
+            case .pending: return "待处理事项"
+            case .myInitiated: return "我发起的"
+            case .partnerInfo: return "TA的信息"
+            }
+        }
+    }
     
     var body: some View {
         NavigationView {
@@ -34,53 +47,60 @@ struct OurSpaceView: View {
                 AppGradient.background
                     .ignoresSafeArea()
                 
+                // 外层ScrollView：整体可滚动
                 ScrollView {
-                    VStack(spacing: AppTheme.Spacing.xxl) {
-                        // 顶部状态区（与我的空间布局一致）
+                    VStack(spacing: AppTheme.Spacing.lg) {
+                        // 1. 顶部状态区（可滚动离开）
                         partnerStatusSection
                         
-                        // 信息列表区
-                        informationListSection
+                        // 2. Tab标签栏（可滚动离开）
+                        tabBarSection
                         
-                        // 伴侣信息区
-                        partnerInfoSection
+                        // 3. TabView内容区（固定高度，支持左右滑动）
+                        tabContentSection
                         
-                        // 共同记录区
+                        // 4. 共同记录区（可滚动离开）
                         commonRecordsSection
                     }
                     .padding(.horizontal, AppTheme.Spacing.lg)
                     .padding(.top, AppTheme.Spacing.lg)
+                    .padding(.bottom, AppTheme.Spacing.xl) // 底部留白
                 }
+                .onAppear {
+                    userState.updatePendingClosures()
+                    userState.cleanExpiredReminders() // 清理过期提醒
+                }
+                
+                // 调试按钮 - 仅在DEBUG模式显示
+                #if DEBUG
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            showingDataDemo = true
+                        }) {
+                            Image(systemName: "gear")
+                                .font(.system(size: 16))
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.blue.opacity(0.8))
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
+                        }
+                        .padding()
+                    }
+                }
+                #endif
             }
             .navigationBarHidden(true)
-
-            // 调试按钮 - 仅在DEBUG模式显示
-            #if DEBUG
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        showingDataDemo = true
-                    }) {
-                        Image(systemName: "gear")
-                            .font(.system(size: 16))
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.blue.opacity(0.8))
-                            .clipShape(Circle())
-                            .shadow(radius: 4)
-                    }
-                    .padding()
-                }
-            }
-            #endif
         }
         .sheet(isPresented: $showingAnxietySoothingGuide) {
             AnxietySoothingGuideView()
         }
         .sheet(isPresented: $showingDataDemo) {
             ComprehensiveDataDemoView()
+                .environmentObject(userState)
         }
     }
     
@@ -160,8 +180,242 @@ struct OurSpaceView: View {
         return true
     }
     
-    // MARK: - 信息列表区
-    private var informationListSection: some View {
+    // MARK: - Tab标签栏
+    private var tabBarSection: some View {
+        HStack(spacing: 0) {
+            ForEach(OurSpaceTab.allCases) { tab in
+                TabBarButton(
+                    title: tab.title,
+                    isSelected: selectedTab == tab,
+                    action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedTab = tab
+                        }
+                    }
+                )
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.vertical, AppTheme.Spacing.sm)
+        .background(Color(.systemBackground))
+        .cornerRadius(AppTheme.Radius.medium)
+        .shadow(color: AppTheme.Shadows.card, radius: 4, x: 0, y: 2)
+    }
+    
+    // MARK: - Tab内容区（动态高度，支持左右滑动）
+    private var tabContentSection: some View {
+        TabView(selection: $selectedTab) {
+            // Tab 0: 信息或提醒
+            notificationsPageView
+                .tag(OurSpaceTab.notifications)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ViewHeightKey.self,
+                            value: geo.size.height
+                        )
+                    }
+                )
+            
+            // Tab 1: 待处理事项
+            pendingItemsPageView
+                .tag(OurSpaceTab.pending)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ViewHeightKey.self,
+                            value: geo.size.height
+                        )
+                    }
+                )
+            
+            // Tab 2: 我发起的
+            myInitiatedPageView
+                .tag(OurSpaceTab.myInitiated)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ViewHeightKey.self,
+                            value: geo.size.height
+                        )
+                    }
+                )
+            
+            // Tab 3: TA的信息
+            partnerInfoPageView
+                .tag(OurSpaceTab.partnerInfo)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ViewHeightKey.self,
+                            value: geo.size.height
+                        )
+                    }
+                )
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .frame(height: tabContentHeight) // 使用动态高度
+        .animation(.easeInOut(duration: 0.3), value: tabContentHeight)
+        .onPreferenceChange(ViewHeightKey.self) { height in
+            // 切换Tab时更新高度
+            if height > 0 {
+                tabContentHeight = max(height, 200) // 最小200pt
+            }
+        }
+    }
+    
+    // MARK: - 页面1：信息或提醒
+    private var notificationsPageView: some View {
+        LazyVStack(spacing: 12) {
+            if userState.notifications.isEmpty {
+                Text("暂无信息或提醒")
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 500) // 占满整个高度
+            } else {
+                ForEach(userState.notifications) { notification in
+                    NotificationInfoCard(notification: notification)
+                }
+            }
+        }
+        .padding(.vertical, AppTheme.Spacing.md)
+        .frame(maxWidth: .infinity)
+    }
+    
+    // MARK: - 页面2：待处理事项
+    private var pendingItemsPageView: some View {
+        LazyVStack(spacing: 12) {
+            // 显示待处理的协作邀请
+            ForEach(userState.invitations.filter { $0.createdBy == "partner" && $0.status == .pending }) { invitation in
+                CollaborationInvitationCard(invitation: invitation)
+            }
+
+            // 显示待处理的安心确认
+            ForEach(userState.pendingClosures) { closure in
+                PendingPeacefulClosureCardView(closure: closure) { response in
+                    userState.respondToClosure(closure, response: response)
+                }
+            }
+
+            // 显示待处理的心意盒
+            ForEach(userState.pendingGiftBoxes.filter { !$0.isFromMe }) { giftBox in
+                PendingGiftBoxCardView(giftBox: giftBox) { response in
+                    userState.respondToGiftBox(giftBox, response: response)
+                }
+            }
+            
+            // 空状态
+            let partnerInvitations = userState.invitations.filter { $0.createdBy == "partner" && $0.status == .pending }
+            let pendingGiftBoxesFromPartner = userState.pendingGiftBoxes.filter { !$0.isFromMe }
+
+            if userState.pendingClosures.isEmpty && partnerInvitations.isEmpty && pendingGiftBoxesFromPartner.isEmpty {
+                Text("暂无待处理事项")
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 500) // 占满整个高度
+            }
+        }
+        .padding(.vertical, AppTheme.Spacing.md)
+        .frame(maxWidth: .infinity)
+    }
+    
+    // MARK: - 页面3：我发起的
+    private var myInitiatedPageView: some View {
+        LazyVStack(spacing: 12) {
+            // 显示我发起的协作邀请
+            ForEach(userState.myInvitations) { invitation in
+                CollaborationInvitationCard(invitation: invitation)
+            }
+
+            // 显示我发起的安心确认
+            ForEach(userState.myClosures.filter { $0.status != .archived && $0.status != .cancelled }) { closure in
+                PeacefulClosureCardView(
+                    closure: closure,
+                    onTap: {
+                        // 可以点击查看详情，但暂时为空
+                    },
+                    onCancel: { closureToCancel in
+                        userState.cancelClosure(closureToCancel)
+                    },
+                    isMyClosure: true
+                )
+            }
+
+            // 显示我发起的心意盒（按最新活动时间倒序）
+            ForEach(userState.myGiftBoxes.sorted(by: { $0.lastActivityTime > $1.lastActivityTime })) { giftBox in
+                MyInitiatedGiftBoxCard(giftBox: giftBox)
+            }
+
+            // 显示我分享的碎片
+            ForEach(userState.fragments.filter { $0.isFromMe }) { fragment in
+                FragmentCard(fragment: fragment)
+            }
+            
+            // 空状态
+            let activeMyClosures = userState.myClosures.filter { $0.status != .archived && $0.status != .cancelled }
+            let myFragments = userState.fragments.filter { $0.isFromMe }
+
+            if activeMyClosures.isEmpty && userState.myInvitations.isEmpty && userState.myGiftBoxes.isEmpty && myFragments.isEmpty {
+                Text("暂无发起事项")
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 400) // 占满基本高度
+            }
+        }
+        .padding(.vertical, AppTheme.Spacing.md)
+        .frame(maxWidth: .infinity)
+    }
+    
+    // MARK: - 页面4：TA的信息
+    private var partnerInfoPageView: some View {
+        VStack(spacing: 12) {
+            // 情绪报告
+            PartnerMoodReportCard()
+            
+            // 碎片收件箱
+            if userState.displayEnergyLevel == .high {
+                Button(action: {
+                    // TODO: 进入碎片收件箱
+                }) {
+                    PartnerInfoCard(
+                        title: "碎片收件箱",
+                        icon: "photo",
+                        color: .orange,
+                        content: "有2条新分享"
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                PartnerInfoCard(
+                    title: "碎片收件箱",
+                    icon: "photo",
+                    color: .gray,
+                    content: "能量不足时暂不可访问"
+                )
+                .opacity(0.6)
+            }
+            
+            // TA的瞬间
+            if userState.displayEnergyLevel != .low {
+                PartnerInfoCard(
+                    title: "TA的瞬间",
+                    icon: "camera",
+                    color: .purple,
+                    content: "发布了1条新动态"
+                )
+            }
+            
+            Spacer() // 填充剩余空间
+        }
+        .padding(.vertical, AppTheme.Spacing.md)
+        .frame(maxWidth: .infinity)
+    }
+    
+    // MARK: - 旧的信息列表区（已废弃，改用Tab方式）
+    private var informationListSection_deprecated: some View {
         VStack(alignment: .leading, spacing: 16) {
             // 信息或提醒模块
             if !userState.notifications.isEmpty {
@@ -283,83 +537,6 @@ struct OurSpaceView: View {
         }
     }
     
-    // MARK: - 伴侣信息区
-    private var partnerInfoSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Button(action: {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    showingPartnerInfo.toggle()
-                }
-            }) {
-                HStack {
-                    Text("TA的信息")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
-                    
-                    Image(systemName: showingPartnerInfo ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            if showingPartnerInfo {
-                VStack(spacing: 12) {
-                    // 情绪报告
-                    PartnerMoodReportCard()
-                    
-                    // 碎片收件箱
-                    if userState.displayEnergyLevel == .high {
-                        Button(action: {
-                            // TODO: 进入碎片收件箱
-                        }) {
-                            PartnerInfoCard(
-                                title: "碎片收件箱",
-                                icon: "photo",
-                                color: .orange,
-                                content: "有2条新分享"
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    } else {
-                        PartnerInfoCard(
-                            title: "碎片收件箱",
-                            icon: "photo",
-                            color: .gray,
-                            content: "能量不足时暂不可访问"
-                        )
-                        .opacity(0.6)
-                    }
-                    
-                    // TA的瞬间
-                    if userState.displayEnergyLevel != .low {
-                        PartnerInfoCard(
-                            title: "TA的瞬间",
-                            icon: "camera",
-                            color: .purple,
-                            content: "发布了1条新动态"
-                        )
-                    }
-                }
-            }
-        }
-        .padding(AppTheme.Spacing.lg)
-        .background(AppGradient.cardBackground)
-        .cornerRadius(AppTheme.Radius.card)
-        .shadow(
-            color: AppTheme.Shadows.card,
-            radius: 8,
-            x: 0,
-            y: 4
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                .stroke(AppTheme.Colors.border, lineWidth: 1)
-        )
-    }
-    
     // MARK: - 共同记录区
     private var commonRecordsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -392,9 +569,6 @@ struct OurSpaceView: View {
 
                     // 成长花园
                     GrowthGardenCard()
-
-                    // 我的心意盒
-                    MyGiftBoxSection()
                 }
             }
         }
@@ -1829,6 +2003,199 @@ struct NotificationDetailView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年MM月dd日 HH:mm"
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Tab标签按钮
+struct TabBarButton: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: AppTheme.FontSize.caption, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                
+                // 下划线指示器
+                Rectangle()
+                    .fill(isSelected ? AppTheme.Colors.primary : Color.clear)
+                    .frame(height: 2)
+                    .cornerRadius(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - 我发起的心意盒卡片（完整操作版）
+struct MyInitiatedGiftBoxCard: View {
+    let giftBox: GiftBox
+    @EnvironmentObject var userState: UserState
+    @State private var showingEditView = false
+    @State private var showingClosureView = false
+    @State private var showingWithdrawAlert = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            // 标题和状态
+            HStack {
+                Image(systemName: "gift.fill")
+                    .foregroundColor(.pink)
+                    .font(.system(size: 20))
+                
+                Text(giftBox.item)
+                    .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.text)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                // 状态标签
+                Text(giftBox.status.displayText)
+                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(giftBox.status.color)
+                    .cornerRadius(8)
+            }
+            
+            // 地点信息
+            HStack(spacing: 6) {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Text(giftBox.suggestedLocation)
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            
+            // 备注（如果有）
+            if let note = giftBox.note, !note.isEmpty {
+                Text(note)
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+            
+            // 时间信息
+            HStack(spacing: 8) {
+                Text("创建于 \(formatDateTime(giftBox.createdAt))")
+                    .font(.system(size: AppTheme.FontSize.caption2))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                
+                if let editedAt = giftBox.lastEditedAt {
+                    Text("• 编辑于 \(formatDateTime(editedAt))")
+                        .font(.system(size: AppTheme.FontSize.caption2))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+            }
+            
+            Divider()
+            
+            // 操作按钮（按需求文档）
+            HStack(spacing: AppTheme.Spacing.sm) {
+                // 待确认状态：只能"撤回"
+                if giftBox.status == .pending {
+                    Button(action: {
+                        showingWithdrawAlert = true
+                    }) {
+                        Label("撤回", systemImage: "arrow.uturn.backward")
+                            .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                } else {
+                    // 其他状态：可"再次编辑发送"
+                    Button(action: {
+                        showingEditView = true
+                    }) {
+                        Label("再次编辑发送", systemImage: "arrow.clockwise")
+                            .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.Colors.primary.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                }
+                
+                // 已接受状态：额外提供"发起安心确认"选项
+                if giftBox.status == .accepted {
+                    Button(action: {
+                        showingClosureView = true
+                    }) {
+                        Label("发起安心确认", systemImage: "checkmark.seal")
+                            .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                            .foregroundColor(.green)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                }
+                
+                Spacer()
+            }
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(AppGradient.cardBackground)
+        .cornerRadius(AppTheme.Radius.card)
+        .shadow(color: AppTheme.Shadows.card, radius: 4, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                .stroke(AppTheme.Colors.border, lineWidth: 1)
+        )
+        .alert("确认撤回", isPresented: $showingWithdrawAlert) {
+            Button("取消", role: .cancel) { }
+            Button("撤回", role: .destructive) {
+                userState.withdrawGiftBox(giftBox)
+            }
+        } message: {
+            Text("撤回后对方将无法看到这个心意盒")
+        }
+        .sheet(isPresented: $showingEditView) {
+            GiftBoxEditView(giftBox: giftBox)
+                .environmentObject(userState)
+        }
+        .sheet(isPresented: $showingClosureView) {
+            // 从心意盒发起安心确认
+            // TODO: 需要创建支持预填数据的安心确认创建页
+            // 当前先打开普通的创建页，用户需要手动填写
+            PeacefulClosureCreateView()
+                .environmentObject(userState)
+                .onAppear {
+                    // 提示：可以基于心意盒 "\(giftBox.item)" 创建安心确认
+                    print("💡 提示：基于心意盒创建安心确认")
+                    print("   - 物品：\(giftBox.item)")
+                    print("   - 地点：\(giftBox.actualLocation ?? giftBox.suggestedLocation)")
+                }
+        }
+    }
+    
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM月dd日 HH:mm"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - ViewHeightKey（用于动态获取视图高度）
+struct ViewHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
