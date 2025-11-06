@@ -124,6 +124,15 @@ class UserState: ObservableObject {
         
         // 初始化心意盒列表
         updateGiftBoxLists()
+        
+        // 加载示例协作邀请数据
+        loadSampleInvitations()
+        
+        // 加载示例碎片数据
+        loadSampleFragments()
+        
+        // 加载示例通知数据
+        loadSampleNotifications()
 
         // 🎯 初始化完成，基础状态追加逻辑已启用
     }
@@ -1307,6 +1316,22 @@ class UserState: ObservableObject {
     @Published var giftBoxes: [GiftBox] = [] // 所有心意盒
     @Published var myGiftBoxes: [GiftBox] = [] // 我发起的心意盒
     @Published var pendingGiftBoxes: [GiftBox] = [] // 待我处理的心意盒
+    
+    // MARK: - 协作邀请相关属性
+    @Published var invitations: [CollaborationInvitation] = [] // 所有协作邀请
+    @Published var myInvitations: [CollaborationInvitation] = [] // 我发起的协作邀请
+
+    // MARK: - 待办事项相关属性
+    @Published var todoItems: [TodoItem] = [] // 待办事项
+
+    // MARK: - Maybe清单相关属性
+    @Published var maybeList: [MaybeItem] = [] // Maybe清单
+
+    // MARK: - 碎片相关属性
+    @Published var fragments: [Fragment] = [] // 所有碎片
+    
+    // MARK: - 通知/信息相关属性
+    @Published var notifications: [NotificationInfo] = [] // 所有通知/信息
 
     // MARK: - 物品类型管理
     @Published var itemTypeManager = ItemTypeManager()
@@ -1647,6 +1672,263 @@ class UserState: ObservableObject {
             location: giftBox.actualLocation ?? giftBox.suggestedLocation,
             relatedGiftBoxId: giftBox.id
         )
+    }
+    
+    // MARK: - 协作邀请示例数据
+    
+    /// 加载协作邀请示例数据（包含所有状态）
+    func loadSampleInvitations() {
+        // 1. 待处理的协作邀请（来自伴侣）
+        let pendingInvitation1 = CollaborationInvitation(
+            title: "周末一起看电影",
+            description: "最近上映了一部不错的电影《流浪地球3》，要不要一起去看？可以周六晚上或者周日下午。",
+            location: "万达影城",
+            startTime: Date().addingTimeInterval(3 * 24 * 3600), // 3天后
+            duration: 7200, // 2小时
+            createdBy: "partner"
+        )
+        
+        let pendingInvitation2 = CollaborationInvitation(
+            title: "一起去公园散步",
+            description: "天气预报说明天天气不错，要不要去中山公园走走？顺便可以拍拍照。",
+            location: "中山公园",
+            startTime: Date().addingTimeInterval(26 * 3600), // 明天下午
+            duration: 5400, // 1.5小时
+            createdBy: "partner"
+        )
+        
+        let pendingInvitation3 = CollaborationInvitation(
+            title: "周五晚上一起吃火锅",
+            description: "发现了一家新开的火锅店，评价很不错，要不要周五晚上一起去试试？",
+            location: "海底捞（人民广场店）",
+            startTime: Date().addingTimeInterval(4 * 24 * 3600), // 4天后
+            duration: 7200, // 2小时
+            createdBy: "partner"
+        )
+        
+        // 2. 已接受的邀请（测试【好呀】逻辑）
+        var acceptedInvitation = CollaborationInvitation(
+            title: "一起去书店看书",
+            description: "最近想买几本书，要不要一起去书店逛逛？",
+            location: "西西弗书店",
+            startTime: Date().addingTimeInterval(5 * 24 * 3600), // 5天后
+            duration: 3600, // 1小时
+            createdBy: "partner"
+        )
+        acceptedInvitation.status = .accepted
+        acceptedInvitation.lastModified = Date()
+        
+        // 3. 协商中的邀请（测试【商量下呗】逻辑）
+        var negotiatingInvitation = CollaborationInvitation(
+            title: "周末去海边",
+            description: "天气预报说周末晴天，去海边走走吧！",
+            location: "金山海滩",
+            startTime: Date().addingTimeInterval(6 * 24 * 3600), // 6天后
+            duration: 14400, // 4小时
+            createdBy: "partner"
+        )
+        negotiatingInvitation.status = .negotiating
+        negotiatingInvitation.lastModified = Date().addingTimeInterval(-3600)
+        
+        // 4. 延后的邀请（测试【以后看】逻辑）
+        var postponedInvitation = CollaborationInvitation(
+            title: "去博物馆看展览",
+            description: "最近有个很有意思的艺术展，要不要找时间一起去看？",
+            location: "上海博物馆",
+            startTime: Date().addingTimeInterval(7 * 24 * 3600), // 7天后
+            duration: 7200, // 2小时
+            createdBy: "partner"
+        )
+        postponedInvitation.status = .postponed
+        postponedInvitation.lastModified = Date().addingTimeInterval(-7200)
+        
+        // 5. 我发起的邀请
+        let myInvitation1 = CollaborationInvitation(
+            title: "一起吃早午餐",
+            description: "发现了一家不错的早午餐店，要不要一起去试试？",
+            location: "绿茶餐厅",
+            startTime: Date().addingTimeInterval(2 * 24 * 3600), // 2天后
+            duration: 5400, // 1.5小时
+            createdBy: "me"
+        )
+        
+        var myInvitation2 = CollaborationInvitation(
+            title: "周日去爬山",
+            description: "好久没运动了，周日一起去爬山吧！",
+            location: "佘山",
+            startTime: Date().addingTimeInterval(5 * 24 * 3600), // 5天后
+            duration: 10800, // 3小时
+            createdBy: "me"
+        )
+        myInvitation2.status = .accepted
+        
+        // 添加到对应列表
+        invitations = [
+            pendingInvitation1,
+            pendingInvitation2,
+            pendingInvitation3,
+            acceptedInvitation,
+            negotiatingInvitation,
+            postponedInvitation
+        ]
+        
+        myInvitations = [
+            myInvitation1,
+            myInvitation2
+        ]
+        
+        print("✅ 已加载协作邀请示例数据")
+        print("   - 待处理邀请: 3个")
+        print("   - 已接受邀请: 1个")
+        print("   - 协商中邀请: 1个")
+        print("   - 已延后邀请: 1个")
+        print("   - 我发起的邀请: 2个")
+    }
+    
+    // MARK: - 碎片示例数据
+    
+    /// 加载碎片示例数据
+    func loadSampleFragments() {
+        let fragments = [
+            Fragment(
+                content: "今天看到一只很可爱的小猫",
+                imageURL: nil,
+                linkURL: nil,
+                createdAt: Date(),
+                isFromMe: true
+            ),
+            Fragment(
+                content: "分享一篇很有意思的文章",
+                imageURL: nil,
+                linkURL: "https://example.com",
+                createdAt: Date().addingTimeInterval(-3600),
+                isFromMe: true
+            )
+        ]
+        
+        self.fragments = fragments
+    }
+    
+    // MARK: - 通知/信息相关方法
+    
+    /// 创建通知
+    func createNotification(type: NotificationInfo.NotificationType, title: String, content: String, relatedItemId: UUID? = nil, endTime: Date? = nil) {
+        let notification = NotificationInfo(
+            type: type,
+            title: title,
+            content: content,
+            relatedItemId: relatedItemId,
+            createdAt: Date(),
+            endTime: endTime,
+            isRead: false
+        )
+        notifications.insert(notification, at: 0) // 插入到最前面
+        print("✅ 创建通知: \(title)")
+    }
+    
+    /// 删除通知（信息点OK后）
+    func dismissNotification(_ notification: NotificationInfo) {
+        notifications.removeAll { $0.id == notification.id }
+        print("✅ 已删除通知: \(notification.title)")
+    }
+    
+    /// 关闭提醒（查看详情后手动关闭）
+    func closeReminder(_ notification: NotificationInfo) {
+        notifications.removeAll { $0.id == notification.id }
+        print("✅ 已关闭提醒: \(notification.title)")
+    }
+    
+    /// 自动清理过期的提醒
+    func cleanExpiredReminders() {
+        let expiredCount = notifications.filter { $0.isExpired }.count
+        notifications.removeAll { $0.isExpired }
+        if expiredCount > 0 {
+            print("✅ 已自动清理\(expiredCount)条过期提醒")
+        }
+    }
+    
+    /// 加载通知示例数据
+    func loadSampleNotifications() {
+        // 模拟各种通知场景
+        notifications = [
+            // 1. 对方接受了我的邀请（信息）
+            NotificationInfo(
+                id: UUID(),
+                type: .invitationAccepted,
+                category: .info,
+                title: "周日去爬山",
+                content: "对方已接受您的邀请，系统已创建待办提醒",
+                relatedItemId: nil,
+                createdAt: Date().addingTimeInterval(-3600), // 1小时前
+                isRead: false
+            ),
+            
+            // 2. 待办事项提醒（有结束时间，会自动消失）
+            NotificationInfo(
+                id: UUID(),
+                type: .todoReminder,
+                category: .reminder,
+                title: "一起去书店看书",
+                content: "活动将在2天后开始，请准时参加",
+                relatedItemId: nil,
+                createdAt: Date().addingTimeInterval(-7200), // 2小时前
+                endTime: Date().addingTimeInterval(2 * 24 * 3600), // 2天后结束
+                isRead: false
+            ),
+            
+            // 3. 待办事项提醒（无结束时间，需手动关闭）
+            NotificationInfo(
+                id: UUID(),
+                type: .todoReminder,
+                category: .reminder,
+                title: "记得联系对方",
+                content: "对方选择微信商量，请及时联系",
+                relatedItemId: nil,
+                createdAt: Date().addingTimeInterval(-10800), // 3小时前
+                endTime: nil, // 无结束时间
+                isRead: false
+            ),
+            
+            // 4. 对方选择"以后看"（信息）
+            NotificationInfo(
+                id: UUID(),
+                type: .invitationPostponed,
+                category: .info,
+                title: "一起吃早午餐",
+                content: "对方选择了\"以后看\"，活动已存入Maybe清单",
+                relatedItemId: nil,
+                createdAt: Date().addingTimeInterval(-14400), // 4小时前
+                isRead: false
+            ),
+            
+            // 5. 对方接受了心意盒（信息）
+            NotificationInfo(
+                id: UUID(),
+                type: .giftBoxAccepted,
+                category: .info,
+                title: "巧克力礼盒",
+                content: "对方已收下您的心意，将在明天下午取走",
+                relatedItemId: nil,
+                createdAt: Date().addingTimeInterval(-18000), // 5小时前
+                isRead: false
+            ),
+            
+            // 6. 对方选择"微信商量"（信息，已读）
+            NotificationInfo(
+                id: UUID(),
+                type: .invitationWechat,
+                category: .info,
+                title: "周末去海边",
+                content: "对方选择通过微信商量，请及时查看微信消息",
+                relatedItemId: nil,
+                createdAt: Date().addingTimeInterval(-86400), // 1天前
+                isRead: true // 已读
+            )
+        ]
+        
+        print("✅ 已加载通知示例数据: \(notifications.count)条")
+        print("   - 信息: \(notifications.filter { $0.category == .info }.count)条")
+        print("   - 提醒: \(notifications.filter { $0.category == .reminder }.count)条")
     }
 }
 
@@ -2045,14 +2327,6 @@ struct EmotionReport: Identifiable {
     let isFromMe: Bool
 }
 
-// MARK: - Maybe清单项模型
-struct MaybeItem: Identifiable {
-    let id = UUID()
-    let content: String
-    let createdAt: Date
-    let isFromMe: Bool
-}
-
 // MARK: - 心情记录模型
 struct MoodRecord: Identifiable, Codable {
     let id: UUID
@@ -2342,14 +2616,48 @@ class CollaborationInvitationManager: ObservableObject {
         }
     }
 
-    private func createTodoItem(for invitation: CollaborationInvitation) {
-        // TODO: 实现待办事项创建逻辑
-        print("创建待办事项: \(invitation.title)")
+    // 创建待办事项（好呀响应后）
+    func createTodoItem(for invitation: CollaborationInvitation) {
+        // TODO: 这里应该添加到UserState的todoItems中
+        // 由于CollaborationInvitationManager没有直接访问UserState，暂时只打印日志
+        print("✅ 创建待办事项: \(invitation.title)")
+        print("   - 开始时间: \(invitation.startTime)")
+        print("   - 结束时间: \(invitation.startTime.addingTimeInterval(invitation.duration))")
+        print("   - 自动消失: 是")
     }
 
-    private func addToMaybeList(invitation: CollaborationInvitation) {
-        // TODO: 实现Maybe清单添加逻辑
-        print("添加到Maybe清单: \(invitation.title) - 地点: \(invitation.location)")
+    // 添加到Maybe清单（以后看响应后）
+    func addToMaybeList(invitation: CollaborationInvitation) {
+        // TODO: 这里应该添加到UserState的maybeList中
+        // 由于CollaborationInvitationManager没有直接访问UserState，暂时只打印日志
+        print("✅ 添加到Maybe清单: \(invitation.title)")
+        print("   - 地点: \(invitation.location)")
+        print("   - 建议时长: \(formatDuration(invitation.duration))")
+    }
+
+    // 添加待办事项（供外部调用）
+    func addTodoItem(_ todoItem: TodoItem) {
+        print("✅ 添加待办事项: \(todoItem.title)")
+        // TODO: 实际添加到UserState.todoItems中
+    }
+
+    // 添加Maybe清单项目（供外部调用）
+    func addToMaybeList(_ maybeItem: MaybeItem) {
+        print("✅ 添加到Maybe清单: \(maybeItem.title)")
+        // TODO: 实际添加到UserState.maybeList中
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = (Int(duration) % 3600) / 60
+
+        if hours > 0 && minutes > 0 {
+            return "\(hours)小时\(minutes)分钟"
+        } else if hours > 0 {
+            return "\(hours)小时"
+        } else {
+            return "\(minutes)分钟"
+        }
     }
 }
 
@@ -2363,6 +2671,124 @@ extension Array where Element: Equatable {
             }
         }
         return result
+    }
+}
+
+// MARK: - 待办事项模型
+struct TodoItem: Identifiable, Codable {
+    let id: UUID
+    let title: String
+    let description: String
+    let location: String?
+    let startTime: Date
+    let endTime: Date?
+    let isAutoDismiss: Bool
+    let type: TodoType
+    let relatedInvitationId: UUID?
+
+    enum TodoType: String, Codable {
+        case invitation = "invitation"
+        case wechatNegotiation = "wechat_negotiation"
+    }
+}
+
+// MARK: - Maybe清单项目模型
+struct MaybeItem: Identifiable, Codable {
+    let id: UUID
+    let title: String
+    let description: String
+    let location: String
+    let suggestedDuration: TimeInterval
+    let createdAt: Date
+    let sourceInvitationId: UUID?
+}
+
+// MARK: - 通知/信息模型
+struct NotificationInfo: Identifiable, Codable {
+    let id: UUID
+    let type: NotificationType
+    let category: NotificationCategory  // 分类：信息 or 提醒
+    let title: String
+    let content: String
+    let relatedItemId: UUID? // 关联的邀请/事项ID
+    let createdAt: Date
+    let endTime: Date?       // 提醒的结束时间（信息没有）
+    var isRead: Bool         // 改为 var，允许修改
+    
+    enum NotificationCategory: String, Codable {
+        case info = "info"          // 信息：点OK消失
+        case reminder = "reminder"  // 提醒：需要查看详情或自动消失
+        
+        var displayName: String {
+            switch self {
+            case .info: return "信息"
+            case .reminder: return "提醒"
+            }
+        }
+    }
+    
+    enum NotificationType: String, Codable {
+        case invitationAccepted = "accepted"        // 对方接受了我的邀请（信息）
+        case invitationPostponed = "postponed"      // 对方选择"以后看"（信息）
+        case invitationWechat = "wechat"           // 对方选择"微信商量"（信息）
+        case todoReminder = "todo_reminder"         // 待办事项提醒（提醒）
+        case giftBoxAccepted = "gift_accepted"      // 对方接受了心意盒（信息）
+        case giftBoxRejected = "gift_rejected"      // 对方拒绝了心意盒（信息）
+        case closureConfirmed = "closure_confirmed" // 对方确认了安心闭环（信息）
+        
+        var icon: String {
+            switch self {
+            case .invitationAccepted: return "checkmark.circle.fill"
+            case .invitationPostponed: return "clock.fill"
+            case .invitationWechat: return "message.fill"
+            case .todoReminder: return "bell.fill"
+            case .giftBoxAccepted: return "gift.fill"
+            case .giftBoxRejected: return "xmark.circle.fill"
+            case .closureConfirmed: return "checkmark.seal.fill"
+            }
+        }
+        
+        var color: Color {
+            switch self {
+            case .invitationAccepted: return .green
+            case .invitationPostponed: return .orange
+            case .invitationWechat: return .purple
+            case .todoReminder: return .blue
+            case .giftBoxAccepted: return .pink
+            case .giftBoxRejected: return .gray
+            case .closureConfirmed: return .green
+            }
+        }
+        
+        // 默认分类
+        var defaultCategory: NotificationCategory {
+            switch self {
+            case .todoReminder:
+                return .reminder
+            default:
+                return .info
+            }
+        }
+    }
+    
+    // 判断提醒是否已过期（自动消失）
+    var isExpired: Bool {
+        guard category == .reminder, let endTime = endTime else {
+            return false
+        }
+        return Date() > endTime
+    }
+    
+    init(id: UUID = UUID(), type: NotificationType, category: NotificationCategory? = nil, title: String, content: String, relatedItemId: UUID? = nil, createdAt: Date = Date(), endTime: Date? = nil, isRead: Bool = false) {
+        self.id = id
+        self.type = type
+        self.category = category ?? type.defaultCategory
+        self.title = title
+        self.content = content
+        self.relatedItemId = relatedItemId
+        self.createdAt = createdAt
+        self.endTime = endTime
+        self.isRead = isRead
     }
 }
 

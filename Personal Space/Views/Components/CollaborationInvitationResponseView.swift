@@ -9,13 +9,16 @@ import SwiftUI
 
 struct CollaborationInvitationResponseView: View {
     let invitation: CollaborationInvitation
+    @EnvironmentObject var userState: UserState
     @StateObject private var invitationManager = CollaborationInvitationManager()
     @Environment(\.presentationMode) var presentationMode
 
     // 协商相关状态
+    @State private var showingNegotiationOptionsView = false
     @State private var showingNegotiationView = false
     @State private var showingWechatAlert = false
     @State private var showingMaybeImportAlert = false
+    @State private var showingAcceptedAlert = false
 
     var body: some View {
         NavigationView {
@@ -87,53 +90,44 @@ struct CollaborationInvitationResponseView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            // 响应按钮区域
+            // 响应按钮区域 - 按需求文档的三个选项
             VStack(spacing: AppTheme.Spacing.md) {
                 HStack(spacing: AppTheme.Spacing.md) {
-                    // 好呀
+                    // 【好呀】
                     ResponseButton(
                         title: "好呀",
                         color: .green,
                         action: {
-                            invitationManager.respondToInvitation(invitation, status: .accepted)
-                            presentationMode.wrappedValue.dismiss()
+                            handleGoodResponse()
                         }
                     )
 
-                    // 商量下呗
+                    // 【商量下呗】
                     ResponseButton(
                         title: "商量下呗",
                         color: .blue,
                         action: {
-                            showingNegotiationView = true
+                            showingNegotiationOptionsView = true
                         }
                     )
                 }
 
-                HStack(spacing: AppTheme.Spacing.md) {
-                    // 以后看
-                    ResponseButton(
-                        title: "以后看",
-                        color: .gray,
-                        action: {
-                            invitationManager.respondToInvitation(invitation, status: .postponed)
-                            presentationMode.wrappedValue.dismiss()
-                        }
-                    )
-
-                    // 微信商量
-                    ResponseButton(
-                        title: "微信商量",
-                        color: .purple,
-                        action: {
-                            invitationManager.respondToInvitation(invitation, status: .wechatNegotiating)
-                            showingWechatAlert = true
-                        }
-                    )
-                }
+                // 【以后看】
+                ResponseButton(
+                    title: "以后看",
+                    color: .gray,
+                    action: {
+                        handlePostponeResponse()
+                    }
+                )
             }
             .padding(AppTheme.Spacing.lg)
             .background(Color(.systemBackground))
+        }
+        .sheet(isPresented: $showingNegotiationOptionsView) {
+            NegotiationOptionsView(invitation: invitation) {
+                presentationMode.wrappedValue.dismiss()
+            }
         }
         .sheet(isPresented: $showingNegotiationView) {
             NegotiationView(invitation: invitation) {
@@ -150,6 +144,80 @@ struct CollaborationInvitationResponseView: View {
         } message: {
             Text("活动已添加到Maybe清单")
         }
+        .alert("已接受", isPresented: $showingAcceptedAlert) {
+            Button("好的") { }
+        } message: {
+            Text("已创建待办提醒，活动结束后将自动消失")
+        }
+    }
+
+    // MARK: - 处理【好呀】响应
+    private func handleGoodResponse() {
+        // 按需求文档：系统自动创建"待办事项"提醒
+        invitationManager.respondToInvitation(invitation, status: .accepted)
+        createTodoItemForAcceptedInvitation()
+        showingAcceptedAlert = true
+        
+        // 延迟关闭，让用户看到提示
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            presentationMode.wrappedValue.dismiss()
+        }
+    }
+
+    // MARK: - 处理【以后看】响应
+    private func handlePostponeResponse() {
+        // 按需求文档：活动地点和内容自动存入Maybe清单
+        invitationManager.respondToInvitation(invitation, status: .postponed)
+        addToMaybeList()
+        presentationMode.wrappedValue.dismiss()
+        showingMaybeImportAlert = true
+    }
+
+    // MARK: - 创建待办事项（好呀响应后）
+    private func createTodoItemForAcceptedInvitation() {
+        // 按需求文档：系统自动在"待我处理"列表中创建"待办事项"提醒
+        // 该待办事项无需用户交互，仅在活动时间（开始时间+持续时间）结束后自动消失
+        let todoItem = TodoItem(
+            id: UUID(),
+            title: invitation.title,
+            description: invitation.description,
+            location: invitation.location,
+            startTime: invitation.startTime,
+            endTime: invitation.startTime.addingTimeInterval(invitation.duration),
+            isAutoDismiss: true, // 活动时间结束后自动消失
+            type: .invitation,
+            relatedInvitationId: invitation.id
+        )
+
+        // 添加到用户状态的待办事项列表
+        userState.todoItems.append(todoItem)
+        
+        print("✅ 【好呀】响应处理完成")
+        print("   - 创建自动待办事项: \(invitation.title)")
+        print("   - 活动时间: \(formatDateTime(invitation.startTime))")
+        print("   - 将在活动结束后自动消失")
+    }
+
+    // MARK: - 添加到Maybe清单（以后看响应后）
+    private func addToMaybeList() {
+        // 按需求文档：对方收到"以后看"通知，同时将活动地点和活动内容自动存入Maybe清单
+        let maybeItem = MaybeItem(
+            id: UUID(),
+            title: invitation.title,
+            description: invitation.description,
+            location: invitation.location,
+            suggestedDuration: invitation.duration,
+            createdAt: Date(),
+            sourceInvitationId: invitation.id
+        )
+        
+        // 添加到Maybe清单
+        userState.maybeList.append(maybeItem)
+        
+        print("✅ 【以后看】响应处理完成")
+        print("   - 活动已存入Maybe清单: \(invitation.title)")
+        print("   - 地点: \(invitation.location)")
+        print("   - 对方将收到'以后看'通知")
     }
 
     private func formatDate(_ date: Date) -> String {

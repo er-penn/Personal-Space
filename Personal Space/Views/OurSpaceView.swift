@@ -16,6 +16,7 @@ struct OurSpaceView: View {
 
     // MARK: - 焦虑平复指南相关状态变量
     @State private var showingAnxietySoothingGuide = false
+    @State private var showingDataDemo = false
     
     // 模拟数据 - 将使用UserState中的数据
     @State private var pendingItems: [Any] = []
@@ -52,9 +53,34 @@ struct OurSpaceView: View {
                 }
             }
             .navigationBarHidden(true)
+
+            // 调试按钮 - 仅在DEBUG模式显示
+            #if DEBUG
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        showingDataDemo = true
+                    }) {
+                        Image(systemName: "gear")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.blue.opacity(0.8))
+                            .clipShape(Circle())
+                            .shadow(radius: 4)
+                    }
+                    .padding()
+                }
+            }
+            #endif
         }
         .sheet(isPresented: $showingAnxietySoothingGuide) {
             AnxietySoothingGuideView()
+        }
+        .sheet(isPresented: $showingDataDemo) {
+            ComprehensiveDataDemoView()
         }
     }
     
@@ -137,11 +163,32 @@ struct OurSpaceView: View {
     // MARK: - 信息列表区
     private var informationListSection: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // 信息或提醒模块
+            if !userState.notifications.isEmpty {
+                Text("信息或提醒")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                
+                LazyVStack(spacing: 12) {
+                    ForEach(userState.notifications.prefix(5)) { notification in
+                        NotificationInfoCard(notification: notification)
+                    }
+                }
+                
+                Divider()
+                    .padding(.vertical, 8)
+            }
+            
             Text("待处理事项")
                 .font(.headline)
                 .foregroundColor(.secondary)
 
             LazyVStack(spacing: 12) {
+                // 显示待处理的协作邀请
+                ForEach(userState.invitations.filter { $0.createdBy == "partner" }) { invitation in
+                    CollaborationInvitationCard(invitation: invitation)
+                }
+
                 // 显示待处理的安心确认
                 ForEach(userState.pendingClosures) { closure in
                     PendingPeacefulClosureCardView(closure: closure) { response in
@@ -149,17 +196,18 @@ struct OurSpaceView: View {
                     }
                 }
 
-                // 显示其他待处理事项（从模拟数据）
-                ForEach(Array(pendingItems.enumerated()), id: \.offset) { index, item in
-                    if let invitation = item as? CollaborationInvitation {
-                        CollaborationInvitationCard(invitation: invitation)
-                    } else if let giftBox = item as? GiftBox {
-                        GiftBoxCard(giftBox: giftBox)
+                // 显示待处理的心意盒
+                ForEach(userState.pendingGiftBoxes.filter { !$0.isFromMe }) { giftBox in
+                    PendingGiftBoxCardView(giftBox: giftBox) { response in
+                        userState.respondToGiftBox(giftBox, response: response)
                     }
                 }
             }
 
-            if userState.pendingClosures.isEmpty && pendingItems.isEmpty {
+            let partnerInvitations = userState.invitations.filter { $0.createdBy == "partner" }
+            let pendingGiftBoxesFromPartner = userState.pendingGiftBoxes.filter { !$0.isFromMe }
+
+            if userState.pendingClosures.isEmpty && partnerInvitations.isEmpty && pendingGiftBoxesFromPartner.isEmpty {
                 Text("暂无待处理事项")
                     .font(.system(size: AppTheme.FontSize.body))
                     .foregroundColor(AppTheme.Colors.textSecondary)
@@ -175,11 +223,9 @@ struct OurSpaceView: View {
                 .foregroundColor(.secondary)
 
             LazyVStack(spacing: 12) {
-                // 显示待处理的心意盒
-                ForEach(userState.pendingGiftBoxes) { giftBox in
-                    PendingGiftBoxCardView(giftBox: giftBox) { response in
-                        userState.respondToGiftBox(giftBox, response: response)
-                    }
+                // 显示我发起的协作邀请
+                ForEach(userState.myInvitations) { invitation in
+                    CollaborationInvitationCard(invitation: invitation)
                 }
 
                 // 显示我发起的安心确认
@@ -201,17 +247,16 @@ struct OurSpaceView: View {
                     MyGiftBoxCardView(giftBox: giftBox)
                 }
 
-                // 显示我发起的其他事项
-                ForEach(Array(myItems.enumerated()), id: \.offset) { index, item in
-                    if let invitation = item as? CollaborationInvitation {
-                        CollaborationInvitationCard(invitation: invitation)
-                    } else if let fragment = item as? Fragment {
-                        FragmentCard(fragment: fragment)
-                    }
+                // 显示我分享的碎片
+                ForEach(userState.fragments.filter { $0.isFromMe }.prefix(3)) { fragment in
+                    FragmentCard(fragment: fragment)
                 }
             }
 
-            if userState.myClosures.filter({ $0.status != .archived }).isEmpty && myItems.isEmpty {
+            let activeMyClosures = userState.myClosures.filter { $0.status != .archived && $0.status != .cancelled }
+            let myFragments = userState.fragments.filter { $0.isFromMe }
+
+            if activeMyClosures.isEmpty && userState.myInvitations.isEmpty && userState.myGiftBoxes.isEmpty && myFragments.isEmpty {
                 Text("暂无发起事项")
                     .font(.system(size: AppTheme.FontSize.body))
                     .foregroundColor(AppTheme.Colors.textSecondary)
@@ -234,6 +279,7 @@ struct OurSpaceView: View {
         )
         .onAppear {
             userState.updatePendingClosures()
+            userState.cleanExpiredReminders() // 清理过期提醒
         }
     }
     
@@ -584,97 +630,6 @@ struct MyGiftBoxCardView: View {
             GiftBoxManageView()
                 .environmentObject(UserState())
         }
-    }
-}
-
-// MARK: - 协作邀请卡片
-struct CollaborationInvitationCard: View {
-    let invitation: CollaborationInvitation
-    @EnvironmentObject var userState: UserState
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "envelope")
-                    .foregroundColor(.blue)
-                
-                Text("协作邀请")
-                    .font(.subheadline)
-                    .font(.subheadline.weight(.medium))
-                
-                Spacer()
-                
-                // 使用 status 属性显示状态
-                Text(invitation.status.rawValue)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(invitation.status.color.opacity(0.2))
-                    .cornerRadius(8)
-            }
-            
-            Text(invitation.title)
-                .font(.headline)
-            
-            // 使用 description 属性替代 content
-            Text(invitation.description)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            // 显示地点和时间信息
-            HStack(spacing: 8) {
-                Image(systemName: "mappin.circle")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(invitation.location)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Image(systemName: "clock")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(formatTime(invitation.startTime))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            // 只有待处理状态才显示操作按钮
-            if invitation.status == InvitationStatus.pending {
-                HStack(spacing: 12) {
-                    Button("好") {
-                        // TODO: 处理接受
-                    }
-                    .font(.subheadline)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.green)
-                    .cornerRadius(8)
-                    
-                    Button("再商量") {
-                        // TODO: 处理商量
-                    }
-                    .font(.subheadline)
-                    .foregroundColor(.blue)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.blue.opacity(0.2))
-                    .cornerRadius(8)
-                    
-                    Spacer()
-                }
-            }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-    }
-    
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM月dd日 HH:mm"
-        return formatter.string(from: date)
     }
 }
 
@@ -1511,6 +1466,369 @@ struct PressureScoreView: View {
             }
             .frame(height: isMainScore ? 8 : 6)
         }
+    }
+}
+
+// MARK: - 协作邀请卡片
+struct CollaborationInvitationCard: View {
+    let invitation: CollaborationInvitation
+    @EnvironmentObject var userState: UserState
+    @State private var showingResponseView = false
+    
+    var body: some View {
+        Button(action: {
+            // 只有待处理的邀请才能点击响应
+            if invitation.status == .pending {
+                showingResponseView = true
+            }
+        }) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                // 标题和状态
+                HStack {
+                    Image(systemName: "calendar")
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .font(.system(size: 20))
+                    
+                    Text(invitation.title)
+                        .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.text)
+                        .lineLimit(1)
+                    
+                    Spacer()
+                    
+                    // 状态标签
+                    Text(invitation.status.rawValue)
+                        .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(invitation.status.color)
+                        .cornerRadius(8)
+                }
+                
+                // 描述
+                Text(invitation.description)
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(2)
+                
+                // 时间和地点
+                HStack(spacing: AppTheme.Spacing.md) {
+                    Label {
+                        Text(formatDateTime(invitation.startTime))
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    } icon: {
+                        Image(systemName: "clock")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    
+                    Label {
+                        Text(invitation.location)
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .lineLimit(1)
+                    } icon: {
+                        Image(systemName: "location")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
+                
+                // 待处理状态显示操作提示
+                if invitation.status == .pending {
+                    HStack {
+                        Spacer()
+                        Text("点击查看详情并答复")
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10))
+                            .foregroundColor(AppTheme.Colors.primary)
+                    }
+                }
+            }
+            .padding(AppTheme.Spacing.md)
+            .background(AppGradient.cardBackground)
+            .cornerRadius(AppTheme.Radius.card)
+            .shadow(color: AppTheme.Shadows.card, radius: 4, x: 0, y: 2)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                    .stroke(AppTheme.Colors.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .sheet(isPresented: $showingResponseView) {
+            CollaborationInvitationResponseView(invitation: invitation)
+                .environmentObject(userState)
+        }
+    }
+    
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM月dd日 HH:mm"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - 通知/信息卡片
+struct NotificationInfoCard: View {
+    let notification: NotificationInfo
+    @EnvironmentObject var userState: UserState
+    @State private var showingDetailView = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
+                // 图标
+                ZStack {
+                    Circle()
+                        .fill(notification.type.color.opacity(0.15))
+                        .frame(width: 40, height: 40)
+                    
+                    Image(systemName: notification.type.icon)
+                        .font(.system(size: 18))
+                        .foregroundColor(notification.type.color)
+                }
+                
+                // 内容
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(notification.title)
+                            .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.text)
+                            .lineLimit(1)
+                        
+                        Spacer()
+                        
+                        Text(formatTimeAgo(notification.createdAt))
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    
+                    Text(notification.content)
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            
+            // 操作按钮
+            HStack(spacing: AppTheme.Spacing.sm) {
+                if notification.category == .info {
+                    // 信息：点击OK消失
+                    Button(action: {
+                        userState.dismissNotification(notification)
+                    }) {
+                        Text("OK")
+                            .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.Colors.primary)
+                            .cornerRadius(12)
+                    }
+                } else {
+                    // 提醒：查看详情
+                    Button(action: {
+                        showingDetailView = true
+                    }) {
+                        Text("查看详情")
+                            .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.Colors.primary.opacity(0.1))
+                            .cornerRadius(12)
+                    }
+                    
+                    // 显示结束时间信息
+                    if let endTime = notification.endTime {
+                        Text("将于\(formatDateTime(endTime))自动关闭")
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    } else {
+                        Text("需手动关闭")
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(.orange)
+                    }
+                }
+                
+                Spacer()
+            }
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(
+            notification.isRead
+                ? Color(.systemBackground)
+                : AppTheme.Colors.primary.opacity(0.03)
+        )
+        .cornerRadius(AppTheme.Radius.card)
+        .shadow(color: AppTheme.Shadows.card, radius: 2, x: 0, y: 1)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                .stroke(
+                    notification.isRead
+                        ? Color.clear
+                        : AppTheme.Colors.primary.opacity(0.1),
+                    lineWidth: 1
+                )
+        )
+        .sheet(isPresented: $showingDetailView) {
+            NotificationDetailView(notification: notification)
+                .environmentObject(userState)
+        }
+    }
+    
+    private func formatTimeAgo(_ date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        
+        if interval < 3600 { // 1小时内
+            let minutes = Int(interval / 60)
+            return "\(minutes)分钟前"
+        } else if interval < 86400 { // 24小时内
+            let hours = Int(interval / 3600)
+            return "\(hours)小时前"
+        } else { // 超过24小时
+            let days = Int(interval / 86400)
+            return "\(days)天前"
+        }
+    }
+    
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM月dd日 HH:mm"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - 通知详情页面
+struct NotificationDetailView: View {
+    let notification: NotificationInfo
+    @EnvironmentObject var userState: UserState
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+                    // 图标和标题
+                    HStack(spacing: AppTheme.Spacing.md) {
+                        ZStack {
+                            Circle()
+                                .fill(notification.type.color.opacity(0.15))
+                                .frame(width: 60, height: 60)
+                            
+                            Image(systemName: notification.type.icon)
+                                .font(.system(size: 28))
+                                .foregroundColor(notification.type.color)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(notification.category.displayName)
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            
+                            Text(notification.title)
+                                .font(.system(size: AppTheme.FontSize.title2, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.text)
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    // 内容
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        Text("详细信息")
+                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.text)
+                        
+                        Text(notification.content)
+                            .font(.system(size: AppTheme.FontSize.body))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .lineSpacing(4)
+                    }
+                    
+                    Divider()
+                    
+                    // 时间信息
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        HStack {
+                            Text("创建时间")
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Spacer()
+                            Text(formatFullDateTime(notification.createdAt))
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(AppTheme.Colors.text)
+                        }
+                        
+                        if let endTime = notification.endTime {
+                            HStack {
+                                Text("结束时间")
+                                    .font(.system(size: AppTheme.FontSize.caption))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                Spacer()
+                                Text(formatFullDateTime(endTime))
+                                    .font(.system(size: AppTheme.FontSize.caption))
+                                    .foregroundColor(AppTheme.Colors.text)
+                            }
+                            
+                            HStack {
+                                Text("自动关闭")
+                                    .font(.system(size: AppTheme.FontSize.caption))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                Spacer()
+                                Text(notification.isExpired ? "已过期" : "未过期")
+                                    .font(.system(size: AppTheme.FontSize.caption))
+                                    .foregroundColor(notification.isExpired ? .red : .green)
+                            }
+                        } else {
+                            HStack {
+                                Text("关闭方式")
+                                    .font(.system(size: AppTheme.FontSize.caption))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                Spacer()
+                                Text("需手动关闭")
+                                    .font(.system(size: AppTheme.FontSize.caption))
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                    }
+                    
+                    Spacer()
+                }
+                .padding(AppTheme.Spacing.lg)
+            }
+            .background(AppGradient.background.ignoresSafeArea())
+            .navigationTitle("提醒详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("返回") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        userState.closeReminder(notification)
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        Text("关闭提醒")
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func formatFullDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年MM月dd日 HH:mm"
+        return formatter.string(from: date)
     }
 }
 
