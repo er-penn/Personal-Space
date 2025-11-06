@@ -43,9 +43,17 @@ struct PeacefulClosureCardView: View {
         VStack(spacing: AppTheme.Spacing.md) {
             // 标题行
             HStack(spacing: AppTheme.Spacing.sm) {
-                // 类型图标
-                Text(closure.type == .item ? "📦" : "🏠")
-                    .font(.system(size: 20))
+                // 类型标签（图标+文字，绿色）
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.green)
+                    
+                    Text("确认")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.green)
+                }
+                .frame(width: 50, alignment: .leading)
 
                 // 标题
                 Text(closure.title)
@@ -244,9 +252,17 @@ struct PendingPeacefulClosureCardView: View {
         VStack(spacing: AppTheme.Spacing.md) {
             // 标题行
             HStack(spacing: AppTheme.Spacing.sm) {
-                // 类型图标
-                Text(closure.type == .item ? "📦" : "🏠")
-                    .font(.system(size: 20))
+                // 类型标签（图标+文字，绿色）
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.green)
+                    
+                    Text("确认")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.green)
+                }
+                .frame(width: 50, alignment: .leading)
 
                 // 标题
                 Text(closure.title)

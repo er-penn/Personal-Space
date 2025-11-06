@@ -688,12 +688,22 @@ struct PendingGiftBoxCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "gift.fill")
-                    .foregroundColor(.pink)
+                // 类型标签（图标+文字，粉色）
+                HStack(spacing: 4) {
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.pink)
+                    
+                    Text("心意")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.pink)
+                }
+                .frame(width: 50, alignment: .leading)
 
-                Text("心意盒")
-                    .font(.subheadline)
-                    .font(.subheadline.weight(.medium))
+                Text(giftBox.item)
+                    .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.text)
+                    .lineLimit(1)
 
                 Spacer()
 
@@ -704,9 +714,6 @@ struct PendingGiftBoxCardView: View {
                     .background(Color.orange.opacity(0.2))
                     .cornerRadius(8)
             }
-
-            Text(giftBox.item)
-                .font(.headline)
 
             Text("建议地点: \(giftBox.suggestedLocation)")
                 .font(.subheadline)
@@ -1659,9 +1666,17 @@ struct CollaborationInvitationCard: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 // 标题和状态
                 HStack {
-                    Image(systemName: "calendar")
-                        .foregroundColor(AppTheme.Colors.primary)
-                        .font(.system(size: 20))
+                    // 类型标签（图标+文字，紫色）
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 14))
+                            .foregroundColor(.purple)
+                        
+                        Text("邀请")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.purple)
+                    }
+                    .frame(width: 50, alignment: .leading)
                     
                     Text(invitation.title)
                         .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
@@ -1755,16 +1770,17 @@ struct NotificationInfoCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
-                // 图标
-                ZStack {
-                    Circle()
-                        .fill(notification.type.color.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    
+                // 类型标签（图标+文字，替换原图标位置）
+                HStack(spacing: 4) {
                     Image(systemName: notification.type.icon)
-                        .font(.system(size: 18))
-                        .foregroundColor(notification.type.color)
+                        .font(.system(size: 14))
+                        .foregroundColor(categoryColor)
+                    
+                    Text(notification.category == .info ? "信息" : "提醒")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(categoryColor)
                 }
+                .frame(width: 50, alignment: .leading)
                 
                 // 内容
                 VStack(alignment: .leading, spacing: 6) {
@@ -1875,6 +1891,10 @@ struct NotificationInfoCard: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM月dd日 HH:mm"
         return formatter.string(from: date)
+    }
+    
+    private var categoryColor: Color {
+        notification.category == .info ? .blue : .orange
     }
 }
 
@@ -2046,9 +2066,17 @@ struct MyInitiatedGiftBoxCard: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             // 标题和状态
             HStack {
-                Image(systemName: "gift.fill")
-                    .foregroundColor(.pink)
-                    .font(.system(size: 20))
+                // 类型标签（图标+文字，粉色）
+                HStack(spacing: 4) {
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.pink)
+                    
+                    Text("心意")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.pink)
+                }
+                .frame(width: 50, alignment: .leading)
                 
                 Text(giftBox.item)
                     .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
