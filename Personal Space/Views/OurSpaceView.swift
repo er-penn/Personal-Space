@@ -17,6 +17,7 @@ struct OurSpaceView: View {
     @State private var showingAnxietySoothingGuide = false
     @State private var showingDataDemo = false
     @State private var showingMoodReport = false // 情绪报告弹窗
+    @State private var showingFragmentInbox = false // 碎片收件箱弹窗
     
     // MARK: - Tab切换状态
     @State private var selectedTab: OurSpaceTab = .notifications
@@ -105,6 +106,10 @@ struct OurSpaceView: View {
         }
         .sheet(isPresented: $showingMoodReport) {
             PartnerMoodReportDetailView()
+        }
+        .sheet(isPresented: $showingFragmentInbox) {
+            FragmentInboxView()
+                .environmentObject(userState)
         }
     }
     
@@ -390,22 +395,22 @@ struct OurSpaceView: View {
             // 碎片收件箱
             if userState.displayEnergyLevel == .high {
                 Button(action: {
-                    // TODO: 进入碎片收件箱
+                    showingFragmentInbox = true
                 }) {
                     PartnerInfoCard(
-                        title: "碎片收件箱",
-                        icon: "photo",
+                        title: "TA的分享",
+                        icon: "photo.on.rectangle.angled",
                         color: .orange,
-                        content: "有2条新分享"
+                        content: userState.receivedFragments.isEmpty ? "暂无分享" : "有\(userState.receivedFragments.count)条分享"
                     )
                 }
                 .buttonStyle(PlainButtonStyle())
             } else {
                 PartnerInfoCard(
-                    title: "碎片收件箱",
-                    icon: "photo",
+                    title: "TA的分享",
+                    icon: "photo.on.rectangle.angled",
                     color: .gray,
-                    content: "能量不足时暂不可访问"
+                    content: "🟢状态时可查看"
                 )
                 .opacity(0.6)
             }

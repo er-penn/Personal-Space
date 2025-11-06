@@ -55,6 +55,7 @@ struct MySpaceView: View {
     @State private var showingCollaborationInvitation = false
     @State private var showingPeacefulClosureCreate = false
     @State private var showingGiftBoxCreate = false
+    @State private var showingFragmentCreate = false
 
     // MARK: - 焦虑平复指南相关状态变量
     @State private var showingAnxietySoothingGuide = false
@@ -228,6 +229,10 @@ struct MySpaceView: View {
         }
         .sheet(isPresented: $showingGiftBoxCreate) {
             GiftBoxCreateView()
+                .environmentObject(userState)
+        }
+        .sheet(isPresented: $showingFragmentCreate) {
+            FragmentCreateView()
                 .environmentObject(userState)
         }
         .sheet(isPresented: $showingAnxietySoothingGuide) {
@@ -730,8 +735,7 @@ struct MySpaceView: View {
         case "赠送心意":
             showingGiftBoxCreate = true
         case "分享碎片":
-            // TODO: 实现分享碎片功能
-            print("分享碎片功能")
+            showingFragmentCreate = true
         case "发布瞬间":
             // TODO: 实现发布瞬间功能
             print("发布瞬间功能")

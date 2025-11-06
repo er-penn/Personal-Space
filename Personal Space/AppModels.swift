@@ -1362,6 +1362,10 @@ class UserState: ObservableObject {
 
     // MARK: - 碎片相关属性
     @Published var fragments: [Fragment] = [] // 所有碎片
+    @Published var myFragments: [Fragment] = [] // 我发送的碎片
+    @Published var receivedFragments: [Fragment] = [] // 收到的碎片
+    @Published var todayFragmentCount: Int = 0 // 今日已发送碎片数量
+    @Published var lastFragmentSendDate: Date? = nil // 最后一次发送碎片的日期
     
     // MARK: - 通知/信息相关属性
     @Published var notifications: [NotificationInfo] = [] // 所有通知/信息
@@ -1972,25 +1976,118 @@ class UserState: ObservableObject {
     // MARK: - 碎片示例数据
     
     /// 加载碎片示例数据
+    // MARK: - 碎片管理方法
+    
+    /// 创建碎片
+    func createFragment(content: String, imageURL: String? = nil, linkURL: String? = nil) -> Bool {
+        // 检查每日限额
+        if !checkFragmentDailyLimit() {
+            return false
+        }
+        
+        let fragment = Fragment(
+            content: content,
+            imageURL: imageURL,
+            linkURL: linkURL,
+            isFromMe: true
+        )
+        
+        fragments.append(fragment)
+        updateFragmentLists()
+        
+        // 更新今日发送计数
+        todayFragmentCount += 1
+        lastFragmentSendDate = Date()
+        
+        print("✅ 碎片创建成功：\(content.prefix(20))...")
+        return true
+    }
+    
+    /// 检查每日限额
+    func checkFragmentDailyLimit() -> Bool {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        // 检查是否是新的一天
+        if let lastDate = lastFragmentSendDate {
+            let lastDay = calendar.startOfDay(for: lastDate)
+            if !calendar.isDate(today, inSameDayAs: lastDay) {
+                // 新的一天，重置计数
+                todayFragmentCount = 0
+            }
+        }
+        
+        // 检查是否达到每日限额（2个）
+        return todayFragmentCount < 2
+    }
+    
+    /// 获取今日剩余可发送碎片数量
+    func getRemainingFragmentCount() -> Int {
+        if checkFragmentDailyLimit() {
+            return 2 - todayFragmentCount
+        }
+        return 0
+    }
+    
+    /// 更新碎片列表（分类）
+    func updateFragmentLists() {
+        myFragments = fragments.filter { $0.isFromMe }.sorted { $0.createdAt > $1.createdAt }
+        receivedFragments = fragments.filter { !$0.isFromMe }.sorted { $0.createdAt > $1.createdAt }
+    }
+    
+    /// 保存碎片（占位方法，后续实现持久化）
+    func saveFragments() {
+        // TODO: 实现Core Data持久化
+        print("💾 碎片已保存")
+    }
+    
     func loadSampleFragments() {
-        let fragments = [
+        let sampleFragments = [
+            // 收到的碎片
+            Fragment(
+                content: "今天天气真好，想和你一起去公园散步 🌸",
+                imageURL: nil,
+                linkURL: nil,
+                createdAt: Date().addingTimeInterval(-7200), // 2小时前
+                isFromMe: false
+            ),
+            Fragment(
+                content: "分享一首很好听的歌给你",
+                imageURL: nil,
+                linkURL: "https://music.apple.com/example",
+                createdAt: Date().addingTimeInterval(-14400), // 4小时前
+                isFromMe: false
+            ),
+            Fragment(
+                content: "看到这个超可爱的小猫咪视频，想到了你 😊",
+                imageURL: "https://example.com/cat.jpg",
+                linkURL: nil,
+                createdAt: Date().addingTimeInterval(-86400), // 昨天
+                isFromMe: false
+            ),
+            // 我发送的碎片
             Fragment(
                 content: "今天看到一只很可爱的小猫",
                 imageURL: nil,
                 linkURL: nil,
-                createdAt: Date(),
+                createdAt: Date().addingTimeInterval(-3600), // 1小时前
                 isFromMe: true
             ),
             Fragment(
                 content: "分享一篇很有意思的文章",
                 imageURL: nil,
-                linkURL: "https://example.com",
-                createdAt: Date().addingTimeInterval(-3600),
+                linkURL: "https://example.com/article",
+                createdAt: Date().addingTimeInterval(-10800), // 3小时前
                 isFromMe: true
             )
         ]
         
-        self.fragments = fragments
+        self.fragments = sampleFragments
+        updateFragmentLists()
+        
+        // 模拟今日已发送1个碎片
+        todayFragmentCount = 1
+        lastFragmentSendDate = Date()
     }
     
     // MARK: - 通知/信息相关方法
@@ -2475,13 +2572,23 @@ class ItemTypeManager: ObservableObject {
 }
 
 // MARK: - 碎片模型
-struct Fragment: Identifiable {
-    let id = UUID()
+// MARK: - Fragment Model (分享碎片)
+struct Fragment: Identifiable, Codable {
+    let id: UUID
     let content: String
     let imageURL: String?
     let linkURL: String?
     let createdAt: Date
     let isFromMe: Bool
+    
+    init(id: UUID = UUID(), content: String, imageURL: String? = nil, linkURL: String? = nil, createdAt: Date = Date(), isFromMe: Bool) {
+        self.id = id
+        self.content = content
+        self.imageURL = imageURL
+        self.linkURL = linkURL
+        self.createdAt = createdAt
+        self.isFromMe = isFromMe
+    }
 }
 
 // MARK: - 瞬间模型
