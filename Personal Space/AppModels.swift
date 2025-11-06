@@ -182,7 +182,37 @@ class UserState: ObservableObject {
     
     // MARK: - 统一倒计时管理方法
     
-  // MARK: - 分钟级倒计时管理（集成到主Timer）
+  // MARK: - 每日状态管理
+    
+    /// 检查并重置每日状态（0点自动重置为"未规划"）
+    func checkAndResetDailyState() {
+        let calendar = Calendar.current
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        
+        // 检查是否是新的一天
+        if let lastDate = lastAppOpenDate {
+            let lastDay = calendar.startOfDay(for: lastDate)
+            
+            if !calendar.isDate(today, inSameDayAs: lastDay) {
+                // 跨天了，重置基础状态为"未规划"
+                print("🔄 检测到跨天：\(lastDay) → \(today)")
+                print("🔄 重置基础状态为：未规划")
+                
+                currentBaseEnergyLevel = .unplanned
+                
+                // 记录状态切换
+                recordEnergyLevelChange(to: .unplanned)
+                
+                print("✅ 每日状态已重置为'未规划'")
+            }
+        }
+        
+        // 更新最后打开日期
+        lastAppOpenDate = now
+    }
+    
+    // MARK: - 分钟级倒计时管理（集成到主Timer）
 
     /// 分钟级倒计时更新（由主Timer每分钟调用一次）
     func updateMinuteCountdowns() {

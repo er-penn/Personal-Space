@@ -243,24 +243,28 @@ struct MySpaceView: View {
             // 1. 更新全局当前时间（所有组件自动响应）
             userState.currentTime = Date()
 
-            // 2. 每分钟检查并追加基础状态时间段
+            // 2. 检查是否跨天，如果是则重置基础状态为"未规划"
+            userState.checkAndResetDailyState()
+
+            // 3. 每分钟检查并追加基础状态时间段
             userState.checkAndAppendBaseStateTimeSlot()
 
-            // 3. 检查并更新预规划状态
+            // 4. 检查并更新预规划状态
             userState.checkAndUpdatePlannedState()
 
-            // 4. 🎯 新增：分钟级倒计时更新
+            // 5. 🎯 新增：分钟级倒计时更新
             userState.updateMinuteCountdowns()
 
-            // 5. 检查过期的安心确认
+            // 6. 检查过期的安心确认
             userState.checkExpiredClosures()
-            // 6. 检查过期的心意盒
+            // 7. 检查过期的心意盒
             userState.checkExpiredGiftBoxes()
-            // 7. 触发UI更新，让所有子组件自动响应状态变化
+            // 8. 触发UI更新，让所有子组件自动响应状态变化
             userState.objectWillChange.send()
         }
 
         // 立即执行一次检查
+        userState.checkAndResetDailyState()
         userState.checkAndUpdatePlannedState()
     }
     
@@ -397,24 +401,52 @@ struct MySpaceView: View {
                         }
                     }
                     .onTapGesture {
-                        // 短按：循环切换能量状态（高→中→低）
+                        // 短按：循环切换能量状态
+                        // 时段规则：0:00-6:59 允许切回"未规划"，7:00-23:59 不允许
                         withAnimation(.easeInOut(duration: 0.3)) {
+                            let calendar = Calendar.current
+                            let currentHour = calendar.component(.hour, from: Date())
+                            let isEarlyMorning = currentHour >= 0 && currentHour < 7
+                            
                             let newLevel: EnergyLevel
-                            switch userState.currentBaseEnergyLevel {
-                            case .high:
-                                newLevel = .medium
-                            case .medium:
-                                newLevel = .low
-                            case .low:
-                                newLevel = .high
-                            case .unplanned:
-                                newLevel = .high
+                            
+                            if isEarlyMorning {
+                                // 凌晨时段（0:00-6:59）：允许切回"未规划"
+                                switch userState.currentBaseEnergyLevel {
+                                case .high:
+                                    newLevel = .medium
+                                case .medium:
+                                    newLevel = .low
+                                case .low:
+                                    newLevel = .unplanned  // ✓ 可以切回未规划
+                                case .unplanned:
+                                    newLevel = .high
+                                }
+                            } else {
+                                // 白天时段（7:00-23:59）：不允许切回"未规划"
+                                switch userState.currentBaseEnergyLevel {
+                                case .high:
+                                    newLevel = .medium
+                                case .medium:
+                                    newLevel = .low
+                                case .low:
+                                    newLevel = .high       // ✓ 跳过未规划，直接回到高
+                                case .unplanned:
+                                    newLevel = .high       // ✓ 单向切换
+                                }
                             }
 
                             // 更新状态并记录状态切换历史（使用新的实时截断策略）
                             userState.updateCurrentBaseEnergyLevel(to: newLevel)
                             userState.recordEnergyLevelChange(to: newLevel)
-                            hasSwitchedFromUnplanned = true
+                            
+                            // 更新 hasSwitchedFromUnplanned 标记
+                            if newLevel != .unplanned {
+                                hasSwitchedFromUnplanned = true
+                            } else {
+                                // 切回未规划时重置标记
+                                hasSwitchedFromUnplanned = false
+                            }
                         }
                     }
                     .onLongPressGesture {
