@@ -133,6 +133,9 @@ class UserState: ObservableObject {
         
         // 加载示例通知数据
         loadSampleNotifications()
+        
+        // 加载示例心意盒数据
+        loadSampleGiftBoxes()
 
         // 🎯 初始化完成，基础状态追加逻辑已启用
     }
@@ -1672,6 +1675,157 @@ class UserState: ObservableObject {
             location: giftBox.actualLocation ?? giftBox.suggestedLocation,
             relatedGiftBoxId: giftBox.id
         )
+    }
+    
+    // MARK: - 心意盒示例数据
+    
+    /// 加载心意盒示例数据（覆盖所有状态）
+    func loadSampleGiftBoxes() {
+        var sampleBoxes: [GiftBox] = []
+        
+        // 1. 待确认状态（我发起的，等待对方响应）
+        let pendingBox1 = GiftBox(
+            item: "奶茶大杯",
+            note: "你最喜欢的芋泥波波奶茶",
+            suggestedLocation: "公司茶水间",
+            preparationTime: 1800, // 30分钟
+            hasExpiration: false,
+            expiresAt: nil,
+            isFromMe: true
+        )
+        sampleBoxes.append(pendingBox1)
+        
+        let pendingBox2 = GiftBox(
+            item: "鲜花一束",
+            note: "希望你喜欢这束向日葵",
+            suggestedLocation: "公司前台",
+            preparationTime: 3600, // 1小时
+            hasExpiration: true,
+            expiresAt: Date().addingTimeInterval(3 * 24 * 3600), // 3天后过期
+            isFromMe: true
+        )
+        sampleBoxes.append(pendingBox2)
+        
+        // 2. 已接受状态（对方已同意接收）
+        let acceptedBox = GiftBox(
+            id: UUID(),
+            item: "巧克力礼盒",
+            note: "甜蜜小惊喜",
+            suggestedLocation: "家里",
+            preparationTime: 1800,
+            hasExpiration: false,
+            expiresAt: nil,
+            isFromMe: true,
+            status: .accepted,
+            acceptedStartTime: Date().addingTimeInterval(24 * 3600), // 明天
+            acceptedEndTime: Date().addingTimeInterval(26 * 3600), // 明天+2小时
+            actualLocation: "家里客厅",
+            response: .accepted,
+            respondedAt: Date().addingTimeInterval(-3600), // 1小时前响应
+            createdAt: Date().addingTimeInterval(-2 * 24 * 3600), // 2天前创建
+            lastEditedAt: nil,
+            isWithdrawn: false
+        )
+        sampleBoxes.append(acceptedBox)
+        
+        // 3. 已拒绝状态（对方不想要）
+        let rejectedBox = GiftBox(
+            id: UUID(),
+            item: "护手霜",
+            note: "冬天要好好保护小手",
+            suggestedLocation: "办公桌",
+            preparationTime: 900, // 15分钟
+            hasExpiration: false,
+            expiresAt: nil,
+            isFromMe: true,
+            status: .rejected,
+            acceptedStartTime: nil,
+            acceptedEndTime: nil,
+            actualLocation: nil,
+            response: .rejected,
+            respondedAt: Date().addingTimeInterval(-12 * 3600), // 12小时前响应
+            createdAt: Date().addingTimeInterval(-3 * 24 * 3600), // 3天前创建
+            lastEditedAt: nil,
+            isWithdrawn: false
+        )
+        sampleBoxes.append(rejectedBox)
+        
+        // 4. 已过期状态（超过有效期）
+        let expiredBox = GiftBox(
+            id: UUID(),
+            item: "冰淇淋",
+            note: "趁着还没化掉快来拿",
+            suggestedLocation: "公司冰箱",
+            preparationTime: 300, // 5分钟
+            hasExpiration: true,
+            expiresAt: Date().addingTimeInterval(-2 * 3600), // 2小时前过期
+            isFromMe: true,
+            status: .expired,
+            acceptedStartTime: nil,
+            acceptedEndTime: nil,
+            actualLocation: nil,
+            response: nil,
+            respondedAt: nil,
+            createdAt: Date().addingTimeInterval(-5 * 24 * 3600), // 5天前创建
+            lastEditedAt: nil,
+            isWithdrawn: false
+        )
+        sampleBoxes.append(expiredBox)
+        
+        // 5. 已撤回状态（我主动撤回）
+        let withdrawnBox = GiftBox(
+            id: UUID(),
+            item: "咖啡",
+            note: "给你带了一杯热美式",
+            suggestedLocation: "办公室",
+            preparationTime: 600, // 10分钟
+            hasExpiration: false,
+            expiresAt: nil,
+            isFromMe: true,
+            status: .withdrawn,
+            acceptedStartTime: nil,
+            acceptedEndTime: nil,
+            actualLocation: nil,
+            response: nil,
+            respondedAt: nil,
+            createdAt: Date().addingTimeInterval(-24 * 3600), // 1天前创建
+            lastEditedAt: Date().addingTimeInterval(-23 * 3600), // 1天前撤回
+            isWithdrawn: true
+        )
+        sampleBoxes.append(withdrawnBox)
+        
+        // 6. 再次编辑发送的例子（已接受，后来又编辑重发）
+        let resentBox = GiftBox(
+            id: UUID(),
+            item: "下午茶套餐",
+            note: "重新准备了一份，希望这次你喜欢",
+            suggestedLocation: "公司休息区",
+            preparationTime: 2700, // 45分钟
+            hasExpiration: true,
+            expiresAt: Date().addingTimeInterval(2 * 24 * 3600), // 2天后过期
+            isFromMe: true,
+            status: .pending, // 重新发送后变为待确认
+            acceptedStartTime: nil,
+            acceptedEndTime: nil,
+            actualLocation: nil,
+            response: nil,
+            respondedAt: nil,
+            createdAt: Date().addingTimeInterval(-7 * 24 * 3600), // 7天前创建
+            lastEditedAt: Date().addingTimeInterval(-2 * 3600), // 2小时前编辑
+            isWithdrawn: false
+        )
+        sampleBoxes.append(resentBox)
+        
+        // 添加到列表
+        giftBoxes.append(contentsOf: sampleBoxes)
+        updateGiftBoxLists()
+        
+        print("✅ 已加载心意盒示例数据: \(sampleBoxes.count)个")
+        print("   - 待确认: \(sampleBoxes.filter { $0.status == .pending }.count)个")
+        print("   - 已接受: \(sampleBoxes.filter { $0.status == .accepted }.count)个")
+        print("   - 已拒绝: \(sampleBoxes.filter { $0.status == .rejected }.count)个")
+        print("   - 已过期: \(sampleBoxes.filter { $0.status == .expired }.count)个")
+        print("   - 已撤回: \(sampleBoxes.filter { $0.status == .withdrawn }.count)个")
     }
     
     // MARK: - 协作邀请示例数据
