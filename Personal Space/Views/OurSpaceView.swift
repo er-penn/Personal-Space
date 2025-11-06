@@ -183,11 +183,9 @@ struct OurSpaceView: View {
                 }
             }
             
-            // 伴侣能量规划进度条（如果有预规划）
-            if hasPartnerEnergyPlan() {
-                PartnerEnergyProgressView()
-                    .frame(height: 20)
-            }
+            // 伴侣能量记录进度条
+            PartnerEnergyRecordView()
+                .environmentObject(partnerState)
         }
         .padding(AppTheme.Spacing.lg)
         .background(AppGradient.cardBackground)
@@ -1300,115 +1298,194 @@ struct GrowthGardenCard: View {
 }
 
 // MARK: - 伴侣能量规划进度条
-struct PartnerEnergyProgressView: View {
+// MARK: - 伴侣能量记录视图（参考EnergyProgressView设计）
+struct PartnerEnergyRecordView: View {
     @EnvironmentObject var partnerState: PartnerState
-    @State private var currentTime = Date()
-    @State private var timer: Timer?
     
-    // 模拟伴侣预规划数据 - 按小时
-    @State private var partnerPlannedEnergy: [Int: EnergyLevel] = [
-        8: .high,    // 8点
-        9: .high,    // 9点
-        10: .high,   // 10点
-        11: .medium, // 11点
-        12: .medium, // 12点
-        13: .low,    // 13点
-        14: .low,    // 14点
-        15: .medium, // 15点
-        16: .medium, // 16点
-        17: .high,   // 17点
-        18: .high,   // 18点
-        19: .medium, // 19点
-        20: .low,    // 20点
-        21: .low,    // 21点
-        22: .low     // 22点
-    ]
-    
-    private let hours = Array(6...22) // 6点到22点
+    private let hours = Array(7...23) // 7点到23点
     
     var body: some View {
-        VStack(spacing: 4) {
-            // 小时标签（每4小时显示一次）- 使用GeometryReader精确定位
+        VStack(spacing: AppTheme.Spacing.sm) {
+            // 时间标签和竖标 - 使用GeometryReader精确定位
             GeometryReader { geometry in
                 ZStack {
-                    ForEach(Array(stride(from: 6, through: 22, by: 4)), id: \.self) { hour in
-                        Text("\(hour):00")
-                            .font(.system(size: 8))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .position(
-                                x: getTimeLabelPosition(for: hour, in: geometry.size.width),
-                                y: 6 // 时间标签的垂直位置
-                            )
+                    // 时间标签：7点、10点、14点、18点、22点
+                    ForEach([7, 10, 14, 18, 22], id: \.self) { hour in
+                        VStack(spacing: 0) {
+                            // 时间标签
+                            Text("\(hour):00")
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            
+                            // 竖标：从标签延伸到能量块左边缘
+                            Rectangle()
+                                .fill(AppTheme.Colors.textSecondary.opacity(0.3))
+                                .frame(width: 1, height: 8)
+                        }
+                        .position(
+                            x: getTimeLabelPosition(for: hour, in: geometry.size.width),
+                            y: 10 // 时间标签的垂直位置
+                        )
                     }
                 }
             }
-            .frame(height: 12)
+            .frame(height: 20)
             
-            // 进度条 - 按小时显示
+            // 进度条 - 按分钟级显示
             GeometryReader { geometry in
                 HStack(spacing: 0.5) {
                     ForEach(hours, id: \.self) { hour in
-                        Rectangle()
-                            .fill(getEnergyColor(for: hour))
-                            .frame(width: geometry.size.width / CGFloat(hours.count), height: 8)
-                            .cornerRadius(1)
+                        PartnerEnergyHourBlock(
+                            hour: hour,
+                            width: geometry.size.width / CGFloat(hours.count),
+                            height: 20,
+                            partnerState: partnerState
+                        )
                     }
                 }
                 .background(Color.gray.opacity(0.2))
-                .cornerRadius(2)
+                .cornerRadius(4)
                 
-                // 当前时间指示器
-                Rectangle()
-                    .fill(AppTheme.Colors.text)
-                    .frame(width: 1, height: 8)
-                    .offset(x: getCurrentTimeOffset(width: geometry.size.width))
+                // 当前时间指示器 - 在7:00-23:59显示
+                if getCurrentTime().hour >= 7 && getCurrentTime().hour <= 23 {
+                    Rectangle()
+                        .fill(AppTheme.Colors.text)
+                        .frame(width: 2, height: 20)
+                        .offset(x: getCurrentTimeOffset(width: geometry.size.width))
+                }
             }
-            .frame(height: 8)
-        }
-        .onAppear {
-            startTimer()
-        }
-        .onDisappear {
-            stopTimer()
+            .frame(height: 20)
+            
+            // 当前时间指示器文本
+            HStack {
+                Spacer()
+                Text(getCurrentTimeDisplayText())
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Spacer()
+            }
         }
     }
     
-    private func getEnergyColor(for hour: Int) -> Color {
-        // 优先级：预规划 > 当天状态
-        // 注意：PartnerState 暂时没有 isFocusModeOn 属性，已移除专注模式检查
-        
-        // 检查是否有预规划
-        if let plannedLevel = partnerPlannedEnergy[hour] {
-            return plannedLevel.color
-        }
-        
-        // 使用当天状态
-        return partnerState.energyLevel.color
+    private func getCurrentTime() -> (hour: Int, minute: Int) {
+        let calendar = Calendar.current
+        let now = Date()
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
+        return (hour, minute)
     }
     
     private func getCurrentTimeOffset(width: CGFloat) -> CGFloat {
-        let currentHour = Calendar.current.component(.hour, from: currentTime)
-        let hourIndex = max(0, min(currentHour - 6, hours.count - 1))
-        let segmentWidth = width / CGFloat(hours.count)
-        return segmentWidth * CGFloat(hourIndex) + segmentWidth / 2
+        let currentTime = getCurrentTime()
+        let currentHour = currentTime.hour
+        let currentMinute = currentTime.minute
+        
+        // 在7:00-23:59区间内
+        if currentHour >= 7 && currentHour <= 23 {
+            let totalMinutes = (currentHour - 7) * 60 + currentMinute
+            let totalRangeMinutes = 17 * 60 // 7:00-23:59共17小时
+            return width * CGFloat(totalMinutes) / CGFloat(totalRangeMinutes)
+        }
+        
+        return 0
     }
     
-    // 计算时间标签的位置（居中对齐到对应时间块）
+    private func getCurrentTimeDisplayText() -> String {
+        let currentTime = getCurrentTime()
+        return String(format: "%d:%02d", currentTime.hour, currentTime.minute)
+    }
+    
+    // 计算时间标签的位置
     private func getTimeLabelPosition(for hour: Int, in totalWidth: CGFloat) -> CGFloat {
-        let hourIndex = hour - 6 // 6点对应索引0
+        let hourIndex = hour - 7 // 7点对应索引0
         let blockWidth = totalWidth / CGFloat(hours.count)
-        return blockWidth * CGFloat(hourIndex) + blockWidth / 2
+        let spacing: CGFloat = 0.5 // 块之间的间距
+        return blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
     }
+}
+
+// MARK: - 伴侣能量小时块（分钟级显示）
+struct PartnerEnergyHourBlock: View {
+    let hour: Int
+    let width: CGFloat
+    let height: CGFloat
+    @ObservedObject var partnerState: PartnerState
     
-    private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
-            currentTime = Date()
+    // 合并后的块信息
+    struct MergedBlock: Identifiable {
+        let id = UUID()
+        let startMinute: Int
+        let endMinute: Int
+        let color: Color
+        
+        var minuteCount: Int {
+            return endMinute - startMinute + 1
         }
     }
     
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+    var body: some View {
+        let mergedBlocks = getMergedBlocks()
+        
+        return HStack(spacing: 0) {
+            ForEach(mergedBlocks) { block in
+                Rectangle()
+                    .fill(block.color)
+                    .frame(width: width * CGFloat(block.minuteCount) / 60.0, height: height)
+            }
+        }
+        .cornerRadius(2)
+    }
+    
+    // 获取合并后的能量块
+    private func getMergedBlocks() -> [MergedBlock] {
+        var blocks: [MergedBlock] = []
+        
+        // 获取第一分钟的颜色
+        var currentColor = getEnergyColor(for: 0)
+        var startMinute = 0
+        
+        // 遍历所有分钟
+        for minute in 1..<60 {
+            let color = getEnergyColor(for: minute)
+            
+            if color != currentColor {
+                // 颜色改变，保存当前块
+                blocks.append(MergedBlock(
+                    startMinute: startMinute,
+                    endMinute: minute - 1,
+                    color: currentColor
+                ))
+                
+                // 开始新块
+                startMinute = minute
+                currentColor = color
+            }
+        }
+        
+        // 添加最后一个块（包含最后一分钟）
+        blocks.append(MergedBlock(
+            startMinute: startMinute,
+            endMinute: 59,
+            color: currentColor
+        ))
+        
+        return blocks
+    }
+    
+    // 获取指定分钟的能量颜色
+    private func getEnergyColor(for minute: Int) -> Color {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentHour = calendar.component(.hour, from: now)
+        let currentMinute = calendar.component(.minute, from: now)
+        
+        // 当前时间之前：显示伴侣的历史状态（模拟为当前状态）
+        if hour < currentHour || (hour == currentHour && minute <= currentMinute) {
+            return partnerState.energyLevel.color
+        }
+        
+        // 当前时间之后：显示灰色（未来）
+        return EnergyLevel.unplanned.color
     }
 }
 
