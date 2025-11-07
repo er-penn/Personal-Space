@@ -912,34 +912,112 @@ struct GiftBoxCard: View {
 // MARK: - 碎片卡片
 struct FragmentCard: View {
     let fragment: Fragment
+    @EnvironmentObject var userState: UserState
+    @State private var showingWithdrawAlert = false
+    @State private var showingDeleteAlert = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "photo")
-                    .foregroundColor(.orange)
+                // 类型标签（图标+文字）
+                HStack(spacing: 4) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 14))
+                        .foregroundColor(.orange)
+                    
+                    Text("碎片")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.orange)
+                }
+                .frame(width: 50, alignment: .leading)
                 
-                Text("分享碎片")
-                    .font(.subheadline)
-                    .font(.subheadline.weight(.medium))
+                Text(fragment.content)
+                    .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.text)
+                    .lineLimit(1)
                 
                 Spacer()
                 
-                Text("我分享的")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.blue.opacity(0.2))
-                    .cornerRadius(8)
+                // 已读/未读状态
+                HStack(spacing: 4) {
+                    Image(systemName: fragment.isRead ? "eye.fill" : "eye.slash")
+                        .font(.system(size: 12))
+                        .foregroundColor(fragment.isRead ? .blue : .gray)
+                    
+                    Text(fragment.isRead ? "已读" : "未读")
+                        .font(.system(size: AppTheme.FontSize.caption2))
+                        .foregroundColor(fragment.isRead ? .blue : .gray)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background((fragment.isRead ? Color.blue : Color.gray).opacity(0.1))
+                .cornerRadius(6)
             }
             
-            Text(fragment.content)
-                .font(.subheadline)
+            // 链接（如果有）
+            if let linkURL = fragment.linkURL {
+                HStack(spacing: 4) {
+                    Image(systemName: "link")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    Text(linkURL)
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            
+            // 时间信息
+            Text(formatDate(fragment.createdAt))
+                .font(.system(size: AppTheme.FontSize.caption2))
+                .foregroundColor(AppTheme.Colors.textSecondary)
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .padding(AppTheme.Spacing.md)
+        .background(AppTheme.Colors.cardBg)
+        .cornerRadius(AppTheme.Radius.medium)
+        .shadow(color: AppTheme.Shadows.card, radius: 2, x: 0, y: 1)
+        .contextMenu {
+            if !fragment.isRead {
+                Button {
+                    showingWithdrawAlert = true
+                } label: {
+                    Label("撤回（对方未读）", systemImage: "arrow.uturn.backward")
+                }
+            }
+            
+            Button(role: .destructive) {
+                showingDeleteAlert = true
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+        .alert("确认撤回", isPresented: $showingWithdrawAlert) {
+            Button("取消", role: .cancel) { }
+            Button("撤回", role: .destructive) {
+                let success = userState.withdrawFragment(fragment)
+                if !success {
+                    // 显示错误提示
+                    print("撤回失败")
+                }
+            }
+        } message: {
+            Text("撤回后对方将看不到这条碎片")
+        }
+        .alert("确认删除", isPresented: $showingDeleteAlert) {
+            Button("取消", role: .cancel) { }
+            Button("删除", role: .destructive) {
+                userState.deleteFragment(fragment)
+            }
+        } message: {
+            Text("删除后您也将看不到这条碎片\n如果对方已读，对方仍可查看")
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        formatter.locale = Locale(identifier: "zh_CN")
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

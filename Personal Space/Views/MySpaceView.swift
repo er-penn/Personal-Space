@@ -61,6 +61,8 @@ struct MySpaceView: View {
 
     // MARK: - 焦虑平复指南相关状态变量
     @State private var showingAnxietySoothingGuide = false
+    @StateObject private var knowledgeActionManager = KnowledgeActionManager()
+    @StateObject private var customContentManager = CustomContentManager()
     
     init() {
         // 每天第一次打开app时重置状态
@@ -72,12 +74,41 @@ struct MySpaceView: View {
         }
     }
     
-    private var anxietyGuideCard: FunctionCard {
-        FunctionCard(title: "焦虑平复指南", icon: "cross.case.fill", color: .orange, content: "推荐：深呼吸练习", action: {
-            showingAnxietySoothingGuide = true
-        })
+    private var knowledgeActionContent: String {
+        let todayActions = knowledgeActionManager.getTodayActions()
+        let completed = todayActions.filter { $0.isCompleted }.count
+        let total = todayActions.count
+        let firstLine = "今日打卡：\(completed)/\(total) 已完成"
+        let consecutiveDays = knowledgeActionManager.getConsecutiveCompletionDays()
+        let flame = consecutiveDays >= 3 ? " 🔥" : ""
+        let secondLine = "连续打卡：\(consecutiveDays)天\(flame)"
+        return firstLine + "\n" + secondLine
     }
-    private let knowledgeActionContent = "今日目标：冥想15分钟 ✓"
+    
+    private var anxietyGuideCard: FunctionCard {
+        let contents = customContentManager.contents.sorted { $0.lastAccessed > $1.lastAccessed }
+        if contents.isEmpty {
+            let preview = "暂无自定义内容\n点击添加你的平复工具"
+            return FunctionCard(title: "焦虑平复指南", icon: "cross.case.fill", color: .orange, content: preview, action: {
+                showingAnxietySoothingGuide = true
+            })
+        } else if contents.count == 1 {
+            let first = contents[0].title
+            let preview = "自定义：\(first)\n点击进入查看更多"
+            return FunctionCard(title: "焦虑平复指南", icon: "cross.case.fill", color: .orange, content: preview, action: {
+                showingAnxietySoothingGuide = true
+            })
+        } else {
+            let first = contents[0].title
+            let second = contents[1].title
+            let moreCount = contents.count - 2
+            let moreText = moreCount > 0 ? "还有 \(moreCount) 个内容待探索" : "点击查看全部自定义内容"
+            let preview = "自定义：\(first) · \(second)\n\(moreText)"
+            return FunctionCard(title: "焦虑平复指南", icon: "cross.case.fill", color: .orange, content: preview, action: {
+                showingAnxietySoothingGuide = true
+            })
+        }
+    }
     
     var body: some View {
         NavigationView {
@@ -248,6 +279,7 @@ struct MySpaceView: View {
         }
         .sheet(isPresented: $showingAnxietySoothingGuide) {
             AnxietySoothingGuideView()
+                .environmentObject(customContentManager)
         }
     }
     

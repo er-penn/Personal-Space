@@ -68,6 +68,7 @@ struct FragmentInboxView: View {
 
 struct FragmentCardView: View {
     let fragment: Fragment
+    @EnvironmentObject var userState: UserState
     
     @State private var showingFullImage = false
     
@@ -106,6 +107,10 @@ struct FragmentCardView: View {
         .background(AppTheme.Colors.cardBg)
         .cornerRadius(AppTheme.Radius.medium)
         .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+        .onAppear {
+            // 标记为已读
+            userState.markFragmentAsRead(fragment.id)
+        }
     }
     
     // MARK: - 图片部分

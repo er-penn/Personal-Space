@@ -2043,6 +2043,46 @@ class UserState: ObservableObject {
         receivedFragments = fragments.filter { !$0.isFromMe }.sorted { $0.createdAt > $1.createdAt }
     }
     
+    /// 撤回碎片（仅未读时）
+    func withdrawFragment(_ fragment: Fragment) -> Bool {
+        guard fragment.isFromMe && !fragment.isRead else {
+            print("❌ 无法撤回：碎片已被对方查看")
+            return false
+        }
+        
+        // 标记为已撤回
+        if let index = fragments.firstIndex(where: { $0.id == fragment.id }) {
+            fragments[index].isWithdrawn = true
+        }
+        
+        // 从列表中移除
+        fragments.removeAll { $0.id == fragment.id }
+        updateFragmentLists()
+        saveFragments()
+        
+        print("✅ 碎片已撤回：\(fragment.content.prefix(20))...")
+        return true
+    }
+    
+    /// 删除碎片
+    func deleteFragment(_ fragment: Fragment) {
+        fragments.removeAll { $0.id == fragment.id }
+        updateFragmentLists()
+        saveFragments()
+        
+        print("🗑️ 碎片已删除：\(fragment.content.prefix(20))...")
+    }
+    
+    /// 标记碎片为已读（接收方查看时调用）
+    func markFragmentAsRead(_ fragmentId: UUID) {
+        if let index = fragments.firstIndex(where: { $0.id == fragmentId }) {
+            fragments[index].isRead = true
+            updateFragmentLists()
+            saveFragments()
+            print("👁️ 碎片已标记为已读")
+        }
+    }
+    
     /// 保存碎片（占位方法，后续实现持久化）
     func saveFragments() {
         // TODO: 实现Core Data持久化
@@ -2057,21 +2097,24 @@ class UserState: ObservableObject {
                 imageURL: nil,
                 linkURL: nil,
                 createdAt: Date().addingTimeInterval(-7200), // 2小时前
-                isFromMe: false
+                isFromMe: false,
+                isRead: false
             ),
             Fragment(
                 content: "分享一首很好听的歌给你",
                 imageURL: nil,
                 linkURL: "https://music.apple.com/example",
                 createdAt: Date().addingTimeInterval(-14400), // 4小时前
-                isFromMe: false
+                isFromMe: false,
+                isRead: false
             ),
             Fragment(
                 content: "看到这个超可爱的小猫咪视频，想到了你 😊",
                 imageURL: "https://example.com/cat.jpg",
                 linkURL: nil,
                 createdAt: Date().addingTimeInterval(-86400), // 昨天
-                isFromMe: false
+                isFromMe: false,
+                isRead: false
             ),
             // 我发送的碎片
             Fragment(
@@ -2079,14 +2122,16 @@ class UserState: ObservableObject {
                 imageURL: nil,
                 linkURL: nil,
                 createdAt: Date().addingTimeInterval(-3600), // 1小时前
-                isFromMe: true
+                isFromMe: true,
+                isRead: false  // 未读，可撤回
             ),
             Fragment(
                 content: "分享一篇很有意思的文章",
                 imageURL: nil,
                 linkURL: "https://example.com/article",
                 createdAt: Date().addingTimeInterval(-10800), // 3小时前
-                isFromMe: true
+                isFromMe: true,
+                isRead: true   // 已读，不可撤回
             )
         ]
         
@@ -2681,14 +2726,18 @@ struct Fragment: Identifiable, Codable {
     let linkURL: String?
     let createdAt: Date
     let isFromMe: Bool
+    var isRead: Bool          // 是否已读
+    var isWithdrawn: Bool     // 是否已撤回
     
-    init(id: UUID = UUID(), content: String, imageURL: String? = nil, linkURL: String? = nil, createdAt: Date = Date(), isFromMe: Bool) {
+    init(id: UUID = UUID(), content: String, imageURL: String? = nil, linkURL: String? = nil, createdAt: Date = Date(), isFromMe: Bool, isRead: Bool = false, isWithdrawn: Bool = false) {
         self.id = id
         self.content = content
         self.imageURL = imageURL
         self.linkURL = linkURL
         self.createdAt = createdAt
         self.isFromMe = isFromMe
+        self.isRead = isRead
+        self.isWithdrawn = isWithdrawn
     }
 }
 
@@ -3353,6 +3402,30 @@ class KnowledgeActionManager: ObservableObject {
             let actionDate = Calendar.current.startOfDay(for: action.date)
             return actionDate >= today && actionDate < tomorrow
         }
+    }
+
+    /// 计算连续打卡天数（从今天开始往前）
+    func getConsecutiveCompletionDays() -> Int {
+        let calendar = Calendar.current
+        let completedDates = Set(
+            actions
+                .filter { $0.isCompleted }
+                .map { calendar.startOfDay(for: $0.date) }
+        )
+        guard !completedDates.isEmpty else { return 0 }
+
+        var consecutiveDays = 0
+        var currentDate = calendar.startOfDay(for: Date())
+
+        while completedDates.contains(currentDate) {
+            consecutiveDays += 1
+            guard let previousDate = calendar.date(byAdding: .day, value: -1, to: currentDate) else {
+                break
+            }
+            currentDate = previousDate
+        }
+
+        return consecutiveDays
     }
 
     func getActionStats(for knowledgeId: UUID) -> ActionStats {
