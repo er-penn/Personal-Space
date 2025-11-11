@@ -1452,25 +1452,47 @@ struct PartnerEnergyRecordView: View {
             
             // 进度条 - 按分钟级显示
             GeometryReader { geometry in
-                HStack(spacing: 0.5) {
-                    ForEach(hours, id: \.self) { hour in
-                        PartnerEnergyHourBlock(
-                            hour: hour,
-                            width: geometry.size.width / CGFloat(hours.count),
-                            height: 20,
-                            partnerState: partnerState
-                        )
+                ZStack {
+                    // 能量块背景
+                    HStack(spacing: 0.5) {
+                        ForEach(hours, id: \.self) { hour in
+                            PartnerEnergyHourBlock(
+                                hour: hour,
+                                width: geometry.size.width / CGFloat(hours.count),
+                                height: 20,
+                                partnerState: partnerState
+                            )
+                        }
                     }
-                }
-                .background(Color.gray.opacity(0.2))
-                .cornerRadius(4)
-                
-                // 当前时间指示器 - 在7:00-23:59显示
-                if getCurrentTime().hour >= 7 && getCurrentTime().hour <= 23 {
-                    Rectangle()
-                        .fill(AppTheme.Colors.text)
-                        .frame(width: 2, height: 20)
-                        .offset(x: getCurrentTimeOffset(width: geometry.size.width))
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(4)
+                    
+                    // 当前时间指示器和时间文本 - 在7:00-23:59显示
+                    if getCurrentTime().hour >= 7 && getCurrentTime().hour <= 23 {
+                        let timeOffset = getCurrentTimeOffset(width: geometry.size.width)
+                        let currentHour = getCurrentTime().hour
+                        let isAfter22 = currentHour >= 22
+                        let lineWidth: CGFloat = 2 // 竖线宽度
+                        let spacing: CGFloat = 4 // 文本与竖线的间距
+                        let estimatedTextWidth: CGFloat = 30 // 估算的文本宽度（"HH:mm"格式，12px字体）
+                        
+                        // 黑色竖线
+                        // 注意：在GeometryReader中，offset是相对于视图中心的
+                        // 所以需要调整：timeOffset是相对于左边缘的位置，需要减去视图宽度的一半
+                        Rectangle()
+                            .fill(AppTheme.Colors.text)
+                            .frame(width: lineWidth, height: 20)
+                            .position(x: timeOffset + lineWidth / 2, y: 10) // 使用position而不是offset
+                        
+                        // 时间文本
+                        Text(getCurrentTimeString())
+                            .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.text)
+                            .position(x: isAfter22 
+                                ? timeOffset - spacing - estimatedTextWidth / 2 // 左边：竖线位置 - 间距 - 文本宽度的一半
+                                : timeOffset + lineWidth + spacing + estimatedTextWidth / 2, // 右边：竖线位置 + 竖线宽度 + 间距 + 文本宽度的一半
+                                y: 10) // 垂直居中
+                    }
                 }
             }
             .frame(height: 20)
@@ -1499,12 +1521,31 @@ struct PartnerEnergyRecordView: View {
         
         // 在7:00-23:59区间内
         if currentHour >= 7 && currentHour <= 23 {
-            let totalMinutes = (currentHour - 7) * 60 + currentMinute
-            let totalRangeMinutes = 17 * 60 // 7:00-23:59共17小时
-            return width * CGFloat(totalMinutes) / CGFloat(totalRangeMinutes)
+            let hourIndex = currentHour - 7 // 7点对应索引0
+            let blockWidth = width / CGFloat(hours.count) // 每个块的宽度（与getTimeLabelPosition一致）
+            let spacing: CGFloat = 0.5 // 块之间的间距（与HStack的spacing一致）
+            
+            // 计算当前小时块的起始位置（与getTimeLabelPosition的计算方式一致）
+            let blockStartOffset = blockWidth * CGFloat(hourIndex) + spacing * CGFloat(hourIndex)
+            
+            // 计算在当前小时内的分钟偏移
+            // 分钟偏移 = (分钟数 / 60) * 块宽度
+            let minuteOffset = (CGFloat(currentMinute) / 60.0) * blockWidth
+            
+            let totalOffset = blockStartOffset + minuteOffset
+            
+            // 确保指针精确对齐到像素边界
+            return round(totalOffset)
         }
         
         return 0
+    }
+    
+    private func getCurrentTimeString() -> String {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: currentTime)
+        let minute = calendar.component(.minute, from: currentTime)
+        return String(format: "%02d:%02d", hour, minute)
     }
     
     // 计算时间标签的位置
