@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: postgres:14-alpine
+    container_name: boundary_capsule_db
+    environment:
+      POSTGRES_DB: boundary_capsule
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - boundary_capsule_network
+
+  # Redis缓存和消息队列
+  redis:
+    image: redis:7-alpine
+    container_name: boundary_capsule_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - boundary_capsule_network
+
+  # Django应用（开发环境）
+  django:
+    build: .
+    container_name: boundary_capsule_django
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - DB_HOST=postgres
+      - DB_NAME=boundary_capsule
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - boundary_capsule_network
+
+  # Celery Worker
+  celery_worker:
+    build: .
+    container_name: boundary_capsule_celery_worker
+    command: celery -A config worker -l info
+    volumes:
+      - .:/app
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=boundary_capsule
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres
+      - redis
+      - django
+    networks:
+      - boundary_capsule_network
+
+  # Celery Beat（定时任务）
+  celery_beat:
+    build: .
+    container_name: boundary_capsule_celery_beat
+    command: celery -A config beat -l info
+    volumes:
+      - .:/app
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=boundary_capsule
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres
+      - redis
+      - django
+    networks:
+      - boundary_capsule_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  boundary_capsule_network:
+    driver: bridge
+
