@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct OurSpaceView: View {
     @EnvironmentObject var userState: UserState
@@ -23,6 +24,9 @@ struct OurSpaceView: View {
     // MARK: - Tab切换状态
     @State private var selectedTab: OurSpaceTab = .notifications
     @State private var tabContentHeight: CGFloat = 400 // 动态Tab内容高度
+    
+    // MARK: - 定时器相关状态变量
+    @State private var timer: Timer?
     
     // Tab类型枚举
     enum OurSpaceTab: Int, CaseIterable, Identifiable {
@@ -72,6 +76,10 @@ struct OurSpaceView: View {
                 .onAppear {
                     userState.updatePendingClosures()
                     userState.cleanExpiredReminders() // 清理过期提醒
+                    startTimer() // 启动定时器
+                }
+                .onDisappear {
+                    stopTimer() // 停止定时器
                 }
                 
                 // 调试按钮 - 仅在DEBUG模式显示
@@ -116,6 +124,34 @@ struct OurSpaceView: View {
             PartnerMomentsView()
                 .environmentObject(userState)
         }
+    }
+    
+    // MARK: - 定时器管理（更新伴侣能量状态）
+    private func startTimer() {
+        stopTimer() // 先停止已存在的timer，避免重复创建
+        
+        // 每分钟更新一次，确保伴侣能量状态和能量条能够及时更新
+        DispatchQueue.main.async {
+            self.timer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { _ in
+                // 1. 更新伴侣能量状态（触发电池图标更新）
+                // 这里可以根据实际需求添加更新逻辑，目前先触发UI更新
+                self.partnerState.objectWillChange.send()
+                
+                // 2. 触发能量条更新：通过更新partnerState来触发PartnerEnergyRecordView的onReceive
+                // PartnerEnergyRecordView中的onReceive(partnerState.objectWillChange)会更新currentTime
+                // 从而触发能量条重绘，更新当前时间指针位置
+            }
+            
+            // 确保定时器在主线程的RunLoop中运行
+            if let timer = self.timer {
+                RunLoop.current.add(timer, forMode: .common)
+            }
+        }
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
     }
     
     // MARK: - 伴侣状态区（参考我的空间布局）
@@ -1383,6 +1419,7 @@ struct GrowthGardenCard: View {
 // MARK: - 伴侣能量记录视图（参考EnergyProgressView设计）
 struct PartnerEnergyRecordView: View {
     @EnvironmentObject var partnerState: PartnerState
+    @State private var currentTime: Date = Date() // 当前时间状态，用于触发视图更新
     
     private let hours = Array(7...23) // 7点到23点
     
@@ -1438,13 +1475,20 @@ struct PartnerEnergyRecordView: View {
             }
             .frame(height: 20)
         }
+        .onAppear {
+            // 初始化当前时间
+            currentTime = Date()
+        }
+        .onReceive(partnerState.objectWillChange) { _ in
+            // 当partnerState更新时（包括timer触发），更新当前时间以触发能量条重绘
+            currentTime = Date()
+        }
     }
     
     private func getCurrentTime() -> (hour: Int, minute: Int) {
         let calendar = Calendar.current
-        let now = Date()
-        let hour = calendar.component(.hour, from: now)
-        let minute = calendar.component(.minute, from: now)
+        let hour = calendar.component(.hour, from: currentTime)
+        let minute = calendar.component(.minute, from: currentTime)
         return (hour, minute)
     }
     
