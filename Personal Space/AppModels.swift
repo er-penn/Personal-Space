@@ -2660,23 +2660,53 @@ class UserState: ObservableObject {
         do {
             let response = try await apiService.getEnergyPlans(date: dateString)
             
-            // 转换预规划记录
-            plannedEnergyPlans = response.plans.compactMap { apiPlan in
+            // 转换预规划记录（支持每个时间段有自己的energy_level）
+            var allPlans: [EnergyPlan] = []
+            
+            for apiPlan in response.plans {
                 guard let date = converter.parseDate(apiPlan.date),
-                      let uuid = UUID(uuidString: apiPlan.id) else { return nil }
+                      let uuid = UUID(uuidString: apiPlan.id) else { continue }
                 
-                let timeSlots = apiPlan.time_slots.map { converter.timeSlotFromAPI($0) }
-                let energyLevel = converter.energyLevelFromString(apiPlan.energy_level)
+                let defaultEnergyLevel = converter.energyLevelFromString(apiPlan.energy_level)
                 let createdAt = converter.parseDateTime(apiPlan.created_at) ?? Date()
                 
-                return EnergyPlan(
-                    id: uuid,
-                    date: date,
-                    timeSlots: timeSlots,
-                    energyLevel: energyLevel,
-                    createdAt: createdAt
-                )
+                // 按energy_level分组时间段
+                var slotsByLevel: [EnergyLevel: [TimeSlot]] = [:]
+                
+                for apiSlot in apiPlan.time_slots {
+                    // 从时间段中读取energy_level，如果没有则使用记录的energy_level
+                    let slotEnergyLevel: EnergyLevel
+                    if let energyLevelString = apiSlot.energy_level {
+                        slotEnergyLevel = converter.energyLevelFromString(energyLevelString)
+                    } else {
+                        slotEnergyLevel = defaultEnergyLevel
+                    }
+                    
+                    let timeSlot = converter.timeSlotFromAPI(apiSlot)
+                    
+                    if slotsByLevel[slotEnergyLevel] == nil {
+                        slotsByLevel[slotEnergyLevel] = []
+                    }
+                    slotsByLevel[slotEnergyLevel]?.append(timeSlot)
+                }
+                
+                // 为每个energy_level创建一个EnergyPlan
+                for (energyLevel, timeSlots) in slotsByLevel {
+                    // 为每个energy_level生成一个新的UUID（基于原UUID和energy_level）
+                    let planId = UUID(uuidString: "\(uuid.uuidString)-\(energyLevel.rawValue)") ?? UUID()
+                    
+                    let plan = EnergyPlan(
+                        id: planId,
+                        date: date,
+                        timeSlots: timeSlots,
+                        energyLevel: energyLevel,
+                        createdAt: createdAt
+                    )
+                    allPlans.append(plan)
+                }
             }
+            
+            plannedEnergyPlans = allPlans
             
             print("✅ 已加载能量预规划: \(plannedEnergyPlans.count)条")
         } catch {
@@ -2736,7 +2766,7 @@ class UserState: ObservableObject {
         // 使用当前能量等级（因为后端只能保存一个energy_level）
         let energyLevelString = converter.energyLevelToString(currentBaseEnergyLevel)
         let dateString = converter.formatDate(today)
-        let apiTimeSlots = allTimeSlots.map { converter.timeSlotToAPI($0) }
+        let apiTimeSlots = allTimeSlots.map { converter.timeSlotToAPI($0, energyLevel: currentBaseEnergyLevel) }
         
         do {
             _ = try await apiService.updateBaseEnergyRecord(
@@ -2816,7 +2846,7 @@ class UserState: ObservableObject {
         
         let dateString = converter.formatDate(date)
         let energyLevelString = converter.energyLevelToString(energyLevel)
-        let timeSlotsAPI = timeSlots.map { converter.timeSlotToAPI($0) }
+        let timeSlotsAPI = timeSlots.map { converter.timeSlotToAPI($0, energyLevel: energyLevel) }
         
         do {
             _ = try await apiService.createEnergyPlan(

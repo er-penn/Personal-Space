@@ -118,9 +118,12 @@ class EnergyService:
                 end_minutes = end_hour * 60 + end_minute
                 remaining_minutes = max(0, end_minutes - current_minutes)
                 
+                # 从时间段中读取energy_level，如果没有则使用记录的energy_level（向后兼容）
+                slot_energy_level = slot.get('energy_level', planned_record.energy_level)
+                
                 return {
                     'is_active': True,
-                    'level': planned_record.energy_level,
+                    'level': slot_energy_level,
                     'remaining_minutes': remaining_minutes,
                     'start_time': self._get_datetime_from_slot(today, start_hour, start_minute),
                     'end_time': self._get_datetime_from_slot(today, end_hour, end_minute)

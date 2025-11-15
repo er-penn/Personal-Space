@@ -320,12 +320,13 @@ class APIService: ObservableObject {
     
     // MARK: - 能量相关API
     
-    /// 时间段模型
+    /// 时间段模型（支持每个时间段有自己的energy_level）
     struct TimeSlot: Codable {
         let start_hour: Int
         let start_minute: Int
         let end_hour: Int
         let end_minute: Int
+        let energy_level: String? // 可选的energy_level字段，用于支持不同能量等级的时间段
     }
     
     /// 能量记录模型
@@ -446,7 +447,7 @@ class APIService: ObservableObject {
     }
     
     /// 更新基础状态记录（包括时间段）
-    func updateBaseEnergyRecord(date: String? = nil, energyLevel: String? = nil, timeSlots: [[String: Int]]? = nil) async throws -> UpdateBaseEnergyRecordResponse {
+    func updateBaseEnergyRecord(date: String? = nil, energyLevel: String? = nil, timeSlots: [[String: Any]]? = nil) async throws -> UpdateBaseEnergyRecordResponse {
         var body: [String: Any] = [:]
         if let date = date {
             body["date"] = date
@@ -475,7 +476,7 @@ class APIService: ObservableObject {
     }
     
     /// 创建能量预规划
-    func createEnergyPlan(date: String, energyLevel: String, timeSlots: [[String: Int]]) async throws -> EnergyPlansResponse.EnergyPlan {
+    func createEnergyPlan(date: String, energyLevel: String, timeSlots: [[String: Any]]) async throws -> EnergyPlansResponse.EnergyPlan {
         let body: [String: Any] = [
             "date": date,
             "energy_level": energyLevel,

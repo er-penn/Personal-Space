@@ -313,7 +313,8 @@ def create_energy_plan(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # 验证每个时间段
+    # 验证每个时间段，并为每个时间段添加energy_level字段
+    validated_time_slots = []
     for slot in time_slots:
         required_fields = ['start_hour', 'start_minute', 'end_hour', 'end_minute']
         if not all(field in slot for field in required_fields):
@@ -344,6 +345,12 @@ def create_energy_plan(request):
                 {'detail': '开始时间必须早于结束时间'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # 为每个时间段添加energy_level字段（如果不存在）
+        validated_slot = slot.copy()
+        if 'energy_level' not in validated_slot:
+            validated_slot['energy_level'] = energy_level
+        validated_time_slots.append(validated_slot)
     
     # 获取或创建预规划记录（同一天只能有一条）
     planned_record, created = EnergyRecord.objects.get_or_create(
@@ -351,15 +358,57 @@ def create_energy_plan(request):
         record_date=target_date,
         record_type=EnergyRecord.RecordType.PLANNED,
         defaults={
-            'energy_level': energy_level,
-            'time_slots': time_slots
+            'energy_level': energy_level,  # 保留作为默认值，用于向后兼容
+            'time_slots': validated_time_slots
         }
     )
     
     if not created:
-        # 更新现有记录
-        planned_record.energy_level = energy_level
-        planned_record.time_slots = time_slots
+        # 更新现有记录：合并时间段而不是覆盖
+        existing_slots = planned_record.time_slots or []
+        new_slots = validated_time_slots
+        
+        # 计算新时间段覆盖的时间范围
+        new_slot_ranges = []
+        for slot in new_slots:
+            start_minutes = slot['start_hour'] * 60 + slot['start_minute']
+            end_minutes = slot['end_hour'] * 60 + slot['end_minute']
+            new_slot_ranges.append((start_minutes, end_minutes))
+        
+        # 过滤掉与新时间段重叠的旧时间段
+        filtered_existing_slots = []
+        for slot in existing_slots:
+            # 兼容旧数据：如果时间段没有energy_level字段，使用记录的energy_level
+            slot_energy_level = slot.get('energy_level', planned_record.energy_level)
+            slot_start_minutes = slot['start_hour'] * 60 + slot['start_minute']
+            slot_end_minutes = slot['end_hour'] * 60 + slot['end_minute']
+            
+            # 检查是否与新时间段重叠
+            overlaps = False
+            for new_start, new_end in new_slot_ranges:
+                # 重叠条件：旧时间段开始 < 新时间段结束 && 旧时间段结束 > 新时间段开始
+                if slot_start_minutes < new_end and slot_end_minutes > new_start:
+                    overlaps = True
+                    break
+            
+            if not overlaps:
+                # 确保旧时间段也有energy_level字段
+                if 'energy_level' not in slot:
+                    slot = slot.copy()
+                    slot['energy_level'] = slot_energy_level
+                filtered_existing_slots.append(slot)
+        
+        # 合并：旧时间段（不重叠的）+ 新时间段
+        merged_slots = filtered_existing_slots + new_slots
+        
+        # 按开始时间排序
+        merged_slots.sort(key=lambda s: (s['start_hour'] * 60 + s['start_minute']))
+        
+        # 更新记录的energy_level为第一个时间段的energy_level（用于向后兼容）
+        if merged_slots:
+            planned_record.energy_level = merged_slots[0].get('energy_level', energy_level)
+        
+        planned_record.time_slots = merged_slots
         planned_record.save()
     
     return Response({

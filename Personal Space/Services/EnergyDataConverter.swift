@@ -40,37 +40,68 @@ class EnergyDataConverter {
         )
     }
     
-    /// 将前端TimeSlot转换为后端格式
-    static func timeSlotToAPI(_ slot: TimeSlot) -> [String: Int] {
+    /// 将前端TimeSlot转换为后端格式（包含energy_level字段）
+    static func timeSlotToAPI(_ slot: TimeSlot, energyLevel: EnergyLevel) -> [String: Any] {
         return [
             "start_hour": slot.startHour,
             "start_minute": slot.startMinute,
             "end_hour": slot.endHour,
-            "end_minute": slot.endMinute
+            "end_minute": slot.endMinute,
+            "energy_level": energyLevelToString(energyLevel)
         ]
     }
     
-    /// 将后端EnergyRecord转换为前端EnergyPlan
-    static func energyPlanFromAPI(_ apiRecord: APIService.EnergyRecord) -> EnergyPlan? {
-        guard let date = parseDate(apiRecord.date) else { return nil }
-        guard let uuid = UUID(uuidString: apiRecord.id) else { return nil }
+    /// 将后端EnergyRecord转换为前端EnergyPlan（支持每个时间段有自己的energy_level）
+    /// 如果时间段有energy_level字段，按energy_level分组；否则使用记录的energy_level
+    static func energyPlanFromAPI(_ apiRecord: APIService.EnergyRecord) -> [EnergyPlan] {
+        guard let date = parseDate(apiRecord.date) else { return [] }
+        guard let uuid = UUID(uuidString: apiRecord.id) else { return [] }
         
-        let timeSlots = apiRecord.time_slots.map { timeSlotFromAPI($0) }
-        let energyLevel = energyLevelFromString(apiRecord.energy_level)
+        let defaultEnergyLevel = energyLevelFromString(apiRecord.energy_level)
         let createdAt = parseDateTime(apiRecord.created_at) ?? Date()
         
-        return EnergyPlan(
-            id: uuid,
-            date: date,
-            timeSlots: timeSlots,
-            energyLevel: energyLevel,
-            createdAt: createdAt
-        )
+        // 按energy_level分组时间段
+        var slotsByLevel: [EnergyLevel: [TimeSlot]] = [:]
+        
+        for apiSlot in apiRecord.time_slots {
+            // 从时间段中读取energy_level，如果没有则使用记录的energy_level
+            let slotEnergyLevel: EnergyLevel
+            if let energyLevelString = apiSlot.energy_level {
+                slotEnergyLevel = energyLevelFromString(energyLevelString)
+            } else {
+                slotEnergyLevel = defaultEnergyLevel
+            }
+            
+            let timeSlot = timeSlotFromAPI(apiSlot)
+            
+            if slotsByLevel[slotEnergyLevel] == nil {
+                slotsByLevel[slotEnergyLevel] = []
+            }
+            slotsByLevel[slotEnergyLevel]?.append(timeSlot)
+        }
+        
+        // 为每个energy_level创建一个EnergyPlan
+        var plans: [EnergyPlan] = []
+        for (energyLevel, timeSlots) in slotsByLevel {
+            // 为每个energy_level生成一个新的UUID（基于原UUID和energy_level）
+            let planId = UUID(uuidString: "\(uuid.uuidString)-\(energyLevel.rawValue)") ?? UUID()
+            
+            let plan = EnergyPlan(
+                id: planId,
+                date: date,
+                timeSlots: timeSlots,
+                energyLevel: energyLevel,
+                createdAt: createdAt
+            )
+            plans.append(plan)
+        }
+        
+        return plans
     }
     
     /// 将后端EnergyRecord数组转换为前端EnergyPlan数组
     static func energyPlansFromAPI(_ apiRecords: [APIService.EnergyRecord]) -> [EnergyPlan] {
-        return apiRecords.compactMap { energyPlanFromAPI($0) }
+        return apiRecords.flatMap { energyPlanFromAPI($0) }
     }
     
     /// 解析日期字符串 (YYYY-MM-DD)
