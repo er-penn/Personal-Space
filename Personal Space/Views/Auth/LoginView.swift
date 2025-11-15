@@ -15,6 +15,7 @@ struct LoginView: View {
     @State private var errorMessage: String?
     @State private var showAlert: Bool = false
     @State private var loginSuccess: Bool = false
+    @State private var showingRegister: Bool = false
     
     var body: some View {
         NavigationView {
@@ -99,15 +100,18 @@ struct LoginView: View {
                     
                     Spacer()
                     
-                    // 提示信息
-                    VStack(spacing: 5) {
-                        Text("测试账号")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("请使用后端数据库中存在的用户")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                    // 注册入口
+                    Button(action: {
+                        showingRegister = true
+                    }) {
+                        HStack {
+                            Text("还没有账号？")
+                                .foregroundColor(.secondary)
+                            Text("立即注册")
+                                .foregroundColor(.purple)
+                                .fontWeight(.semibold)
+                        }
+                        .font(.subheadline)
                     }
                     .padding(.bottom, 30)
                 }
@@ -123,6 +127,9 @@ struct LoginView: View {
         }
         .fullScreenCover(isPresented: $loginSuccess) {
             MainTabView()
+        }
+        .sheet(isPresented: $showingRegister) {
+            RegisterView()
         }
     }
     

@@ -231,6 +231,35 @@ class APIService: ObservableObject {
     
     // MARK: - 认证相关API
     
+    /// 注册
+    struct RegisterResponse: Codable {
+        let id: String
+        let phone: String
+        let nickname: String?
+        let message: String
+    }
+    
+    func register(phone: String, password: String, passwordConfirm: String, nickname: String? = nil) async throws -> RegisterResponse {
+        var body: [String: Any] = [
+            "phone": phone,
+            "password": password,
+            "password_confirm": passwordConfirm
+        ]
+        
+        if let nickname = nickname, !nickname.isEmpty {
+            body["nickname"] = nickname
+        }
+        
+        let response: RegisterResponse = try await request(
+            endpoint: "/auth/register/",
+            method: "POST",
+            body: body,
+            requiresAuth: false
+        )
+        
+        return response
+    }
+    
     /// 登录
     /// 注意：后端API需要phone字段
     func login(phone: String, password: String) async throws -> LoginResponse {

@@ -1,10 +1,10 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 from apps.users.models import User
-from apps.users.serializers import UserSerializer, UserUpdateSerializer
+from apps.users.serializers import UserSerializer, UserUpdateSerializer, UserCreateSerializer
 from apps.relationships.models import Relationship
 
 
@@ -58,4 +58,20 @@ class UserViewSet(viewsets.ModelViewSet):
         if relationship:
             partner = relationship.get_partner(user)
             send_energy_level_changed(partner.id, user.current_energy_level)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register(request):
+    """用户注册"""
+    serializer = UserCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    user = serializer.save()
+    
+    return Response({
+        'id': str(user.id),
+        'phone': user.phone,
+        'nickname': user.nickname,
+        'message': '注册成功'
+    }, status=status.HTTP_201_CREATED)
 

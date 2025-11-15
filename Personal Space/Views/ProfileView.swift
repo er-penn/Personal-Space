@@ -12,6 +12,7 @@ struct ProfileView: View {
     @EnvironmentObject var partnerState: PartnerState
     @State private var showingCalmSpace = false
     @State private var showingSettings = false
+    @State private var showingPersonalInfo = false
     
     private var settingsSections: [SettingsSection] {
         [
@@ -61,40 +62,53 @@ struct ProfileView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $showingPersonalInfo) {
+            PersonalInfoView()
+        }
     }
     
     // MARK: - 顶部用户信息区域
     private var topUserInfoSection: some View {
         HStack(spacing: AppTheme.Spacing.lg) {
-            // 左侧：头像和昵称
-            HStack(spacing: AppTheme.Spacing.md) {
-                // 头像
-                Circle()
-                    .fill(LinearGradient(
-                        colors: [.blue, .purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        Text("我")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-                
-                // 昵称
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("SSSPenn")
-                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.text)
+            // 左侧：头像和昵称（可点击）
+            Button(action: {
+                showingPersonalInfo = true
+            }) {
+                HStack(spacing: AppTheme.Spacing.md) {
+                    // 头像
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [.blue, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        .frame(width: 50, height: 50)
+                        .overlay(
+                            Text("我")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.white)
+                        )
                     
-                    Text("已使用 15 天")
-                        .font(.system(size: AppTheme.FontSize.caption))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    // 昵称
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("SSSPenn")
+                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.text)
+                        
+                        Text("已使用 15 天")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // 右箭头提示可点击
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
-                
-                Spacer()
             }
+            .buttonStyle(PlainButtonStyle())
             
             // 右侧：消息和客服图标
             HStack(spacing: AppTheme.Spacing.md) {
@@ -613,10 +627,12 @@ struct PersonalInfoView: View {
 // MARK: - 设置页面
 struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
+    @StateObject private var apiService = APIService.shared
     @State private var phoneNumber = "138****8888"
     @State private var wechat = "未绑定"
     @State private var basicNotifications = true
     @State private var partnerFocusReminder = true
+    @State private var showingLogoutAlert = false
     
     var body: some View {
         NavigationView {
@@ -703,6 +719,27 @@ struct SettingsView: View {
                         .padding(.vertical, 4)
                     }
                     .listRowBackground(AppTheme.Colors.cardBg)
+                    
+                    // 账号
+                    Section("账号") {
+                        Button(action: {
+                            showingLogoutAlert = true
+                        }) {
+                            HStack {
+                                Image(systemName: "arrow.right.square")
+                                    .foregroundColor(.red)
+                                    .font(.title2)
+                                
+                                Text("退出登录")
+                                    .font(.body)
+                                    .foregroundColor(.red)
+                                
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .listRowBackground(AppTheme.Colors.cardBg)
                 }
                 .listStyle(InsetGroupedListStyle())
             }
@@ -713,7 +750,22 @@ struct SettingsView: View {
                     presentationMode.wrappedValue.dismiss()
                 }
             )
+            .alert("退出登录", isPresented: $showingLogoutAlert) {
+                Button("取消", role: .cancel) {}
+                Button("退出", role: .destructive) {
+                    logout()
+                }
+            } message: {
+                Text("确定要退出登录吗？")
+            }
         }
+    }
+    
+    // MARK: - 退出登录
+    private func logout() {
+        apiService.logout()
+        // 退出登录后会自动跳转到登录页面（因为isLoggedIn变为false）
+        presentationMode.wrappedValue.dismiss()
     }
 }
 
