@@ -77,6 +77,11 @@ struct OurSpaceView: View {
                     userState.updatePendingClosures()
                     userState.cleanExpiredReminders() // 清理过期提醒
                     startTimer() // 启动定时器
+                    
+                    // 从后端加载伴侣状态
+                    Task {
+                        await partnerState.loadPartnerStatus()
+                    }
                 }
                 .onDisappear {
                     stopTimer() // 停止定时器

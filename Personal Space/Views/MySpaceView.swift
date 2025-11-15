@@ -217,6 +217,11 @@ struct MySpaceView: View {
                                         userState.startTemporaryState(type: stateType, duration: duration)
                                         showingTemporaryStateOverlay = true
                                         showingTimePicker = false
+                                        
+                                        // 同步到后端
+                                        Task {
+                                            await userState.createTemporaryStateToBackend(type: stateType, durationMinutes: Int(duration / 60))
+                                        }
                                     }
                                 },
                                 onCancel: {
@@ -240,6 +245,12 @@ struct MySpaceView: View {
         }
         .onAppear {
             startTimer()
+
+            // 从后端加载能量数据
+            Task {
+                await userState.loadCurrentEnergyStatus()
+                await userState.loadEnergyRecords()
+            }
 
             // 加载示例安心确认数据（仅DEBUG模式）
             #if DEBUG
@@ -488,6 +499,11 @@ struct MySpaceView: View {
                             userState.updateCurrentBaseEnergyLevel(to: newLevel)
                             userState.recordEnergyLevelChange(to: newLevel)
                             
+                            // 同步到后端
+                            Task {
+                                await userState.syncCurrentEnergyLevelToBackend()
+                            }
+                            
                             // 更新 hasSwitchedFromUnplanned 标记
                             if newLevel != .unplanned {
                                 hasSwitchedFromUnplanned = true
@@ -560,6 +576,10 @@ struct MySpaceView: View {
                                     withAnimation(.easeInOut(duration: 0.3)) {
                                         userState.updateCurrentBaseEnergyLevel(to: .high)  // 使用新的实时截断策略
                                         hasSwitchedFromUnplanned = true
+                                        // 同步到后端
+                                        Task {
+                                            await userState.syncCurrentEnergyLevelToBackend()
+                                        }
                                     }
                                 },
                                 onLongPress: {
@@ -579,6 +599,10 @@ struct MySpaceView: View {
                                     withAnimation(.easeInOut(duration: 0.3)) {
                                         userState.updateCurrentBaseEnergyLevel(to: .low)  // 使用新的实时截断策略
                                         hasSwitchedFromUnplanned = true
+                                        // 同步到后端
+                                        Task {
+                                            await userState.syncCurrentEnergyLevelToBackend()
+                                        }
                                     }
                                 },
                                 onLongPress: {
@@ -653,6 +677,10 @@ struct MySpaceView: View {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             userState.endTemporaryState()
                             showingTemporaryStateOverlay = false
+                            // 同步到后端
+                            Task {
+                                await userState.endTemporaryStateToBackend()
+                            }
                             // 🎯 手动触发一次UI刷新，让能量条立即显示新的状态
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 userState.objectWillChange.send()
@@ -765,6 +793,10 @@ struct MySpaceView: View {
         withAnimation(.easeInOut(duration: 0.3)) {
             userState.updateCurrentBaseEnergyLevel(to: level)  // 使用新的实时截断策略
             hasSwitchedFromUnplanned = true
+            // 同步到后端
+            Task {
+                await userState.syncCurrentEnergyLevelToBackend()
+            }
         }
     }
     

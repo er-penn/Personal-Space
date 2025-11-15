@@ -43,6 +43,11 @@ struct APIResponse<T: Codable>: Codable {
     let detail: String?  // Django错误详情
 }
 
+// MARK: - Django REST Framework错误响应
+struct DetailResponse: Codable {
+    let detail: String?
+}
+
 // MARK: - 登录响应
 struct LoginResponse: Codable {
     let access: String
@@ -176,6 +181,11 @@ class APIService: ObservableObject {
         // 检查HTTP状态码
         if let httpResponse = response as? HTTPURLResponse {
             if httpResponse.statusCode >= 400 {
+                // 尝试解析Django REST Framework标准错误格式: {"detail": "..."}
+                if let detailResponse = try? JSONDecoder().decode(DetailResponse.self, from: data),
+                   let detail = detailResponse.detail {
+                    throw APIError.serverError(detail)
+                }
                 // 尝试解析错误信息
                 if let errorResponse = try? JSONDecoder().decode(APIResponse<String>.self, from: data) {
                     let errorMessage = errorResponse.detail ?? errorResponse.message ?? "服务器错误"
@@ -306,6 +316,184 @@ class APIService: ObservableObject {
         }
         
         return try await request(endpoint: "/users/me/update/", method: "PUT", body: body)
+    }
+    
+    // MARK: - 能量相关API
+    
+    /// 时间段模型
+    struct TimeSlot: Codable {
+        let start_hour: Int
+        let start_minute: Int
+        let end_hour: Int
+        let end_minute: Int
+    }
+    
+    /// 能量记录模型
+    struct EnergyRecord: Codable, Identifiable {
+        let id: String
+        let date: String
+        let energy_level: String
+        let time_slots: [TimeSlot]
+        let temporary_type: String?
+        let original_energy_level: String?
+        let created_at: String
+        let updated_at: String
+    }
+    
+    /// 当前状态响应
+    struct CurrentStatusResponse: Codable {
+        let current_status: CurrentStatus
+        let partner_status: PartnerStatus?
+        
+        struct CurrentStatus: Codable {
+            let base_energy_level: String
+            let display_energy_level: String
+            let temporary_state: TemporaryState
+            let planned_state: PlannedState
+            
+            struct TemporaryState: Codable {
+                let is_active: Bool
+                let type: String?
+                let remaining_minutes: Int
+            }
+            
+            struct PlannedState: Codable {
+                let is_active: Bool
+                let level: String?
+                let remaining_minutes: Int
+            }
+        }
+        
+        struct PartnerStatus: Codable {
+            let energy_level: String
+        }
+    }
+    
+    /// 能量记录响应
+    struct EnergyRecordsResponse: Codable {
+        let records: Records
+        let summary: Summary
+        
+        struct Records: Codable {
+            let base: [EnergyRecord]
+            let planned: [EnergyRecord]
+            let temporary: [EnergyRecord]
+        }
+        
+        struct Summary: Codable {
+            let high_minutes: Int
+            let medium_minutes: Int
+            let low_minutes: Int
+            let unplanned_minutes: Int
+        }
+    }
+    
+    /// 能量预规划响应
+    struct EnergyPlansResponse: Codable {
+        let plans: [EnergyPlan]
+        
+        struct EnergyPlan: Codable, Identifiable {
+            let id: String
+            let date: String
+            let energy_level: String
+            let time_slots: [TimeSlot]
+            let created_at: String
+        }
+    }
+    
+    /// 伴侣状态响应
+    struct PartnerStatusResponse: Codable {
+        let partner_status: PartnerStatus
+        
+        struct PartnerStatus: Codable {
+            let energy_level: String
+            let records: Records
+            
+            struct Records: Codable {
+                let base: [EnergyRecord]
+            }
+        }
+    }
+    
+    /// 获取当前能量状态
+    func getCurrentEnergyStatus() async throws -> CurrentStatusResponse {
+        return try await request(endpoint: "/energy/current-status/", method: "GET")
+    }
+    
+    /// 更新当前能量状态
+    func updateCurrentEnergyLevel(energyLevel: String) async throws -> UpdateEnergyLevelResponse {
+        let body = ["energy_level": energyLevel]
+        return try await request(endpoint: "/energy/current-status/", method: "PUT", body: body)
+    }
+    
+    struct UpdateEnergyLevelResponse: Codable {
+        let energy_level: String
+        let updated_at: String
+    }
+    
+    /// 获取能量记录
+    func getEnergyRecords(date: String? = nil, type: String? = nil) async throws -> EnergyRecordsResponse {
+        var queryItems: [String] = []
+        if let date = date {
+            queryItems.append("date=\(date)")
+        }
+        if let type = type {
+            queryItems.append("type=\(type)")
+        }
+        
+        let queryString = queryItems.isEmpty ? "" : "?\(queryItems.joined(separator: "&"))"
+        return try await request(endpoint: "/energy/records/\(queryString)", method: "GET")
+    }
+    
+    /// 获取能量预规划
+    func getEnergyPlans(date: String? = nil) async throws -> EnergyPlansResponse {
+        let queryString = date != nil ? "?date=\(date!)" : ""
+        return try await request(endpoint: "/energy/plans/\(queryString)", method: "GET")
+    }
+    
+    /// 创建能量预规划
+    func createEnergyPlan(date: String, energyLevel: String, timeSlots: [[String: Int]]) async throws -> EnergyPlansResponse.EnergyPlan {
+        let body: [String: Any] = [
+            "date": date,
+            "energy_level": energyLevel,
+            "time_slots": timeSlots
+        ]
+        return try await request(endpoint: "/energy/plans/create/", method: "POST", body: body)
+    }
+    
+    /// 创建临时状态
+    func createTemporaryState(type: String, durationMinutes: Int) async throws -> TemporaryStateResponse {
+        let body: [String: Any] = [
+            "type": type,
+            "duration_minutes": durationMinutes
+        ]
+        return try await request(endpoint: "/energy/temporary-state/", method: "POST", body: body)
+    }
+    
+    struct TemporaryStateResponse: Codable {
+        let id: String
+        let type: String
+        let start_time: String
+        let end_time: String
+        let remaining_minutes: Int
+    }
+    
+    /// 结束临时状态
+    func endTemporaryState(id: String? = nil) async throws -> EndTemporaryStateResponse {
+        var endpoint = "/energy/temporary-state/end/"
+        if let id = id {
+            endpoint += "?id=\(id)"
+        }
+        return try await request(endpoint: endpoint, method: "DELETE", body: nil)
+    }
+    
+    struct EndTemporaryStateResponse: Codable {
+        let message: String
+    }
+    
+    /// 获取伴侣状态
+    func getPartnerStatus() async throws -> PartnerStatusResponse {
+        return try await request(endpoint: "/energy/partner-status/", method: "GET")
     }
 }
 

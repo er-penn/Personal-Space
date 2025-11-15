@@ -38,6 +38,7 @@ class EnergyRecord(models.Model):
     )
     
     # 时间段信息（JSONB存储）
+    # 格式: [{"start_hour": 7, "start_minute": 0, "end_hour": 10, "end_minute": 30}, ...]
     time_slots = models.JSONField(default=list, verbose_name='时间段列表')
     
     # 临时状态特有字段
@@ -66,10 +67,12 @@ class EnergyRecord(models.Model):
         db_table = 'energy_records'
         verbose_name = '能量状态记录'
         verbose_name_plural = '能量状态记录'
-        unique_together = [['user', 'record_date', 'record_type']]
+        # 注意：base和planned类型在同一天只能有一条记录，但temporary类型可以有多个
+        # 因此不使用unique_together，改为在应用层控制唯一性
         indexes = [
             models.Index(fields=['user', 'record_date']),
             models.Index(fields=['record_type']),
+            models.Index(fields=['user', 'record_date', 'record_type']),
         ]
 
 

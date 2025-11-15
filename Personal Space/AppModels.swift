@@ -2357,6 +2357,212 @@ class UserState: ObservableObject {
         print("   - 信息: \(notifications.filter { $0.category == .info }.count)条")
         print("   - 提醒: \(notifications.filter { $0.category == .reminder }.count)条")
     }
+    
+    // MARK: - 从后端加载数据
+    
+    /// 从后端加载当前能量状态
+    @MainActor
+    func loadCurrentEnergyStatus() async {
+        let apiService = APIService.shared
+        
+        do {
+            let response = try await apiService.getCurrentEnergyStatus()
+            let converter = EnergyDataConverter.self
+            
+            // 更新基础能量状态
+            currentBaseEnergyLevel = converter.energyLevelFromString(response.current_status.base_energy_level)
+            
+            // 更新临时状态
+            let tempState = response.current_status.temporary_state
+            isTemporaryStateActive = tempState.is_active
+            if tempState.is_active {
+                currentTemporaryStateType = converter.temporaryStateTypeFromString(tempState.type)
+                temporaryStateCountdown = tempState.remaining_minutes
+            } else {
+                currentTemporaryStateType = nil
+                temporaryStateCountdown = 0
+            }
+            
+            // 更新预规划状态
+            let plannedState = response.current_status.planned_state
+            isPlannedStateActive = plannedState.is_active
+            if plannedState.is_active, let levelStr = plannedState.level {
+                currentPlannedStateLevel = converter.energyLevelFromString(levelStr)
+                plannedStateCountdown = plannedState.remaining_minutes
+            } else {
+                currentPlannedStateLevel = nil
+                plannedStateCountdown = 0
+            }
+            
+            print("✅ 已加载当前能量状态")
+        } catch {
+            print("❌ 加载当前能量状态失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 从后端加载能量记录
+    @MainActor
+    func loadEnergyRecords(date: Date? = nil) async {
+        let apiService = APIService.shared
+        let converter = EnergyDataConverter.self
+        
+        let dateString = date != nil ? converter.formatDate(date!) : nil
+        
+        do {
+            let response = try await apiService.getEnergyRecords(date: dateString)
+            
+            // 转换基础状态记录
+            baseEnergyPlans = converter.energyPlansFromAPI(response.records.base)
+            
+            // 转换预规划状态记录
+            plannedEnergyPlans = converter.energyPlansFromAPI(response.records.planned)
+            
+            // 转换临时状态记录
+            temporaryStatePlans = converter.energyPlansFromAPI(response.records.temporary)
+            
+            print("✅ 已加载能量记录")
+            print("   - 基础状态: \(baseEnergyPlans.count)条")
+            print("   - 预规划状态: \(plannedEnergyPlans.count)条")
+            print("   - 临时状态: \(temporaryStatePlans.count)条")
+        } catch {
+            print("❌ 加载能量记录失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 从后端加载能量预规划
+    @MainActor
+    func loadEnergyPlans(date: Date? = nil) async {
+        let apiService = APIService.shared
+        let converter = EnergyDataConverter.self
+        
+        let dateString = date != nil ? converter.formatDate(date!) : nil
+        
+        do {
+            let response = try await apiService.getEnergyPlans(date: dateString)
+            
+            // 转换预规划记录
+            plannedEnergyPlans = response.plans.compactMap { apiPlan in
+                guard let date = converter.parseDate(apiPlan.date),
+                      let uuid = UUID(uuidString: apiPlan.id) else { return nil }
+                
+                let timeSlots = apiPlan.time_slots.map { converter.timeSlotFromAPI($0) }
+                let energyLevel = converter.energyLevelFromString(apiPlan.energy_level)
+                let createdAt = converter.parseDateTime(apiPlan.created_at) ?? Date()
+                
+                return EnergyPlan(
+                    id: uuid,
+                    date: date,
+                    timeSlots: timeSlots,
+                    energyLevel: energyLevel,
+                    createdAt: createdAt
+                )
+            }
+            
+            print("✅ 已加载能量预规划: \(plannedEnergyPlans.count)条")
+        } catch {
+            print("❌ 加载能量预规划失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 更新当前能量状态到后端
+    @MainActor
+    func syncCurrentEnergyLevelToBackend() async {
+        let apiService = APIService.shared
+        let converter = EnergyDataConverter.self
+        
+        let energyLevelString = converter.energyLevelToString(currentBaseEnergyLevel)
+        
+        do {
+            _ = try await apiService.updateCurrentEnergyLevel(energyLevel: energyLevelString)
+            print("✅ 已同步当前能量状态到后端: \(energyLevelString)")
+        } catch {
+            print("❌ 同步能量状态失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 创建临时状态到后端
+    @MainActor
+    func createTemporaryStateToBackend(type: TemporaryStateType, durationMinutes: Int) async {
+        let apiService = APIService.shared
+        let converter = EnergyDataConverter.self
+        
+        let typeString = converter.temporaryStateTypeToString(type)
+        
+        do {
+            let response = try await apiService.createTemporaryState(type: typeString, durationMinutes: durationMinutes)
+            
+            // 更新本地状态
+            isTemporaryStateActive = true
+            currentTemporaryStateType = type
+            temporaryStateCountdown = response.remaining_minutes
+            
+            if let startTime = converter.parseDateTime(response.start_time) {
+                currentTemporaryStateStartTime = startTime
+            }
+            if let endTime = converter.parseDateTime(response.end_time) {
+                currentTemporaryStateEndTime = endTime
+            }
+            
+            // 重新加载能量记录以获取最新的临时状态
+            await loadEnergyRecords()
+            
+            print("✅ 已创建临时状态到后端: \(typeString)")
+        } catch {
+            print("❌ 创建临时状态失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 结束临时状态到后端
+    @MainActor
+    func endTemporaryStateToBackend(id: UUID? = nil) async {
+        let apiService = APIService.shared
+        
+        let idString = id?.uuidString
+        
+        do {
+            _ = try await apiService.endTemporaryState(id: idString)
+            
+            // 更新本地状态
+            isTemporaryStateActive = false
+            currentTemporaryStateType = nil
+            temporaryStateCountdown = 0
+            currentTemporaryStateStartTime = nil
+            currentTemporaryStateEndTime = nil
+            
+            // 重新加载能量记录
+            await loadEnergyRecords()
+            
+            print("✅ 已结束临时状态")
+        } catch {
+            print("❌ 结束临时状态失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 创建能量预规划到后端
+    @MainActor
+    func createEnergyPlanToBackend(date: Date, energyLevel: EnergyLevel, timeSlots: [TimeSlot]) async {
+        let apiService = APIService.shared
+        let converter = EnergyDataConverter.self
+        
+        let dateString = converter.formatDate(date)
+        let energyLevelString = converter.energyLevelToString(energyLevel)
+        let timeSlotsAPI = timeSlots.map { converter.timeSlotToAPI($0) }
+        
+        do {
+            _ = try await apiService.createEnergyPlan(
+                date: dateString,
+                energyLevel: energyLevelString,
+                timeSlots: timeSlotsAPI
+            )
+            
+            // 重新加载预规划
+            await loadEnergyPlans(date: date)
+            
+            print("✅ 已创建能量预规划到后端")
+        } catch {
+            print("❌ 创建能量预规划失败: \(error.localizedDescription)")
+        }
+    }
 }
 
 // 安心确认初始数据结构
@@ -2371,6 +2577,36 @@ struct PeacefulClosureInitialData {
 class PartnerState: ObservableObject {
     @Published var energyLevel: EnergyLevel = .medium
     @Published var lastSeen: Date = Date()
+    @Published var partnerEnergyRecords: [EnergyPlan] = [] // 伴侣能量记录
+    
+    /// 从后端加载伴侣状态
+    @MainActor
+    func loadPartnerStatus() async {
+        let apiService = APIService.shared
+        let converter = EnergyDataConverter.self
+        
+        do {
+            let response = try await apiService.getPartnerStatus()
+            
+            // 更新伴侣能量状态
+            energyLevel = converter.energyLevelFromString(response.partner_status.energy_level)
+            
+            // 更新伴侣能量记录
+            partnerEnergyRecords = converter.energyPlansFromAPI(response.partner_status.records.base)
+            
+            print("✅ 已加载伴侣状态")
+        } catch {
+            // 检查是否是404错误（没有伴侣关系）
+            if case APIError.serverError(let message) = error,
+               message.contains("未找到活跃的关系") {
+                // 静默处理：没有伴侣关系是正常状态，不打印错误
+                print("ℹ️ 当前未绑定伴侣")
+                return
+            }
+            // 其他错误正常打印
+            print("❌ 加载伴侣状态失败: \(error.localizedDescription)")
+        }
+    }
 }
 
 // MARK: - 功能卡片模型
@@ -2845,6 +3081,15 @@ struct EnergyPlan: Identifiable, Codable {
 
     init(date: Date, timeSlots: [TimeSlot], energyLevel: EnergyLevel, createdAt: Date = Date()) {
         self.id = UUID()
+        self.date = Calendar.current.startOfDay(for: date)
+        self.timeSlots = timeSlots
+        self.energyLevel = energyLevel
+        self.createdAt = createdAt
+    }
+    
+    // 从API数据创建（使用指定的UUID）
+    init(id: UUID, date: Date, timeSlots: [TimeSlot], energyLevel: EnergyLevel, createdAt: Date = Date()) {
+        self.id = id
         self.date = Calendar.current.startOfDay(for: date)
         self.timeSlots = timeSlots
         self.energyLevel = energyLevel

@@ -1439,6 +1439,15 @@ struct SaveEnergyPlanButton: View {
                     energyLevel: energyLevel
                 )
                 print("🎯 批量保存整合：\(start):00 - \(end):59, 能量等级：\(energyLevel.rawValue)")
+                
+                // 同步到后端
+                Task {
+                    await userState.createEnergyPlanToBackend(
+                        date: targetDate,
+                        energyLevel: energyLevel,
+                        timeSlots: [batchTimeSlot]
+                    )
+                }
             }
         } else if let hour = hour {
             // 单个保存：移除同一天同一小时的旧规划
@@ -1464,6 +1473,15 @@ struct SaveEnergyPlanButton: View {
                     energyLevel: energyLevel
                 )
                 print("🎯 单小时保存整合：\(hour):00 - \(hour):59, 能量等级：\(energyLevel.rawValue)")
+                
+                // 同步到后端
+                Task {
+                    await userState.createEnergyPlanToBackend(
+                        date: targetDate,
+                        energyLevel: energyLevel,
+                        timeSlots: [hourlyTimeSlot]
+                    )
+                }
             }
         }
         
@@ -2435,6 +2453,15 @@ extension FloatingEnergyButtons {
                 )
                 print("🎯 范围保存整合：\(String(format: "%02d:%02d", startHour, startMinute)) - \(String(format: "%02d:%02d", endHour, endMinute)), 能量等级：\(energyLevel.rawValue)")
                 
+                // 同步到后端
+                Task {
+                    await userState.createEnergyPlanToBackend(
+                        date: targetDate,
+                        energyLevel: energyLevel,
+                        timeSlots: [rangeTimeSlot]
+                    )
+                }
+                
                 // 验证保存的数据
                 print("=== 验证保存的数据 ===")
                 let verifyPlans = userState.plannedEnergyPlans.filter { plan in
@@ -2514,6 +2541,8 @@ extension FloatingEnergyButtons {
 
 // MARK: - EnergyTimelineOverlay
 struct EnergyTimelineOverlay: View {
+    @EnvironmentObject var userState: UserState
+    
     let showingEnergyButtons: Bool
     let showingUnselectableHint: Bool
     
@@ -2605,6 +2634,18 @@ struct EnergyTimelineOverlay: View {
                 UnselectableHintView()
                     .allowsHitTesting(true)
                     .zIndex(1000) // 确保在最上层
+            }
+        }
+        .onAppear {
+            // 从后端加载能量预规划数据
+            Task {
+                await userState.loadEnergyPlans(date: selectedDate)
+            }
+        }
+        .onChange(of: selectedDate) { newDate in
+            // 切换日期时重新加载数据
+            Task {
+                await userState.loadEnergyPlans(date: newDate)
             }
         }
     }
