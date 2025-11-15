@@ -56,22 +56,31 @@ struct OurSpaceView: View {
                 
                 // 外层ScrollView：整体可滚动
                 ScrollView {
-                    VStack(spacing: AppTheme.Spacing.lg) {
-                        // 1. 顶部状态区（可滚动离开）
-                        partnerStatusSection
-                        
-                        // 2. Tab标签栏（可滚动离开）
-                        tabBarSection
-                        
-                        // 3. TabView内容区（固定高度，支持左右滑动）
-                        tabContentSection
-                        
-                        // 4. 共同记录区（可滚动离开）
-                        commonRecordsSection
+                    if partnerState.hasPartner {
+                        // 有伴侣时显示正常内容
+                        VStack(spacing: AppTheme.Spacing.lg) {
+                            // 1. 顶部状态区（可滚动离开）
+                            partnerStatusSection
+                            
+                            // 2. Tab标签栏（可滚动离开）
+                            tabBarSection
+                            
+                            // 3. TabView内容区（固定高度，支持左右滑动）
+                            tabContentSection
+                            
+                            // 4. 共同记录区（可滚动离开）
+                            commonRecordsSection
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+                        .padding(.top, AppTheme.Spacing.lg)
+                        .padding(.bottom, AppTheme.Spacing.xl) // 底部留白
+                    } else {
+                        // 没有伴侣时显示提示页面
+                        noPartnerView
+                            .padding(.horizontal, AppTheme.Spacing.lg)
+                            .padding(.top, AppTheme.Spacing.xl)
+                            .padding(.bottom, AppTheme.Spacing.xl)
                     }
-                    .padding(.horizontal, AppTheme.Spacing.lg)
-                    .padding(.top, AppTheme.Spacing.lg)
-                    .padding(.bottom, AppTheme.Spacing.xl) // 底部留白
                 }
                 .onAppear {
                     userState.updatePendingClosures()
@@ -243,6 +252,57 @@ struct OurSpaceView: View {
     private func hasPartnerEnergyPlan() -> Bool {
         // 模拟数据：假设伴侣有能量规划
         return true
+    }
+    
+    // MARK: - 未绑定伴侣提示视图
+    private var noPartnerView: some View {
+        VStack(spacing: AppTheme.Spacing.xl) {
+            Spacer()
+                .frame(height: 100)
+            
+            // 图标
+            Image(systemName: "person.2.fill")
+                .font(.system(size: 80))
+                .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
+            
+            // 标题
+            Text("未绑定伴侣")
+                .font(.system(size: AppTheme.FontSize.title, weight: .bold))
+                .foregroundColor(AppTheme.Colors.text)
+            
+            // 描述
+            Text("绑定伴侣后，您可以：\n• 查看TA的能量状态\n• 发起协作邀请\n• 发送心意盒\n• 分享碎片和瞬间")
+                .font(.system(size: AppTheme.FontSize.body))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(8)
+                .padding(.horizontal, AppTheme.Spacing.xl)
+            
+            // 引导按钮
+            Button(action: {
+                // TODO: 跳转到绑定伴侣页面
+                print("跳转到绑定伴侣页面")
+            }) {
+                Text("去绑定伴侣")
+                    .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.md)
+                    .background(AppGradient.primaryGradient)
+                    .cornerRadius(AppTheme.Radius.large)
+                    .shadow(
+                        color: AppTheme.Colors.primary.opacity(0.3),
+                        radius: 8,
+                        x: 0,
+                        y: 4
+                    )
+            }
+            .padding(.horizontal, AppTheme.Spacing.xl)
+            .padding(.top, AppTheme.Spacing.lg)
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     // MARK: - Tab标签栏

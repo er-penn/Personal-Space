@@ -2578,6 +2578,7 @@ class PartnerState: ObservableObject {
     @Published var energyLevel: EnergyLevel = .medium
     @Published var lastSeen: Date = Date()
     @Published var partnerEnergyRecords: [EnergyPlan] = [] // 伴侣能量记录
+    @Published var hasPartner: Bool = false // 是否有伴侣关系
     
     /// 从后端加载伴侣状态
     @MainActor
@@ -2594,11 +2595,19 @@ class PartnerState: ObservableObject {
             // 更新伴侣能量记录
             partnerEnergyRecords = converter.energyPlansFromAPI(response.partner_status.records.base)
             
+            // 标记有伴侣关系
+            hasPartner = true
+            
             print("✅ 已加载伴侣状态")
         } catch {
             // 检查是否是404错误（没有伴侣关系）
             if case APIError.serverError(let message) = error,
                message.contains("未找到活跃的关系") {
+                // 标记没有伴侣关系
+                hasPartner = false
+                // 重置伴侣状态为默认值
+                energyLevel = .medium
+                partnerEnergyRecords = []
                 // 静默处理：没有伴侣关系是正常状态，不打印错误
                 print("ℹ️ 当前未绑定伴侣")
                 return
