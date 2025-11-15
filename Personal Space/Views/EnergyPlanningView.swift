@@ -562,14 +562,28 @@ struct EnergyPlanningView: View {
             leftPointerMinute = minTime.minute
         }
         
-        // 设置右指针 - 应该卡在选中范围的结束块的右边界
-        // 右指针应该显示在选中范围的最后一个块的右边界（即下一个块的左边界）
-        rightPointerHour = endHour
-        rightPointerMinute = 0  // 卡在下一个块的左边界
+        // 设置右指针
+        // 判断是单个块还是多个块：如果endHour == startHour + 1，说明是单个块
+        if endHour == startHour + 1 {
+            // 单个块模式：右指针应该是该块的右边界（startHour:59）
+            rightPointerHour = startHour
+            rightPointerMinute = 59
+        } else {
+            // 多个块模式：右指针应该是最后一个块的右边界
+            // 如果endHour是24，应该设置为23:59
+            if endHour == 24 {
+                rightPointerHour = 23
+                rightPointerMinute = 59
+            } else {
+                rightPointerHour = endHour - 1
+                rightPointerMinute = 59
+            }
+        }
         
         showingPointers = true
         print("设置指针: 左指针=\(leftPointerHour ?? 0):\(leftPointerMinute ?? 0), 右指针=\(rightPointerHour ?? 0):\(rightPointerMinute ?? 0)")
-        print("实际选择范围: \(startHour):00 - \(endHour):00 (影响 \(endHour - startHour) 个块)")
+        let rangeEnd = endHour == startHour + 1 ? "\(startHour):59" : (endHour == 24 ? "23:59" : "\(endHour - 1):59")
+        print("实际选择范围: \(startHour):00 - \(rangeEnd) (影响 \(endHour - startHour) 个块)")
     }
     
     // 方法：创建时间选择器视图
