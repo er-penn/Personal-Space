@@ -88,6 +88,7 @@ class UserState: ObservableObject {
     @Published var currentBaseEnergyLevel: EnergyLevel = .unplanned // 实时基础状态（用于UI显示）
     @Published var lastProcessedMinute: Date? = nil // 最后处理的分钟（用于检测分钟变化）
     @Published var currentTime: Date = Date() // 全局当前时间（统一管理）
+    private var lastBaseRecordSyncTime: Date? = nil // 最后同步基础状态记录的时间（用于防抖）
     
     // MARK: - 预规划状态遮罩相关属性
     @Published var isPlannedStateActive: Bool = false // 是否处于预规划状态遮罩
@@ -340,6 +341,23 @@ class UserState: ObservableObject {
 
             baseEnergyPlans.append(newPlan)
             print("🎯 创建新的基础状态规划：\(currentBaseEnergyLevel.description), 时间段：\(currentHour):\(String(format: "%02d", currentMinute))")
+        }
+        
+        // 🎯 每5分钟同步一次到后端（防抖）
+        let now = Date()
+        if let lastSyncTime = lastBaseRecordSyncTime {
+            let timeSinceLastSync = now.timeIntervalSince(lastSyncTime)
+            if timeSinceLastSync < 300 { // 5分钟内不重复同步
+                return
+            }
+        }
+        
+        // 更新同步时间
+        lastBaseRecordSyncTime = now
+        
+        // 异步同步到后端
+        Task { @MainActor in
+            await syncBaseEnergyRecordsToBackend()
         }
     }
     
@@ -2424,8 +2442,210 @@ class UserState: ObservableObject {
             print("   - 基础状态: \(baseEnergyPlans.count)条")
             print("   - 预规划状态: \(plannedEnergyPlans.count)条")
             print("   - 临时状态: \(temporaryStatePlans.count)条")
+            
+            // 🎯 加载完成后，检查并填充时间缺口
+            await fillTimeGapInBaseRecords()
         } catch {
             print("❌ 加载能量记录失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 填充基础状态记录的时间缺口（考虑预规划状态）
+    /// 当app重新打开时，检查从最后记录时间到当前时间是否有缺口，并智能填充
+    @MainActor
+    private func fillTimeGapInBaseRecords() async {
+        let calendar = Calendar.current
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        let currentHour = calendar.component(.hour, from: now)
+        let currentMinute = calendar.component(.minute, from: now)
+        
+        // 1. 找到今天所有基础状态记录中最晚的结束时间点
+        var latestEndTime: (hour: Int, minute: Int)? = nil
+        
+        for plan in baseEnergyPlans {
+            guard calendar.isDate(plan.date, inSameDayAs: today) else { continue }
+            
+            for slot in plan.timeSlots {
+                if latestEndTime == nil {
+                    latestEndTime = (slot.endHour, slot.endMinute)
+                } else {
+                    let slotEndMinutes = slot.endHour * 60 + slot.endMinute
+                    let latestEndMinutes = latestEndTime!.hour * 60 + latestEndTime!.minute
+                    if slotEndMinutes > latestEndMinutes {
+                        latestEndTime = (slot.endHour, slot.endMinute)
+                    }
+                }
+            }
+        }
+        
+        // 如果没有基础状态记录，从7:00开始（或当前时间，如果早于7:00）
+        if latestEndTime == nil {
+            if currentHour >= 7 {
+                latestEndTime = (7, 0)
+            } else {
+                // 早于7:00，不需要填充
+                return
+            }
+        }
+        
+        // 2. 计算缺口时间段
+        // 从结束时间的下一分钟开始
+        var gapStartHour = latestEndTime!.hour
+        var gapStartMinute = latestEndTime!.minute + 1
+        
+        // 处理分钟数超过59的情况
+        if gapStartMinute > 59 {
+            gapStartHour += 1
+            gapStartMinute = 0
+        }
+        
+        // 如果下一分钟超过了当前时间，不需要填充
+        let gapStartMinutes = gapStartHour * 60 + gapStartMinute
+        let currentMinutes = currentHour * 60 + currentMinute
+        
+        if gapStartMinutes >= currentMinutes {
+            // 没有缺口，或者缺口已经到未来时间
+            return
+        }
+        
+        // 缺口结束时间：当前时间的上一分钟（避免填充到未来）
+        var gapEndHour = currentHour
+        var gapEndMinute = max(0, currentMinute - 1)
+        
+        // 如果当前分钟是0，上一分钟应该是上一小时的59分
+        if currentMinute == 0 {
+            gapEndHour = max(0, currentHour - 1)
+            gapEndMinute = 59
+        }
+        
+        let gapEndMinutes = gapEndHour * 60 + gapEndMinute
+        
+        if gapStartMinutes > gapEndMinutes {
+            // 没有有效缺口
+            return
+        }
+        
+        print("🔍 检测到时间缺口: \(gapStartHour):\(String(format: "%02d", gapStartMinute)) - \(gapEndHour):\(String(format: "%02d", gapEndMinute))")
+        
+        // 3. 检查预规划状态，找到今天所有预规划时间段（只考虑与缺口时间段有重叠的）
+        var plannedSlots: [(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int)] = []
+        
+        for plan in plannedEnergyPlans {
+            guard calendar.isDate(plan.date, inSameDayAs: today) else { continue }
+            
+            for slot in plan.timeSlots {
+                let slotStartMinutes = slot.startHour * 60 + slot.startMinute
+                let slotEndMinutes = slot.endHour * 60 + slot.endMinute
+                
+                // 只考虑与缺口时间段有重叠的预规划时间段
+                // 重叠条件：预规划开始时间 <= 缺口结束时间 && 预规划结束时间 >= 缺口开始时间
+                if slotStartMinutes <= gapEndMinutes && slotEndMinutes >= gapStartMinutes {
+                    // 计算实际重叠的部分（裁剪到缺口时间段内）
+                    let overlapStartMinutes = max(slotStartMinutes, gapStartMinutes)
+                    let overlapEndMinutes = min(slotEndMinutes, gapEndMinutes)
+                    
+                    let overlapStartHour = overlapStartMinutes / 60
+                    let overlapStartMinute = overlapStartMinutes % 60
+                    let overlapEndHour = overlapEndMinutes / 60
+                    let overlapEndMinute = overlapEndMinutes % 60
+                    
+                    plannedSlots.append((
+                        startHour: overlapStartHour,
+                        startMinute: overlapStartMinute,
+                        endHour: overlapEndHour,
+                        endMinute: overlapEndMinute
+                    ))
+                }
+            }
+        }
+        
+        // 按开始时间排序
+        plannedSlots.sort { slot1, slot2 in
+            let start1 = slot1.startHour * 60 + slot1.startMinute
+            let start2 = slot2.startHour * 60 + slot2.startMinute
+            return start1 < start2
+        }
+        
+        // 4. 分段填充基础状态（只填充未被预规划覆盖的部分）
+        var fillSlots: [(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int)] = []
+        var currentFillStart = (hour: gapStartHour, minute: gapStartMinute)
+        
+        for plannedSlot in plannedSlots {
+            let plannedStartMinutes = plannedSlot.startHour * 60 + plannedSlot.startMinute
+            let plannedEndMinutes = plannedSlot.endHour * 60 + plannedSlot.endMinute
+            let currentFillStartMinutes = currentFillStart.hour * 60 + currentFillStart.minute
+            
+            // 如果预规划开始时间在当前填充起点之后，需要先填充基础状态
+            if plannedStartMinutes > currentFillStartMinutes {
+                // 填充基础状态：从当前填充起点到预规划开始时间的前一分钟
+                let fillEndMinutes = plannedStartMinutes - 1
+                let fillEndHour = fillEndMinutes / 60
+                let fillEndMinute = fillEndMinutes % 60
+                
+                if fillEndMinutes >= currentFillStartMinutes {
+                    fillSlots.append((
+                        startHour: currentFillStart.hour,
+                        startMinute: currentFillStart.minute,
+                        endHour: fillEndHour,
+                        endMinute: fillEndMinute
+                    ))
+                }
+            }
+            
+            // 更新当前填充起点：预规划结束时间的下一分钟
+            if plannedEndMinutes >= currentFillStartMinutes {
+                let nextStartMinutes = plannedEndMinutes + 1
+                let nextStartHour = nextStartMinutes / 60
+                let nextStartMinute = nextStartMinutes % 60
+                
+                // 如果下一分钟超过了缺口结束时间，停止填充
+                if nextStartMinutes > gapEndMinutes {
+                    currentFillStart = (hour: gapEndHour + 1, minute: 0) // 标记为结束
+                    break
+                }
+                
+                currentFillStart = (hour: nextStartHour, minute: nextStartMinute)
+            }
+        }
+        
+        // 如果还有剩余时间，填充到最后
+        let currentFillStartMinutes = currentFillStart.hour * 60 + currentFillStart.minute
+        if currentFillStartMinutes <= gapEndMinutes {
+            fillSlots.append((
+                startHour: currentFillStart.hour,
+                startMinute: currentFillStart.minute,
+                endHour: gapEndHour,
+                endMinute: gapEndMinute
+            ))
+        }
+        
+        // 5. 将填充的时间段添加到基础状态记录
+        if !fillSlots.isEmpty {
+            print("🔧 开始填充基础状态缺口，共\(fillSlots.count)个时间段")
+            
+            for fillSlot in fillSlots {
+                let timeSlot = TimeSlot(
+                    startHour: fillSlot.startHour,
+                    startMinute: fillSlot.startMinute,
+                    endHour: fillSlot.endHour,
+                    endMinute: fillSlot.endMinute
+                )
+                
+                addOrMergeBaseEnergyPlan(
+                    date: today,
+                    timeSlot: timeSlot,
+                    energyLevel: currentBaseEnergyLevel
+                )
+                
+                print("   ✅ 填充: \(fillSlot.startHour):\(String(format: "%02d", fillSlot.startMinute)) - \(fillSlot.endHour):\(String(format: "%02d", fillSlot.endMinute)) (\(currentBaseEnergyLevel.description))")
+            }
+            
+            // 6. 同步到后端
+            await syncBaseEnergyRecordsToBackend()
+            print("✅ 已填充时间缺口并同步到后端")
+        } else {
+            print("ℹ️ 时间缺口完全被预规划状态覆盖，无需填充基础状态")
         }
     }
     
@@ -2477,6 +2697,56 @@ class UserState: ObservableObject {
             print("✅ 已同步当前能量状态到后端: \(energyLevelString)")
         } catch {
             print("❌ 同步能量状态失败: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 同步基础状态记录到后端（包括时间段）
+    /// 注意：后端同一天只能有一条base记录，所以合并今天所有基础状态记录的时间段
+    @MainActor
+    func syncBaseEnergyRecordsToBackend() async {
+        let apiService = APIService.shared
+        let converter = EnergyDataConverter.self
+        
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        // 找到今天的基础状态记录
+        let todayBasePlans = baseEnergyPlans.filter { plan in
+            calendar.isDate(plan.date, inSameDayAs: today)
+        }
+        
+        // 如果没有今天的基础状态记录，不需要同步
+        guard !todayBasePlans.isEmpty else {
+            return
+        }
+        
+        // 合并所有今天的基础状态记录的时间段（按时间排序）
+        var allTimeSlots: [TimeSlot] = []
+        for plan in todayBasePlans {
+            allTimeSlots.append(contentsOf: plan.timeSlots)
+        }
+        
+        // 按开始时间排序
+        allTimeSlots.sort { slot1, slot2 in
+            let start1 = slot1.startHour * 60 + slot1.startMinute
+            let start2 = slot2.startHour * 60 + slot2.startMinute
+            return start1 < start2
+        }
+        
+        // 使用当前能量等级（因为后端只能保存一个energy_level）
+        let energyLevelString = converter.energyLevelToString(currentBaseEnergyLevel)
+        let dateString = converter.formatDate(today)
+        let apiTimeSlots = allTimeSlots.map { converter.timeSlotToAPI($0) }
+        
+        do {
+            _ = try await apiService.updateBaseEnergyRecord(
+                date: dateString,
+                energyLevel: energyLevelString,
+                timeSlots: apiTimeSlots
+            )
+            print("✅ 已同步基础状态记录到后端: \(energyLevelString), \(allTimeSlots.count)个时间段")
+        } catch {
+            print("❌ 同步基础状态记录失败: \(error.localizedDescription)")
         }
     }
     

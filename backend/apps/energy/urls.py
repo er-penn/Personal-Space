@@ -7,6 +7,7 @@ urlpatterns = [
     
     # 能量记录
     path('records/', views.get_energy_records, name='energy-records'),
+    path('records/base/', views.update_base_energy_record, name='energy-base-record-update'),
     
     # 能量预规划
     path('plans/', views.get_energy_plans, name='energy-plans'),

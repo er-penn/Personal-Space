@@ -445,6 +445,29 @@ class APIService: ObservableObject {
         return try await request(endpoint: "/energy/records/\(queryString)", method: "GET")
     }
     
+    /// 更新基础状态记录（包括时间段）
+    func updateBaseEnergyRecord(date: String? = nil, energyLevel: String? = nil, timeSlots: [[String: Int]]? = nil) async throws -> UpdateBaseEnergyRecordResponse {
+        var body: [String: Any] = [:]
+        if let date = date {
+            body["date"] = date
+        }
+        if let energyLevel = energyLevel {
+            body["energy_level"] = energyLevel
+        }
+        if let timeSlots = timeSlots {
+            body["time_slots"] = timeSlots
+        }
+        return try await request(endpoint: "/energy/records/base/", method: "PUT", body: body)
+    }
+    
+    struct UpdateBaseEnergyRecordResponse: Codable {
+        let id: String
+        let record_date: String
+        let energy_level: String
+        let time_slots: [TimeSlot]
+        let updated_at: String
+    }
+    
     /// 获取能量预规划
     func getEnergyPlans(date: String? = nil) async throws -> EnergyPlansResponse {
         let queryString = date != nil ? "?date=\(date!)" : ""

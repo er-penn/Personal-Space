@@ -396,6 +396,102 @@ def get_energy_records(request):
     return Response(result)
 
 
+@api_view(['PUT', 'POST'])
+@permission_classes([IsAuthenticated])
+def update_base_energy_record(request):
+    """更新基础状态记录（包括时间段）"""
+    user = request.user
+    date_str = request.data.get('date')  # YYYY-MM-DD，可选，默认为今天
+    energy_level = request.data.get('energy_level')
+    time_slots = request.data.get('time_slots', [])
+    
+    # 解析日期
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'detail': '日期格式错误，请使用YYYY-MM-DD格式'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    else:
+        target_date = timezone.now().date()
+    
+    # 验证能量等级
+    if energy_level and energy_level not in [choice[0] for choice in User.EnergyLevel.choices]:
+        return Response(
+            {'detail': '无效的能量状态'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 验证时间段格式
+    for slot in time_slots:
+        required_fields = ['start_hour', 'start_minute', 'end_hour', 'end_minute']
+        if not all(field in slot for field in required_fields):
+            return Response(
+                {'detail': f'时间段缺少必需字段: {required_fields}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 验证时间范围
+        if not (0 <= slot['start_hour'] <= 23 and 0 <= slot['end_hour'] <= 23):
+            return Response(
+                {'detail': '小时数必须在0-23之间'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not (0 <= slot['start_minute'] <= 59 and 0 <= slot['end_minute'] <= 59):
+            return Response(
+                {'detail': '分钟数必须在0-59之间'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # 获取或创建基础状态记录
+    base_record, created = EnergyRecord.objects.get_or_create(
+        user=user,
+        record_date=target_date,
+        record_type=EnergyRecord.RecordType.BASE,
+        defaults={
+            'energy_level': energy_level or user.current_energy_level,
+            'time_slots': time_slots
+        }
+    )
+    
+    if not created:
+        # 更新现有记录
+        if energy_level:
+            base_record.energy_level = energy_level
+        if time_slots:
+            base_record.time_slots = time_slots
+        base_record.save()
+    
+    # 如果提供了energy_level，同时更新user.current_energy_level
+    if energy_level:
+        user.current_energy_level = energy_level
+        user.save()
+        
+        # 记录状态变更
+        EnergyLevelChange.objects.create(
+            user=user,
+            change_time=timezone.now(),
+            new_energy_level=energy_level,
+            change_type='manual'
+        )
+        
+        # 通知伴侣
+        service = EnergyService()
+        service._notify_partner_energy_change(user)
+    
+    serializer = EnergyRecordSerializer(base_record)
+    return Response({
+        'id': str(base_record.id),
+        'record_date': base_record.record_date.isoformat(),
+        'energy_level': base_record.energy_level,
+        'time_slots': base_record.time_slots,
+        'updated_at': base_record.updated_at.isoformat()
+    })
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_partner_status(request):

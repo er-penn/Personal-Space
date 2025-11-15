@@ -265,6 +265,11 @@ struct MySpaceView: View {
         }
         .onDisappear {
             stopTimer()
+            
+            // 页面切换时同步基础状态记录到后端
+            Task {
+                await userState.syncBaseEnergyRecordsToBackend()
+            }
         }
         .sheet(isPresented: $showingCollaborationInvitation) {
             CollaborationInvitationView()
@@ -500,9 +505,10 @@ struct MySpaceView: View {
                             userState.updateCurrentBaseEnergyLevel(to: newLevel)
                             userState.recordEnergyLevelChange(to: newLevel)
                             
-                            // 同步到后端
+                            // 同步到后端（包括能量等级和基础状态记录）
                             Task {
                                 await userState.syncCurrentEnergyLevelToBackend()
+                                await userState.syncBaseEnergyRecordsToBackend()
                             }
                             
                             // 更新 hasSwitchedFromUnplanned 标记
