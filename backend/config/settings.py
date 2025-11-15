@@ -158,7 +158,25 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+# 允许iOS应用访问（开发环境）
+# iOS模拟器使用localhost，真机需要使用实际IP地址
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True  # 开发环境允许所有来源
+else:
+    CORS_ALLOW_ALL_ORIGINS = False  # 生产环境需要明确配置
+
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Channels配置
 CHANNEL_LAYERS = {
