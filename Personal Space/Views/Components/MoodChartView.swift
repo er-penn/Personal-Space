@@ -98,12 +98,12 @@ struct MoodChartView: View {
                 }
             }
             
-            // 心情趋势图
-            if !userState.moodRecords.isEmpty {
+            // 心情趋势图（只显示今天的心情记录）
+            if !todayMoodRecords.isEmpty {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                    MoodTrendHeader(moodRecords: userState.moodRecords, selectedRecord: $selectedRecord)
+                    MoodTrendHeader(moodRecords: todayMoodRecords, selectedRecord: $selectedRecord)
 
-                    MoodTrendChart(moodRecords: userState.moodRecords, selectedRecord: $selectedRecord)
+                    MoodTrendChart(moodRecords: todayMoodRecords, selectedRecord: $selectedRecord)
                         .frame(height: 120)
                         .background(AppTheme.Colors.bgMain)
                         .cornerRadius(AppTheme.Radius.medium)
@@ -141,6 +141,15 @@ struct MoodChartView: View {
             )
             showingRecordButton = false
             moodNote = ""
+        }
+    }
+    
+    /// 获取今天的心情记录
+    private var todayMoodRecords: [MoodRecord] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return userState.moodRecords.filter { record in
+            calendar.isDate(record.timestamp, inSameDayAs: today)
         }
     }
     
@@ -480,6 +489,8 @@ struct MoodRecordPageView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var selectedDate: Date? = nil
     @State private var showingCalendar = false
+    @State private var displayedDaysCount: Int = 10 // 当前显示的天数
+    private let daysPerPage: Int = 10 // 每次加载的天数
     
     var body: some View {
         NavigationView {
@@ -487,40 +498,98 @@ struct MoodRecordPageView: View {
                 AppGradient.background
                     .ignoresSafeArea()
                 
-                VStack(spacing: 0) {
-                    // 隐藏的日历
-                    if showingCalendar {
-                        MoodRecordCalendarView(
-                            selectedDate: $selectedDate,
-                            moodRecords: userState.moodRecords
-                        )
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                    
-                    // 心情记录列表
+                // 心情记录列表（使用ScrollViewReader实现滚动定位）
+                ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: AppTheme.Spacing.lg) {
-                            if let selectedDate = selectedDate {
-                                // 显示选中日期的记录
+                            // 显示分页的记录，按日期分组（始终显示所有日期，不再过滤）
+                            let sortedDates = groupedMoodRecords.keys.sorted(by: >)
+                            let displayedDates = Array(sortedDates.prefix(displayedDaysCount))
+                            
+                            ForEach(displayedDates, id: \.self) { date in
                                 DailyMoodRecords(
-                                    date: selectedDate,
-                                    moodRecords: userState.moodRecords.filter { 
-                                        Calendar.current.isDate($0.timestamp, inSameDayAs: selectedDate)
-                                    }
+                                    date: date,
+                                    moodRecords: groupedMoodRecords[date] ?? [],
+                                    isSelected: selectedDate != nil && Calendar.current.isDate(date, inSameDayAs: selectedDate!)
                                 )
-                            } else {
-                                // 显示所有记录，按日期分组
-                                ForEach(groupedMoodRecords.keys.sorted(by: >), id: \.self) { date in
-                                    DailyMoodRecords(
-                                        date: date,
-                                        moodRecords: groupedMoodRecords[date] ?? []
-                                    )
+                                .id(date) // 为每个日期添加ID，用于滚动定位
+                                .onAppear {
+                                    // 当最后一个可见的日期出现时，加载更多
+                                    if date == displayedDates.last && displayedDates.count < sortedDates.count {
+                                        loadMoreDays()
+                                    }
+                                }
+                            }
+                            
+                            // 加载更多提示
+                            if displayedDates.count < sortedDates.count {
+                                HStack {
+                                    Spacer()
+                                    Text("加载更多...")
+                                        .font(.system(size: AppTheme.FontSize.body))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                        .padding(.vertical, AppTheme.Spacing.md)
+                                    Spacer()
+                                }
+                                .onAppear {
+                                    // 当加载提示出现时，自动加载更多
+                                    loadMoreDays()
                                 }
                             }
                         }
                         .padding(.horizontal, AppTheme.Spacing.lg)
                         .padding(.top, AppTheme.Spacing.lg)
                     }
+                    .onChange(of: selectedDate) { newDate in
+                        // 当选中日期改变时，滚动到对应位置并自动收起日历
+                        if let date = newDate {
+                            // 自动收起日历
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showingCalendar = false
+                            }
+                            
+                            // 确保该日期已加载（如果不在已显示的日期中，需要先加载）
+                            let sortedDates = groupedMoodRecords.keys.sorted(by: >)
+                            if let dateIndex = sortedDates.firstIndex(where: { Calendar.current.isDate($0, inSameDayAs: date) }) {
+                                // 如果日期不在已显示的范围内，先加载到该位置
+                                let targetDisplayCount = min(dateIndex + 1 + daysPerPage, sortedDates.count)
+                                if targetDisplayCount > displayedDaysCount {
+                                    displayedDaysCount = targetDisplayCount
+                                }
+                                
+                                // 延迟一下，确保视图已渲染（等待日历收起动画完成）
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    withAnimation(.easeInOut(duration: 0.5)) {
+                                        proxy.scrollTo(date, anchor: .top)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // 悬浮日历（使用 overlay 显示，不占用空间）
+                if showingCalendar {
+                    // 背景遮罩层，点击可隐藏日历
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showingCalendar = false
+                            }
+                        }
+                        .overlay(
+                            VStack {
+                                Spacer()
+                                MoodRecordCalendarView(
+                                    selectedDate: $selectedDate,
+                                    moodRecords: userState.moodRecords
+                                )
+                                .padding(.horizontal, AppTheme.Spacing.lg)
+                                .padding(.bottom, AppTheme.Spacing.xl)
+                            }
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        )
                 }
             }
             .navigationTitle("心情记录")
@@ -548,6 +617,18 @@ struct MoodRecordPageView: View {
                             .foregroundColor(AppTheme.Colors.primary)
                     }
                 }
+            }
+        }
+    }
+    
+    /// 加载更多天数
+    private func loadMoreDays() {
+        let sortedDates = groupedMoodRecords.keys.sorted(by: >)
+        let newCount = min(displayedDaysCount + daysPerPage, sortedDates.count)
+        
+        if newCount > displayedDaysCount {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                displayedDaysCount = newCount
             }
         }
     }
@@ -709,6 +790,7 @@ struct MoodRecordCalendarView: View {
 struct DailyMoodRecords: View {
     let date: Date
     let moodRecords: [MoodRecord]
+    let isSelected: Bool // 是否被选中（用于高亮显示）
     @State private var selectedRecord: MoodRecord? = nil
 
     private let dateFormatter: DateFormatter = {
@@ -719,10 +801,16 @@ struct DailyMoodRecords: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            // 日期标题
+            // 日期标题（选中时高亮显示）
             Text(dateFormatter.string(from: date))
                 .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.primary)
+                .foregroundColor(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.text)
+                .padding(.horizontal, isSelected ? AppTheme.Spacing.sm : 0)
+                .padding(.vertical, isSelected ? AppTheme.Spacing.xs : 0)
+                .background(
+                    isSelected ? RoundedRectangle(cornerRadius: AppTheme.Radius.small)
+                        .fill(AppTheme.Colors.primary.opacity(0.1)) : nil
+                )
             
             if moodRecords.isEmpty {
                 Text("暂无记录")
