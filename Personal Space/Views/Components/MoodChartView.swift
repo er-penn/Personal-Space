@@ -229,15 +229,53 @@ struct MoodPath: View {
         let width = geometry.size.width
         let height = geometry.size.height
         let padding: CGFloat = 20
-        let xStep = (width - padding * 2) / CGFloat(max(1, moodRecords.count - 1))
+        let availableWidth = width - padding * 2
         let yStep = (height - padding * 2) / 9.0
         
+        guard moodRecords.count >= 2 else {
+            return []
+        }
+        
+        // 1. 计算所有相邻记录之间的时间间隔（秒）
+        var timeIntervals: [TimeInterval] = []
+        for i in 1..<moodRecords.count {
+            let interval = moodRecords[i].timestamp.timeIntervalSince(moodRecords[i-1].timestamp)
+            timeIntervals.append(max(interval, 1)) // 最小1秒，避免除零
+        }
+        
+        // 2. 计算总时间间隔
+        let totalInterval = timeIntervals.reduce(0, +)
+        
+        // 3. 如果总间隔为0（所有记录在同一时间），使用等距分布
+        guard totalInterval > 0 else {
+            let xStep = availableWidth / CGFloat(moodRecords.count - 1)
+            var points: [CGPoint] = []
+            for (index, record) in moodRecords.enumerated() {
+                let x = padding + CGFloat(index) * xStep
+                let y = height - padding - (CGFloat(record.value - 1) * yStep)
+                points.append(CGPoint(x: x, y: y))
+            }
+            return points
+        }
+        
+        // 4. 按时间间隔比例计算每个点的x坐标
+        var xPositions: [CGFloat] = [padding] // 第一个点在最左边
+        var currentX = padding
+        
+        for interval in timeIntervals {
+            let proportion = CGFloat(interval / totalInterval)
+            currentX += proportion * availableWidth
+            xPositions.append(currentX)
+        }
+        
+        // 5. 生成所有点
         var points: [CGPoint] = []
         for (index, record) in moodRecords.enumerated() {
-            let x = padding + CGFloat(index) * xStep
+            let x = xPositions[index]
             let y = height - padding - (CGFloat(record.value - 1) * yStep)
             points.append(CGPoint(x: x, y: y))
         }
+        
         return points
     }
 }
@@ -270,10 +308,45 @@ struct MoodDataPoints: View {
         let width = geometry.size.width
         let height = geometry.size.height
         let padding: CGFloat = 20
-        let xStep = (width - padding * 2) / CGFloat(max(1, moodRecords.count - 1))
+        let availableWidth = width - padding * 2
         let yStep = (height - padding * 2) / 9.0
         
-        let x = padding + CGFloat(index) * xStep
+        guard moodRecords.count >= 2 else {
+            let x = padding + CGFloat(index) * availableWidth
+            let y = height - padding - (CGFloat(record.value - 1) * yStep)
+            return CGPoint(x: x, y: y)
+        }
+        
+        // 1. 计算所有相邻记录之间的时间间隔（秒）
+        var timeIntervals: [TimeInterval] = []
+        for i in 1..<moodRecords.count {
+            let interval = moodRecords[i].timestamp.timeIntervalSince(moodRecords[i-1].timestamp)
+            timeIntervals.append(max(interval, 1)) // 最小1秒，避免除零
+        }
+        
+        // 2. 计算总时间间隔
+        let totalInterval = timeIntervals.reduce(0, +)
+        
+        // 3. 如果总间隔为0（所有记录在同一时间），使用等距分布
+        guard totalInterval > 0 else {
+            let xStep = availableWidth / CGFloat(moodRecords.count - 1)
+            let x = padding + CGFloat(index) * xStep
+            let y = height - padding - (CGFloat(record.value - 1) * yStep)
+            return CGPoint(x: x, y: y)
+        }
+        
+        // 4. 按时间间隔比例计算x坐标
+        var xPositions: [CGFloat] = [padding] // 第一个点在最左边
+        var currentX = padding
+        
+        for interval in timeIntervals {
+            let proportion = CGFloat(interval / totalInterval)
+            currentX += proportion * availableWidth
+            xPositions.append(currentX)
+        }
+        
+        // 5. 返回对应索引的点
+        let x = xPositions[index]
         let y = height - padding - (CGFloat(record.value - 1) * yStep)
         return CGPoint(x: x, y: y)
     }
