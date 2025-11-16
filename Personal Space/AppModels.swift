@@ -980,6 +980,7 @@ class UserState: ObservableObject {
     
     /// 手动结束预规划状态（用户点击了倒计时）
     /// 会截断当前预规划状态的TimeSlot到当前时间的上一分钟
+    @MainActor
     func endPlannedStateManually() {
         guard isPlannedStateActive,
               let plannedLevel = currentPlannedStateLevel else {
@@ -987,6 +988,9 @@ class UserState: ObservableObject {
         }
         
         print("🎯 手动结束预规划遮罩，能量等级: \(plannedLevel.description)")
+        
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
         
         // 🎯 截断当前预规划状态的TimeSlot到当前时间的上一分钟
         let modified = truncateCurrentTimeSlot(
@@ -997,6 +1001,41 @@ class UserState: ObservableObject {
 
         if modified {
             print("🎯 预规划状态TimeSlot已截断")
+            
+            // ✅ 同步更新后的预规划到后端
+            // 找到被截断的预规划（同一天、相同能量等级）
+            if let modifiedPlan = plannedEnergyPlans.first(where: { plan in
+                calendar.isDate(plan.date, inSameDayAs: today) &&
+                plan.energyLevel == plannedLevel
+            }) {
+                // 如果还有剩余时间段，同步更新后的预规划到后端
+                if !modifiedPlan.timeSlots.isEmpty {
+                    Task { @MainActor in
+                        await createEnergyPlanToBackend(
+                            date: today,
+                            energyLevel: plannedLevel,
+                            timeSlots: modifiedPlan.timeSlots
+                        )
+                        print("✅ 已同步截断后的预规划到后端")
+                    }
+                } else {
+                    // 如果预规划被完全删除（所有时间段都被截断），需要删除后端的预规划
+                    // 由于后端API不支持空时间段，我们需要重新加载预规划来确保数据一致
+                    // 或者通过发送一个无效的时间段来触发后端的合并逻辑，但这不太合理
+                    // 暂时先重新加载预规划，让前端和后端数据保持一致
+                    Task { @MainActor in
+                        await loadEnergyPlans(date: today)
+                        print("✅ 预规划已被完全删除，已重新加载预规划数据")
+                    }
+                }
+            } else {
+                // 预规划被完全删除（所有时间段都被截断）
+                // 由于后端API不支持空时间段，我们需要重新加载预规划来确保数据一致
+                Task { @MainActor in
+                    await loadEnergyPlans(date: today)
+                    print("✅ 预规划已被完全删除，已重新加载预规划数据")
+                }
+            }
         }
         
         // 记录预规划状态结束，切换到基础状态
@@ -2735,6 +2774,7 @@ class UserState: ObservableObject {
     
     /// 同步基础状态记录到后端（包括时间段）
     /// 注意：后端同一天只能有一条base记录，所以合并今天所有基础状态记录的时间段
+    /// 每个时间段保留自己的能量等级，避免数据覆盖问题
     @MainActor
     func syncBaseEnergyRecordsToBackend() async {
         let apiService = APIService.shared
@@ -2753,23 +2793,31 @@ class UserState: ObservableObject {
             return
         }
         
-        // 合并所有今天的基础状态记录的时间段（按时间排序）
-        var allTimeSlots: [TimeSlot] = []
+        // 合并所有今天的基础状态记录的时间段，同时保留能量等级信息（成对存储）
+        var allTimeSlots: [(slot: TimeSlot, energyLevel: EnergyLevel)] = []
         for plan in todayBasePlans {
-            allTimeSlots.append(contentsOf: plan.timeSlots)
+            for slot in plan.timeSlots {
+                // ✅ 时间段和能量等级一起存储，避免信息丢失
+                allTimeSlots.append((slot: slot, energyLevel: plan.energyLevel))
+            }
         }
         
         // 按开始时间排序
-        allTimeSlots.sort { slot1, slot2 in
-            let start1 = slot1.startHour * 60 + slot1.startMinute
-            let start2 = slot2.startHour * 60 + slot2.startMinute
+        allTimeSlots.sort { item1, item2 in
+            let start1 = item1.slot.startHour * 60 + item1.slot.startMinute
+            let start2 = item2.slot.startHour * 60 + item2.slot.startMinute
             return start1 < start2
         }
         
-        // 使用当前能量等级（因为后端只能保存一个energy_level）
-        let energyLevelString = converter.energyLevelToString(currentBaseEnergyLevel)
+        // 使用第一个时间段的能量等级作为记录的默认值（用于向后兼容）
+        let defaultEnergyLevel = allTimeSlots.first?.energyLevel ?? currentBaseEnergyLevel
+        let energyLevelString = converter.energyLevelToString(defaultEnergyLevel)
         let dateString = converter.formatDate(today)
-        let apiTimeSlots = allTimeSlots.map { converter.timeSlotToAPI($0, energyLevel: currentBaseEnergyLevel) }
+        
+        // ✅ 映射时使用每个时间段对应的能量等级，而不是统一的currentBaseEnergyLevel
+        let apiTimeSlots = allTimeSlots.map { item in
+            converter.timeSlotToAPI(item.slot, energyLevel: item.energyLevel)
+        }
         
         do {
             _ = try await apiService.updateBaseEnergyRecord(
@@ -2777,7 +2825,7 @@ class UserState: ObservableObject {
                 energyLevel: energyLevelString,
                 timeSlots: apiTimeSlots
             )
-            print("✅ 已同步基础状态记录到后端: \(energyLevelString), \(allTimeSlots.count)个时间段")
+            print("✅ 已同步基础状态记录到后端: \(energyLevelString), \(allTimeSlots.count)个时间段（每个时间段保留自己的能量等级）")
         } catch {
             print("❌ 同步基础状态记录失败: \(error.localizedDescription)")
         }
