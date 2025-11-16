@@ -131,14 +131,14 @@ struct MoodChartView: View {
     
     private func recordMood() {
         let trimmedNote = moodNote.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newRecord = MoodRecord(
-            value: currentMood,
-            timestamp: Date(),
-            note: trimmedNote.isEmpty ? nil : trimmedNote
-        )
         
         withAnimation(.easeInOut(duration: 0.3)) {
-            userState.moodRecords.append(newRecord)
+            // 使用 UserState 的 addMoodRecord 方法，会自动保存到 UserDefaults
+            userState.addMoodRecord(
+                value: currentMood,
+                timestamp: Date(),
+                note: trimmedNote.isEmpty ? nil : trimmedNote
+            )
             showingRecordButton = false
             moodNote = ""
         }
@@ -682,6 +682,8 @@ struct DailyMoodRecords: View {
 // MARK: - 心情记录条目
 struct MoodRecordItem: View {
     let record: MoodRecord
+    @State private var isExpanded = false
+    @State private var needsExpansion = false
     
     private let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -703,23 +705,81 @@ struct MoodRecordItem: View {
                 .foregroundColor(getMoodColor(record.value))
                 .frame(width: 30, alignment: .center)
             
-            // 备注
-            if let note = record.note, !note.isEmpty {
-                Text(note)
-                    .font(.system(size: AppTheme.FontSize.body))
-                    .foregroundColor(AppTheme.Colors.text)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                Text("无备注")
-                    .font(.system(size: AppTheme.FontSize.body))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            // 备注区域
+            noteContent
         }
         .padding(AppTheme.Spacing.md)
         .background(AppTheme.Colors.bgMain)
         .cornerRadius(AppTheme.Radius.medium)
+    }
+    
+    // MARK: - 备注内容视图（拆分为独立计算属性）
+    @ViewBuilder
+    private var noteContent: some View {
+        if let note = record.note, !note.isEmpty {
+            noteTextWithExpansion(note: note)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(measurementBackground(note: note))
+                .onPreferenceChange(TextHeightPreferenceKey.self) { fullHeight in
+                    if fullHeight > 45 {
+                        needsExpansion = true
+                    }
+                }
+                .onAppear {
+                    if note.count > 50 {
+                        needsExpansion = true
+                    }
+                }
+        } else {
+            Text("无备注")
+                .font(.system(size: AppTheme.FontSize.body))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    
+    // MARK: - 备注文本（带展开/收起功能）
+    @ViewBuilder
+    private func noteTextWithExpansion(note: String) -> some View {
+        if needsExpansion {
+            // 需要展开/收起功能：根据状态显示2行或完整文本
+            Text(note)
+                .font(.system(size: AppTheme.FontSize.body))
+                .foregroundColor(AppTheme.Colors.text)
+                .lineLimit(isExpanded ? nil : 2)
+                .fixedSize(horizontal: false, vertical: true)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded.toggle()
+                    }
+                }
+        } else {
+            // 不需要展开：直接显示完整文本
+            Text(note)
+                .font(.system(size: AppTheme.FontSize.body))
+                .foregroundColor(AppTheme.Colors.text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    
+    // MARK: - 测量背景（用于检测文本高度）
+    private func measurementBackground(note: String) -> some View {
+        Text(note)
+            .font(.system(size: AppTheme.FontSize.body))
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .opacity(0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .preference(
+                            key: TextHeightPreferenceKey.self,
+                            value: geometry.size.height
+                        )
+                }
+            )
     }
     
     private func getMoodColor(_ mood: Double) -> Color {
@@ -732,6 +792,15 @@ struct MoodRecordItem: View {
         }
     }
 }
+
+// MARK: - 文本高度偏好键（用于检测文本是否超过2行）
+struct TextHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 
 #Preview {
     MoodChartView()

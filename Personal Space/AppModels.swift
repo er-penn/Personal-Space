@@ -114,6 +114,9 @@ class UserState: ObservableObject {
         // 初始化基础状态为未规划，覆盖7:00-23:59
         initializeBaseEnergyPlan()
         
+        // 加载持久化的心情记录
+        loadMoodRecords()
+        
         // 仅在DEBUG模式下启用示例数据
         #if DEBUG
         setupSampleEnergyPlans()
@@ -3346,6 +3349,44 @@ struct MoodRecord: Identifiable, Codable {
         self.value = value
         self.timestamp = timestamp
         self.note = note
+    }
+}
+
+// MARK: - 心情记录持久化扩展
+extension UserState {
+    /// 保存心情记录到 UserDefaults
+    private func saveMoodRecords() {
+        if let encoded = try? JSONEncoder().encode(moodRecords) {
+            UserDefaults.standard.set(encoded, forKey: "moodRecords")
+            print("✅ 已保存心情记录: \(moodRecords.count)条")
+        } else {
+            print("❌ 保存心情记录失败")
+        }
+    }
+    
+    /// 从 UserDefaults 加载心情记录
+    private func loadMoodRecords() {
+        if let data = UserDefaults.standard.data(forKey: "moodRecords"),
+           let decoded = try? JSONDecoder().decode([MoodRecord].self, from: data) {
+            moodRecords = decoded
+            print("✅ 已加载心情记录: \(moodRecords.count)条")
+        } else {
+            moodRecords = []
+            print("ℹ️ 未找到已保存的心情记录")
+        }
+    }
+    
+    /// 添加心情记录（自动保存）
+    func addMoodRecord(value: Double, timestamp: Date = Date(), note: String? = nil) {
+        let newRecord = MoodRecord(value: value, timestamp: timestamp, note: note)
+        moodRecords.append(newRecord)
+        saveMoodRecords()
+    }
+    
+    /// 删除心情记录（自动保存）
+    func deleteMoodRecord(_ record: MoodRecord) {
+        moodRecords.removeAll { $0.id == record.id }
+        saveMoodRecords()
     }
 }
 
