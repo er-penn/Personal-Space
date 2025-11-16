@@ -121,8 +121,6 @@ class UserState: ObservableObject {
         #if DEBUG
         setupSampleEnergyPlans()
         // setupSampleActualEnergyRecords()
-        // 生成30天的测试心情记录数据（如果还没有数据）
-        setupSampleMoodRecords()
         #endif
 
         // 调试：打印当前基础状态信息
@@ -3439,76 +3437,6 @@ extension UserState {
         saveMoodRecords()
     }
     
-    /// 生成30天的测试心情记录数据（仅DEBUG模式）
-    #if DEBUG
-    private func setupSampleMoodRecords() {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        var testRecords: [MoodRecord] = []
-        
-        // 生成过去30天的数据（包括今天）
-        for dayOffset in 0..<30 {
-            guard let date = calendar.date(byAdding: .day, value: -dayOffset, to: today) else { continue }
-            
-            // 每天生成1-3条记录
-            let recordsPerDay = Int.random(in: 1...3)
-            
-            for recordIndex in 0..<recordsPerDay {
-                // 随机时间：8:00-22:00之间
-                let hour = Int.random(in: 8...22)
-                let minute = Int.random(in: 0...59)
-                
-                guard let timestamp = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) else { continue }
-                
-                // 随机心情值：1.0-10.0
-                let moodValue = Double.random(in: 1.0...10.0)
-                
-                // 随机决定是否有备注（30%概率有备注）
-                let hasNote = Int.random(in: 1...10) <= 3
-                let note: String? = hasNote ? generateRandomNote() : nil
-                
-                let record = MoodRecord(value: moodValue, timestamp: timestamp, note: note)
-                testRecords.append(record)
-            }
-        }
-        
-        // 按时间排序（从旧到新）
-        testRecords.sort { $0.timestamp < $1.timestamp }
-        
-        // 保存到 UserDefaults（覆盖现有数据）
-        moodRecords = testRecords
-        saveMoodRecords()
-        
-        print("✅ 已生成30天的测试心情记录: \(testRecords.count)条")
-    }
-    
-    /// 生成随机备注内容
-    private func generateRandomNote() -> String {
-        let notes = [
-            "今天心情不错",
-            "有点累",
-            "感觉很充实",
-            "需要休息一下",
-            "今天工作很顺利",
-            "有点焦虑",
-            "心情平静",
-            "今天运动了，感觉很好",
-            "有点压力",
-            "今天和朋友聊天很开心",
-            "工作有点忙",
-            "今天天气很好",
-            "有点困",
-            "今天完成了重要任务",
-            "心情有点低落",
-            "今天吃了好吃的",
-            "感觉很有动力",
-            "需要调整一下状态",
-            "今天学习了很多新东西",
-            "有点疲惫但很满足"
-        ]
-        return notes.randomElement() ?? "心情记录"
-    }
-    #endif
 }
 
 // MARK: - 时间段结构
