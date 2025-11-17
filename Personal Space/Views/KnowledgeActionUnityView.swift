@@ -199,7 +199,7 @@ struct KnowledgeView: View {
         }
         .sheet(item: $selectedKnowledge) { knowledge in
             KnowledgeDetailView(
-                knowledge: knowledge,
+                knowledgeId: knowledge.id,
                 manager: manager
             )
         }
@@ -575,12 +575,19 @@ struct ActionCardView: View {
 struct KnowledgeEditView: View {
     @ObservedObject var manager: KnowledgeActionManager
     @Binding var isPresented: Bool
+    let knowledgeToEdit: Knowledge? // 可选：如果传入则进入编辑模式，否则为新建模式
     @State private var title: String = ""
     @State private var content: String = ""
     @State private var hasAction: Bool = false
     @State private var selectedActionType: ActionType = .daily
     @State private var dailyTime: Date = Date()
     @State private var scenarioCondition: String = ""
+    
+    init(manager: KnowledgeActionManager, isPresented: Binding<Bool>, knowledgeToEdit: Knowledge? = nil) {
+        self.manager = manager
+        self._isPresented = isPresented
+        self.knowledgeToEdit = knowledgeToEdit
+    }
 
     var body: some View {
         NavigationView {
@@ -631,8 +638,19 @@ struct KnowledgeEditView: View {
                     }
                 }
             }
-            .navigationTitle("新增认知")
+            .navigationTitle(knowledgeToEdit == nil ? "新增认知" : "编辑认知")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                // 如果是编辑模式，加载现有数据
+                if let knowledge = knowledgeToEdit {
+                    title = knowledge.title
+                    content = knowledge.content
+                    hasAction = knowledge.hasAction
+                    selectedActionType = knowledge.actionType ?? .daily
+                    dailyTime = knowledge.actionConfig?.dailyTime ?? Date()
+                    scenarioCondition = knowledge.actionConfig?.scenarioCondition ?? ""
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") {
@@ -663,15 +681,31 @@ struct KnowledgeEditView: View {
             actionConfig = nil
         }
 
-        let knowledge = Knowledge(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            content: content.trimmingCharacters(in: .whitespacesAndNewlines),
-            hasAction: hasAction,
-            actionType: hasAction ? selectedActionType : nil,
-            actionConfig: actionConfig
-        )
-
-        manager.addKnowledge(knowledge)
+        if let existingKnowledge = knowledgeToEdit {
+            // 编辑模式：更新现有认知（创建新实例，保留id和createdAt）
+            let updatedKnowledge = Knowledge(
+                id: existingKnowledge.id,
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+                createdAt: existingKnowledge.createdAt,
+                updatedAt: Date(),
+                hasAction: hasAction,
+                actionType: hasAction ? selectedActionType : nil,
+                actionConfig: actionConfig
+            )
+            manager.updateKnowledge(updatedKnowledge)
+        } else {
+            // 新建模式：添加新认知
+            let knowledge = Knowledge(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+                hasAction: hasAction,
+                actionType: hasAction ? selectedActionType : nil,
+                actionConfig: actionConfig
+            )
+            manager.addKnowledge(knowledge)
+        }
+        
         isPresented = false
     }
 }
@@ -773,20 +807,45 @@ struct ActionCheckInView: View {
 
 // MARK: - 认知详情视图
 struct KnowledgeDetailView: View {
-    let knowledge: Knowledge
+    let knowledgeId: UUID // 改为使用ID，而不是直接传递knowledge对象
     @ObservedObject var manager: KnowledgeActionManager
     @Environment(\.presentationMode) var presentationMode
+    @State private var showingEditView = false
+    
+    // 从manager中动态获取最新的knowledge数据
+    private var knowledge: Knowledge? {
+        manager.knowledges.first { $0.id == knowledgeId }
+    }
 
     private var actionStats: ActionStats {
-        manager.getActionStats(for: knowledge.id)
+        manager.getActionStats(for: knowledgeId)
     }
 
     private var relatedActions: [ActionRecord] {
-        manager.getActionsForKnowledge(knowledge.id)
+        manager.getActionsForKnowledge(knowledgeId)
             .sorted { $0.date > $1.date }
     }
 
     var body: some View {
+        Group {
+            if let knowledge = knowledge {
+                knowledgeDetailContent(knowledge: knowledge)
+            } else {
+                NavigationView {
+                    VStack {
+                        Text("认知不存在")
+                            .foregroundColor(.secondary)
+                        Button("返回") {
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func knowledgeDetailContent(knowledge: Knowledge) -> some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: AppTheme.Spacing.lg) {
@@ -964,9 +1023,16 @@ struct KnowledgeDetailView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("编辑") {
-                        // TODO: 实现编辑功能
+                        showingEditView = true
                     }
                 }
+            }
+            .sheet(isPresented: $showingEditView) {
+                KnowledgeEditView(
+                    manager: manager,
+                    isPresented: $showingEditView,
+                    knowledgeToEdit: knowledge
+                )
             }
         }
     }

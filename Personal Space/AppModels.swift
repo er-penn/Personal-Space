@@ -3919,6 +3919,18 @@ struct Knowledge: Identifiable, Codable {
         self.createdAt = Date()
         self.updatedAt = Date()
     }
+    
+    // 编辑模式初始化方法（保留id和createdAt）
+    init(id: UUID, title: String, content: String, createdAt: Date, updatedAt: Date, hasAction: Bool, actionType: ActionType?, actionConfig: ActionConfig?) {
+        self.id = id
+        self.title = title
+        self.content = content
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.hasAction = hasAction
+        self.actionType = actionType
+        self.actionConfig = actionConfig
+    }
 
     // 计算相关联的行动统计
     var actionStats: ActionStats {
