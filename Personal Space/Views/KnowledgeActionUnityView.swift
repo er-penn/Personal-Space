@@ -296,33 +296,19 @@ struct KnowledgeCardView: View {
 struct ActionView: View {
     @ObservedObject var manager: KnowledgeActionManager
 
-    private var todayActions: [ActionRecord] {
-        manager.getTodayActions()
+
+    @State private var showingKnowledgeLibrary = false
+
+    private var todayDailyActions: [ActionRecord] {
+        manager.getTodayDailyActions()
+    }
+    
+    private var scenarioActions: [Knowledge] {
+        manager.getScenarioActions()
     }
 
-    private var stats: (todayPending: Int, weeklyCompleted: Double, consecutiveDays: Int) {
-        let todayPending = todayActions.filter { !$0.isCompleted && !$0.isSuspended }.count
-        let weekActions = manager.actions.filter { action in
-            let calendar = Calendar.current
-            let actionDate = action.date
-            return calendar.isDate(actionDate, equalTo: Date(), toGranularity: .weekOfYear)
-        }
-        let weeklyCompleted = weekActions.isEmpty ? 0.0 : Double(weekActions.filter { $0.isCompleted }.count) / Double(weekActions.count)
-
-        // 计算连续打卡天数
-        var consecutiveDays = 0
-        let sortedDates = Set(manager.actions.map { Calendar.current.startOfDay(for: $0.date) }).sorted(by: >)
-        let today = Calendar.current.startOfDay(for: Date())
-
-        for date in sortedDates {
-            if Calendar.current.isDate(date, inSameDayAs: today.addingTimeInterval(-TimeInterval(consecutiveDays * 24 * 60 * 60))) {
-                consecutiveDays += 1
-            } else {
-                break
-            }
-        }
-
-        return (todayPending, weeklyCompleted, consecutiveDays)
+    private var todayPending: Int {
+        todayDailyActions.filter { !$0.isCompleted }.count
     }
 
     var body: some View {
@@ -330,24 +316,25 @@ struct ActionView: View {
             VStack(spacing: AppTheme.Spacing.lg) {
                 // 统计区域
                 ActionStatsView(
-                    todayPending: stats.todayPending,
-                    weeklyCompleted: stats.weeklyCompleted,
-                    consecutiveDays: stats.consecutiveDays
+                    todayPending: todayPending,
+                    onKnowledgeLibraryTap: {
+                        showingKnowledgeLibrary = true
+                    }
                 )
 
-                // 行动列表
+                // 今日行动列表
                 VStack(spacing: AppTheme.Spacing.md) {
                     HStack {
                         Text("今日行动")
                             .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
                             .foregroundColor(AppTheme.Colors.text)
                         Spacer()
-                        Text("\(todayActions.count) 项")
+                        Text("\(todayDailyActions.count) 项")
                             .font(.system(size: AppTheme.FontSize.caption))
                             .foregroundColor(.secondary)
                     }
 
-                    if todayActions.isEmpty {
+                    if todayDailyActions.isEmpty {
                         VStack(spacing: AppTheme.Spacing.md) {
                             Image(systemName: "checkmark.circle")
                                 .font(.system(size: 48))
@@ -365,10 +352,34 @@ struct ActionView: View {
                         .cornerRadius(AppTheme.Radius.medium)
                     } else {
                         LazyVStack(spacing: AppTheme.Spacing.sm) {
-                            ForEach(todayActions) { action in
-                                ActionCardView(
+                            ForEach(todayDailyActions) { action in
+                                DailyActionCardView(
                                     action: action,
                                     knowledge: manager.knowledges.first { $0.id == action.knowledgeId },
+                                    manager: manager
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                // 日常行动列表
+                if !scenarioActions.isEmpty {
+                    VStack(spacing: AppTheme.Spacing.md) {
+                        HStack {
+                            Text("日常行动")
+                                .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.text)
+                            Spacer()
+                            Text("\(scenarioActions.count) 项")
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        LazyVStack(spacing: AppTheme.Spacing.sm) {
+                            ForEach(scenarioActions) { knowledge in
+                                ScenarioActionCardView(
+                                    knowledge: knowledge,
                                     manager: manager
                                 )
                             }
@@ -382,14 +393,16 @@ struct ActionView: View {
             .padding(.top, AppTheme.Spacing.xs)
         }
         .background(AppGradient.background)
+        .sheet(isPresented: $showingKnowledgeLibrary) {
+            KnowledgeLibraryView(manager: manager)
+        }
     }
 }
 
 // MARK: - 行动统计视图
 struct ActionStatsView: View {
     let todayPending: Int
-    let weeklyCompleted: Double
-    let consecutiveDays: Int
+    let onKnowledgeLibraryTap: () -> Void
 
     var body: some View {
         VStack(spacing: AppTheme.Spacing.lg) {
@@ -409,35 +422,22 @@ struct ActionStatsView: View {
                 .cornerRadius(AppTheme.Radius.medium)
                 .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
 
-                // 本周完成率
-                VStack(spacing: AppTheme.Spacing.sm) {
-                    Text("\(Int(weeklyCompleted * 100))%")
-                        .font(.system(size: AppTheme.FontSize.title2, weight: .bold))
-                        .foregroundColor(weeklyCompleted > 0.7 ? .green : .orange)
-                    Text("本周完成率")
-                        .font(.system(size: AppTheme.FontSize.caption))
-                        .foregroundColor(.secondary)
+                // 知行库
+                Button(action: onKnowledgeLibraryTap) {
+                    VStack(spacing: AppTheme.Spacing.sm) {
+                        Image(systemName: "books.vertical")
+                            .font(.system(size: AppTheme.FontSize.title2, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        Text("知行库")
+                            .font(.system(size: AppTheme.FontSize.caption))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(AppTheme.Radius.medium)
+                    .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(AppTheme.Radius.medium)
-                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-
-                // 连续天数
-                VStack(spacing: AppTheme.Spacing.sm) {
-                    Text("\(consecutiveDays)")
-                        .font(.system(size: AppTheme.FontSize.title2, weight: .bold))
-                        .foregroundColor(.blue)
-                    Text("连续天数")
-                        .font(.system(size: AppTheme.FontSize.caption))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(AppTheme.Radius.medium)
-                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
             }
         }
     }
@@ -471,14 +471,6 @@ struct ActionCardView: View {
                             Text("已完成")
                                 .font(.system(size: AppTheme.FontSize.caption))
                                 .foregroundColor(.green)
-                        }
-                    } else if action.isSuspended {
-                        HStack(spacing: 4) {
-                            Image(systemName: "pause.circle.fill")
-                                .foregroundColor(.orange)
-                            Text("已挂起")
-                                .font(.system(size: AppTheme.FontSize.caption))
-                                .foregroundColor(.orange)
                         }
                     } else {
                         HStack(spacing: 4) {
@@ -537,20 +529,6 @@ struct ActionCardView: View {
                         .cornerRadius(AppTheme.Radius.medium)
                     }
 
-                    Button(action: {
-                        manager.suspendAction(action)
-                    }) {
-                        HStack {
-                            Image(systemName: "pause.circle")
-                            Text("挂起")
-                        }
-                        .font(.system(size: AppTheme.FontSize.body, weight: .medium))
-                        .foregroundColor(.orange)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppTheme.Spacing.sm)
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(AppTheme.Radius.medium)
-                    }
                 }
             }
         }
@@ -696,14 +674,14 @@ struct KnowledgeEditView: View {
             manager.updateKnowledge(updatedKnowledge)
         } else {
             // 新建模式：添加新认知
-            let knowledge = Knowledge(
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                content: content.trimmingCharacters(in: .whitespacesAndNewlines),
-                hasAction: hasAction,
-                actionType: hasAction ? selectedActionType : nil,
-                actionConfig: actionConfig
-            )
-            manager.addKnowledge(knowledge)
+        let knowledge = Knowledge(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+            hasAction: hasAction,
+            actionType: hasAction ? selectedActionType : nil,
+            actionConfig: actionConfig
+        )
+        manager.addKnowledge(knowledge)
         }
         
         isPresented = false
@@ -717,6 +695,21 @@ struct ActionCheckInView: View {
     @ObservedObject var manager: KnowledgeActionManager
     @Binding var isPresented: Bool
     @State private var notes: String = ""
+    @State private var isSuccess: Bool? = nil // 成功/失败（仅场景触发类型）
+    @State private var score: Double = 5.0 // 评分（1-10，仅成功时有效）
+    
+    private var isEditing: Bool {
+        action.isCompleted
+    }
+    
+    private var isScenarioType: Bool {
+        knowledge.actionType == .scenario
+    }
+    
+    private var shouldDefaultToFailure: Bool {
+        // 场景触发类型且不是编辑模式时，默认选中失败
+        isScenarioType && !isEditing
+    }
 
     var body: some View {
         NavigationView {
@@ -743,6 +736,48 @@ struct ActionCheckInView: View {
                     .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
                 }
 
+                // 成功/失败选择（仅场景触发类型）
+                if isScenarioType {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        Text("结果")
+                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        
+                        Picker("结果", selection: $isSuccess) {
+                            Text("失败").tag(Bool?.some(false))
+                            Text("成功").tag(Bool?.some(true))
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        
+                        // 评分（仅成功时显示）
+                        if isSuccess == true {
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                                HStack {
+                                    Text("评分")
+                                        .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                                    Spacer()
+                                    Text("\(Int(score))分")
+                                        .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                }
+                                
+                                Slider(value: $score, in: 1...10, step: 1)
+                                
+                                HStack {
+                                    Text("1分")
+                                        .font(.system(size: AppTheme.FontSize.caption2))
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Text("10分")
+                                        .font(.system(size: AppTheme.FontSize.caption2))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(.top, AppTheme.Spacing.sm)
+                        }
+                    }
+                }
+                
                 // 心得输入
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                     Text("今日心得")
@@ -767,14 +802,27 @@ struct ActionCheckInView: View {
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                 }
+                .onAppear {
+                    // 如果是编辑模式，加载现有的数据
+                    if isEditing {
+                        notes = action.notes ?? ""
+                        isSuccess = action.isSuccess
+                        if let actionScore = action.score {
+                            score = Double(actionScore)
+                        }
+                    } else if shouldDefaultToFailure {
+                        // 场景触发类型且不是编辑模式时，默认选中失败
+                        isSuccess = false
+                    }
+                }
 
                 Spacer()
 
                 // 完成按钮
                 Button(action: {
-                    completeAction()
+                    saveAction()
                 }) {
-                    Text("完成打卡")
+                    Text(isEditing ? "保存修改" : "完成打卡")
                         .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -788,9 +836,14 @@ struct ActionCheckInView: View {
             .padding(.top, AppTheme.Spacing.lg)
             .background(AppGradient.background)
             .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(isEditing ? "编辑打卡" : "打卡")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") {
+                        // 如果是新建模式且未完成，删除这个action
+                        if !isEditing && !action.isCompleted {
+                            manager.deleteAction(action)
+                        }
                         isPresented = false
                     }
                 }
@@ -798,9 +851,18 @@ struct ActionCheckInView: View {
         }
     }
 
-    private func completeAction() {
+    private func saveAction() {
         let finalNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        manager.completeAction(action, notes: finalNotes.isEmpty ? nil : finalNotes)
+        let finalIsSuccess = isScenarioType ? isSuccess : nil
+        let finalScore = (isScenarioType && isSuccess == true) ? Int(score) : nil
+        
+        if isEditing {
+            // 编辑模式：更新心得
+            manager.updateActionNotes(action, notes: finalNotes.isEmpty ? nil : finalNotes, isSuccess: finalIsSuccess, score: finalScore)
+        } else {
+            // 新建模式：完成打卡
+            manager.completeAction(action, notes: finalNotes.isEmpty ? nil : finalNotes, isSuccess: finalIsSuccess, score: finalScore)
+        }
         isPresented = false
     }
 }
@@ -1073,15 +1135,6 @@ struct ActionHistoryView: View {
                             .font(.system(size: AppTheme.FontSize.caption2))
                             .foregroundColor(.green)
                     }
-                } else if action.isSuspended {
-                    HStack(spacing: 4) {
-                        Image(systemName: "pause.circle.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(.orange)
-                        Text("已挂起")
-                            .font(.system(size: AppTheme.FontSize.caption2))
-                            .foregroundColor(.orange)
-                    }
                 } else {
                     HStack(spacing: 4) {
                         Image(systemName: "circle")
@@ -1110,6 +1163,618 @@ struct ActionHistoryView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM月dd日 HH:mm"
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - 日常打卡行动卡片视图
+struct DailyActionCardView: View {
+    let action: ActionRecord
+    let knowledge: Knowledge?
+    let manager: KnowledgeActionManager
+    @State private var showingCheckIn = false
+
+    private var currentConsecutiveDays: Int {
+        guard let knowledge = knowledge else { return 0 }
+        return manager.getCurrentConsecutiveDays(for: knowledge.id)
+    }
+    
+    private var maxConsecutiveDays: Int {
+        guard let knowledge = knowledge else { return 0 }
+        return manager.getMaxConsecutiveDays(for: knowledge.id)
+    }
+    
+    private var isTodayCompleted: Bool {
+        action.isCompleted
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            // 认知引用
+            if let knowledge = knowledge {
+                HStack {
+                    Image(systemName: "clock")
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(.blue)
+                    Text(knowledge.title)
+                        .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                        .foregroundColor(.primary)
+                    Spacer()
+
+                    // 状态标签
+                    if action.isCompleted {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("已完成")
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(.green)
+                        }
+                    } else {
+                        HStack(spacing: 4) {
+                            Image(systemName: "circle")
+                                .foregroundColor(.gray)
+                            Text("待打卡")
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+            }
+            
+            // 连续天数统计
+            HStack(spacing: AppTheme.Spacing.lg) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("本次连续")
+                        .font(.system(size: AppTheme.FontSize.caption2))
+                        .foregroundColor(.secondary)
+                    Text("\(currentConsecutiveDays)天")
+                        .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
+                        .foregroundColor(.blue)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("历史最长")
+                        .font(.system(size: AppTheme.FontSize.caption2))
+                        .foregroundColor(.secondary)
+                    Text("\(maxConsecutiveDays)天")
+                        .font(.system(size: AppTheme.FontSize.body, weight: .semibold))
+                        .foregroundColor(.orange)
+                }
+                
+                Spacer()
+            }
+            .padding(.vertical, AppTheme.Spacing.sm)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .background(Color(.systemGray6))
+            .cornerRadius(AppTheme.Radius.small)
+
+            // 心得备注
+            if let notes = action.notes, !notes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("心得")
+                        .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text(notes)
+                        .font(.system(size: AppTheme.FontSize.body))
+                        .foregroundColor(.primary)
+                        .padding(AppTheme.Spacing.sm)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(AppTheme.Radius.small)
+                }
+            }
+
+            // 操作按钮
+            Button(action: {
+                showingCheckIn = true
+            }) {
+                HStack {
+                    Image(systemName: isTodayCompleted ? "pencil.circle" : "checkmark.circle")
+                    Text(isTodayCompleted ? "编辑打卡" : "打卡")
+                }
+                .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .background(AppTheme.Colors.primary)
+                .cornerRadius(AppTheme.Radius.medium)
+            }
+        }
+        .padding(AppTheme.Spacing.lg)
+        .background(Color(.systemBackground))
+        .cornerRadius(AppTheme.Radius.medium)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .sheet(isPresented: $showingCheckIn) {
+            if let knowledge = knowledge {
+                ActionCheckInView(
+                    action: action,
+                    knowledge: knowledge,
+                    manager: manager,
+                    isPresented: $showingCheckIn
+                )
+            }
+        }
+    }
+}
+
+// MARK: - 场景触发行动卡片视图
+struct ScenarioActionCardView: View {
+    let knowledge: Knowledge
+    @ObservedObject var manager: KnowledgeActionManager
+    @State private var showingCheckIn = false
+    @State private var isEditingMode = false // true: 编辑打卡, false: 再打卡
+    @State private var actionToEdit: ActionRecord? = nil // 要编辑的action
+    @State private var newAction: ActionRecord? = nil // 新建的action
+    
+    private var latestCompletedAction: ActionRecord? {
+        manager.getLatestTodayCompletedAction(for: knowledge.id)
+    }
+    
+    private var hasCompletedToday: Bool {
+        latestCompletedAction != nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            // 标题
+            HStack {
+                Image(systemName: "lightbulb")
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(.orange)
+                Text(knowledge.title)
+                    .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            
+            // 触发条件
+            if let condition = knowledge.actionConfig?.scenarioCondition {
+                Text("触发条件：\(condition)")
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, AppTheme.Spacing.sm)
+                    .padding(.vertical, AppTheme.Spacing.xs)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(AppTheme.Radius.small)
+            }
+            
+            // 心得备注（显示最近一条的心得）
+            if let action = latestCompletedAction, let notes = action.notes, !notes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("最近心得")
+                        .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text(notes)
+                        .font(.system(size: AppTheme.FontSize.body))
+                        .foregroundColor(.primary)
+                        .padding(AppTheme.Spacing.sm)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(AppTheme.Radius.small)
+                }
+            }
+
+            // 操作按钮
+            if hasCompletedToday {
+                // 有已完成记录：显示"编辑打卡"和"再打卡"两个按钮
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    Button(action: {
+                        isEditingMode = true
+                        actionToEdit = latestCompletedAction
+                        showingCheckIn = true
+                    }) {
+                        HStack {
+                            Image(systemName: "pencil.circle")
+                            Text("编辑打卡")
+                        }
+                        .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppTheme.Spacing.sm)
+                        .background(AppTheme.Colors.primary)
+                        .cornerRadius(AppTheme.Radius.medium)
+                    }
+                    
+                    Button(action: {
+                        isEditingMode = false
+                        actionToEdit = nil
+                        // 在按钮点击时创建新的action，而不是在sheet闭包中
+                        newAction = manager.createAction(for: knowledge.id, date: Date())
+                        showingCheckIn = true
+                    }) {
+                        HStack {
+                            Image(systemName: "plus.circle")
+                            Text("再打卡")
+                        }
+                        .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppTheme.Spacing.sm)
+                        .background(AppTheme.Colors.primary.opacity(0.1))
+                        .cornerRadius(AppTheme.Radius.medium)
+                    }
+                }
+            } else {
+                // 没有已完成记录：显示"打卡"按钮
+                Button(action: {
+                    isEditingMode = false
+                    actionToEdit = nil
+                    // 在按钮点击时创建新的action，而不是在sheet闭包中
+                    newAction = manager.createAction(for: knowledge.id, date: Date())
+                    showingCheckIn = true
+                }) {
+                    HStack {
+                        Image(systemName: "checkmark.circle")
+                        Text("打卡")
+                    }
+                    .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.sm)
+                    .background(AppTheme.Colors.primary)
+                    .cornerRadius(AppTheme.Radius.medium)
+                }
+            }
+        }
+        .padding(AppTheme.Spacing.lg)
+        .background(Color(.systemBackground))
+        .cornerRadius(AppTheme.Radius.medium)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .sheet(isPresented: $showingCheckIn) {
+            if isEditingMode, let action = actionToEdit {
+                // 编辑模式：编辑最近的一条打卡记录
+                ActionCheckInView(
+                    action: action,
+                    knowledge: knowledge,
+                    manager: manager,
+                    isPresented: $showingCheckIn
+                )
+            } else if let action = newAction {
+                // 新建模式：使用已创建的action
+                ActionCheckInView(
+                    action: action,
+                    knowledge: knowledge,
+                    manager: manager,
+                    isPresented: $showingCheckIn
+                )
+            }
+        }
+        .onChange(of: showingCheckIn) { newValue in
+            // sheet关闭时清理状态
+            if !newValue {
+                // 如果新建的action未完成，删除它
+                // 注意：需要从manager中获取最新的action状态，因为newAction是值类型副本
+                if let action = newAction {
+                    // 从manager中查找最新的action状态
+                    if let latestAction = manager.actions.first(where: { $0.id == action.id }) {
+                        // 如果action未完成，删除它
+                        if !latestAction.isCompleted {
+                            manager.deleteAction(action)
+                        }
+                    } else {
+                        // 如果action不存在于manager中（可能已经被删除），不需要处理
+                    }
+                }
+                actionToEdit = nil
+                newAction = nil
+            }
+        }
+    }
+}
+
+// MARK: - 知行库视图
+struct KnowledgeLibraryView: View {
+    @ObservedObject var manager: KnowledgeActionManager
+    @Environment(\.dismiss) var dismiss
+    @State private var selectedKnowledge: Knowledge? = nil
+
+    private var knowledgesWithAction: [Knowledge] {
+        let filtered = manager.knowledges.filter { $0.hasAction }
+        // 排序：日常打卡类型在前，场景触发类型在后，每组内按创建时间倒序
+        return filtered.sorted { k1, k2 in
+            // 先按类型排序：日常打卡在前，场景触发在后
+            if k1.actionType == .daily && k2.actionType != .daily {
+                return true
+            }
+            if k1.actionType != .daily && k2.actionType == .daily {
+                return false
+            }
+            // 同类型内按创建时间倒序
+            return k1.createdAt > k2.createdAt
+        }
+    }
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                LazyVStack(spacing: AppTheme.Spacing.md) {
+                    ForEach(knowledgesWithAction) { knowledge in
+                        KnowledgeLibraryCardView(
+                            knowledge: knowledge,
+                            manager: manager,
+                            onTap: {
+                                selectedKnowledge = knowledge
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.lg)
+                .padding(.vertical, AppTheme.Spacing.md)
+            }
+            .background(AppGradient.background)
+            .navigationTitle("知行库")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                }
+            }
+            .sheet(item: $selectedKnowledge) { knowledge in
+                KnowledgeActionHistoryView(knowledge: knowledge, manager: manager)
+            }
+        }
+    }
+}
+
+// MARK: - 知行库卡片视图
+struct KnowledgeLibraryCardView: View {
+    let knowledge: Knowledge
+    let manager: KnowledgeActionManager
+    let onTap: () -> Void
+    
+    private var completedCount: Int {
+        manager.getCompletedCount(for: knowledge.id)
+    }
+    
+    private var maxConsecutiveDays: Int {
+        if knowledge.actionType == .daily {
+            return manager.getMaxConsecutiveDays(for: knowledge.id)
+        }
+        return 0
+    }
+    
+    private var completionRate: Double {
+        if knowledge.actionType == .daily {
+            return manager.getCompletionRate(for: knowledge.id)
+        }
+        return 0.0
+    }
+    
+    private var successRate: Double {
+        if knowledge.actionType == .scenario {
+            return manager.getSuccessRate(for: knowledge.id)
+        }
+        return 0.0
+    }
+    
+    private var averageScore: Double {
+        if knowledge.actionType == .scenario {
+            return manager.getAverageScore(for: knowledge.id)
+        }
+        return 0.0
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            // 标题（可点击）
+            Button(action: onTap) {
+                HStack {
+                    Text(knowledge.title)
+                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            // 统计信息
+            if knowledge.actionType == .daily {
+                // 日常打卡类型：已打卡次数、最多连续、完成率
+                HStack(spacing: 0) {
+                    StatItemView(
+                        label: "已打卡",
+                        value: "\(completedCount)",
+                        color: .blue
+                    )
+                    
+                    Divider()
+                        .frame(height: 40)
+                    
+                    StatItemView(
+                        label: "最多连续",
+                        value: "\(maxConsecutiveDays)天",
+                        color: .orange
+                    )
+                    
+                    Divider()
+                        .frame(height: 40)
+                    
+                    StatItemView(
+                        label: "完成率",
+                        value: "\(Int(completionRate * 100))%",
+                        color: completionRate >= 0.7 ? .green : .orange
+                    )
+                }
+                .padding(.vertical, AppTheme.Spacing.md)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .background(Color(.systemGray6))
+                .cornerRadius(AppTheme.Radius.small)
+            } else {
+                // 场景触发类型：已打卡次数、成功率、综合评分
+                HStack(spacing: 0) {
+                    StatItemView(
+                        label: "已打卡",
+                        value: "\(completedCount)",
+                        color: .blue
+                    )
+                    
+                    Divider()
+                        .frame(height: 40)
+                    
+                    StatItemView(
+                        label: "成功率",
+                        value: "\(Int(successRate * 100))%",
+                        color: successRate >= 0.7 ? .green : .orange
+                    )
+                    
+                    Divider()
+                        .frame(height: 40)
+                    
+                    StatItemView(
+                        label: "综合评分",
+                        value: String(format: "%.1f", averageScore),
+                        color: averageScore >= 7.0 ? .green : averageScore >= 5.0 ? .orange : .red
+                    )
+                }
+                .padding(.vertical, AppTheme.Spacing.md)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .background(Color(.systemGray6))
+                .cornerRadius(AppTheme.Radius.small)
+            }
+            
+            // 开启行动/挂起按钮（仅对日常打卡类型）
+            if knowledge.actionType == .daily {
+                Button(action: {
+                    if knowledge.isSuspended {
+                        manager.activateKnowledge(knowledge.id)
+                    } else {
+                        manager.suspendKnowledge(knowledge.id)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: knowledge.isSuspended ? "play.circle" : "pause.circle")
+                        Text(knowledge.isSuspended ? "开启行动" : "挂起")
+                    }
+                    .font(.system(size: AppTheme.FontSize.body, weight: .medium))
+                    .foregroundColor(knowledge.isSuspended ? .white : .orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppTheme.Spacing.sm)
+                    .background(knowledge.isSuspended ? AppTheme.Colors.primary : Color.orange.opacity(0.1))
+                    .cornerRadius(AppTheme.Radius.medium)
+                }
+            }
+        }
+        .padding(AppTheme.Spacing.lg)
+        .background(Color(.systemBackground))
+        .cornerRadius(AppTheme.Radius.medium)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+    }
+}
+
+// MARK: - 行动历史记录视图
+struct KnowledgeActionHistoryView: View {
+    let knowledge: Knowledge
+    @ObservedObject var manager: KnowledgeActionManager
+    @Environment(\.dismiss) var dismiss
+    
+    private var actionRecords: [ActionRecord] {
+        // 只显示已完成的记录，未完成的记录不应该出现在历史中
+        manager.getActionsForKnowledge(knowledge.id)
+            .filter { $0.isCompleted }
+            .sorted { $0.date > $1.date }
+    }
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                LazyVStack(spacing: AppTheme.Spacing.md) {
+                    ForEach(actionRecords) { action in
+                        ActionHistoryCardView(action: action)
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.lg)
+                .padding(.vertical, AppTheme.Spacing.md)
+            }
+            .background(AppGradient.background)
+            .navigationTitle(knowledge.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 行动历史卡片视图
+struct ActionHistoryCardView: View {
+    let action: ActionRecord
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年MM月dd日 HH:mm"
+        return formatter.string(from: date)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+            HStack {
+                Text(formatDate(action.date))
+                    .font(.system(size: AppTheme.FontSize.caption))
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                // 状态标签
+                if action.isCompleted {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.green)
+                        Text("已完成")
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(.green)
+                    }
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "circle")
+                            .font(.system(size: 10))
+                            .foregroundColor(.gray)
+                        Text("未完成")
+                            .font(.system(size: AppTheme.FontSize.caption2))
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+
+            if let notes = action.notes, !notes.isEmpty {
+                Text("今日心得：\(notes)")
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(.primary)
+                    .padding(AppTheme.Spacing.sm)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(AppTheme.Radius.small)
+            }
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(Color(.systemBackground))
+        .cornerRadius(AppTheme.Radius.medium)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+    }
+}
+
+// MARK: - 统计项视图
+struct StatItemView: View {
+    let label: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(value)
+                .font(.system(size: AppTheme.FontSize.title3, weight: .bold))
+                .foregroundColor(color)
+            Text(label)
+                .font(.system(size: AppTheme.FontSize.caption2))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

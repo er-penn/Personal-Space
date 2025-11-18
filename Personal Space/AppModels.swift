@@ -3908,20 +3908,22 @@ struct Knowledge: Identifiable, Codable {
     var hasAction: Bool
     var actionType: ActionType?
     var actionConfig: ActionConfig?
+    var isSuspended: Bool // 挂起状态（行动层面）
 
-    init(title: String, content: String, hasAction: Bool = false, actionType: ActionType? = nil, actionConfig: ActionConfig? = nil) {
+    init(title: String, content: String, hasAction: Bool = false, actionType: ActionType? = nil, actionConfig: ActionConfig? = nil, isSuspended: Bool = false) {
         self.id = UUID()
         self.title = title
         self.content = content
         self.hasAction = hasAction
         self.actionType = actionType
         self.actionConfig = actionConfig
+        self.isSuspended = isSuspended
         self.createdAt = Date()
         self.updatedAt = Date()
     }
     
     // 编辑模式初始化方法（保留id和createdAt）
-    init(id: UUID, title: String, content: String, createdAt: Date, updatedAt: Date, hasAction: Bool, actionType: ActionType?, actionConfig: ActionConfig?) {
+    init(id: UUID, title: String, content: String, createdAt: Date, updatedAt: Date, hasAction: Bool, actionType: ActionType?, actionConfig: ActionConfig?, isSuspended: Bool = false) {
         self.id = id
         self.title = title
         self.content = content
@@ -3930,6 +3932,7 @@ struct Knowledge: Identifiable, Codable {
         self.hasAction = hasAction
         self.actionType = actionType
         self.actionConfig = actionConfig
+        self.isSuspended = isSuspended
     }
 
     // 计算相关联的行动统计
@@ -3975,9 +3978,10 @@ struct ActionRecord: Identifiable, Codable {
     let knowledgeId: UUID
     var date: Date
     var isCompleted: Bool
-    var isSuspended: Bool // 挂起状态
     var notes: String? // 心得备注
     var scenarioTriggered: Bool // 场景是否已触发
+    var isSuccess: Bool? // 是否成功（仅场景触发类型使用）
+    var score: Int? // 评分（1-10，仅成功时有效）
     var attachments: [String] = [] // 图片/附件路径
 
     init(knowledgeId: UUID, date: Date = Date()) {
@@ -3985,8 +3989,9 @@ struct ActionRecord: Identifiable, Codable {
         self.knowledgeId = knowledgeId
         self.date = date
         self.isCompleted = false
-        self.isSuspended = false
         self.scenarioTriggered = false
+        self.isSuccess = nil
+        self.score = nil
     }
 }
 
@@ -4020,6 +4025,11 @@ class KnowledgeActionManager: ObservableObject {
         actions.removeAll { $0.knowledgeId == knowledge.id }
         saveData()
     }
+    
+    func deleteAction(_ action: ActionRecord) {
+        actions.removeAll { $0.id == action.id }
+        saveData()
+    }
 
     // MARK: - 行动管理
     func createAction(for knowledgeId: UUID, date: Date = Date()) -> ActionRecord {
@@ -4029,19 +4039,47 @@ class KnowledgeActionManager: ObservableObject {
         return action
     }
 
-    func completeAction(_ action: ActionRecord, notes: String? = nil) {
+    func completeAction(_ action: ActionRecord, notes: String? = nil, isSuccess: Bool? = nil, score: Int? = nil) {
         if let index = actions.firstIndex(where: { $0.id == action.id }) {
             actions[index].isCompleted = true
             actions[index].notes = notes
-            actions[index].isSuspended = false
+            actions[index].isSuccess = isSuccess
+            actions[index].score = score
             saveData()
         }
     }
-
-    func suspendAction(_ action: ActionRecord) {
+    
+    func updateActionNotes(_ action: ActionRecord, notes: String?, isSuccess: Bool? = nil, score: Int? = nil) {
         if let index = actions.firstIndex(where: { $0.id == action.id }) {
-            actions[index].isSuspended = true
-            actions[index].isCompleted = false
+            actions[index].notes = notes
+            actions[index].isSuccess = isSuccess
+            actions[index].score = score
+            saveData()
+        }
+    }
+    
+    // 挂起/开启行动（在Knowledge层面）
+    func suspendKnowledge(_ knowledgeId: UUID) {
+        if let index = knowledges.firstIndex(where: { $0.id == knowledgeId }) {
+            knowledges[index].isSuspended = true
+            saveData()
+        }
+    }
+    
+    func activateKnowledge(_ knowledgeId: UUID) {
+        if let index = knowledges.firstIndex(where: { $0.id == knowledgeId }) {
+            knowledges[index].isSuspended = false
+            // 如果今天还没有ActionRecord，自动创建一条
+            let today = Calendar.current.startOfDay(for: Date())
+            let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+            let hasTodayAction = actions.contains { action in
+                action.knowledgeId == knowledgeId &&
+                Calendar.current.startOfDay(for: action.date) >= today &&
+                Calendar.current.startOfDay(for: action.date) < tomorrow
+            }
+            if !hasTodayAction {
+                _ = createAction(for: knowledgeId, date: Date())
+            }
             saveData()
         }
     }
@@ -4088,10 +4126,170 @@ class KnowledgeActionManager: ObservableObject {
         let knowledgeActions = getActionsForKnowledge(knowledgeId)
         let total = knowledgeActions.count
         let completed = knowledgeActions.filter { $0.isCompleted }.count
-        let suspended = knowledgeActions.filter { $0.isSuspended }.count
+        let knowledge = knowledges.first { $0.id == knowledgeId }
+        let suspended = knowledge?.isSuspended == true ? 1 : 0
         let completionRate = total > 0 ? Double(completed) / Double(total) : 0
 
         return ActionStats(total: total, completed: completed, suspended: suspended, completionRate: completionRate)
+    }
+    
+    // MARK: - 统计计算函数
+    
+    /// 获取已打卡次数（日常打卡和场景触发都统计）
+    func getCompletedCount(for knowledgeId: UUID) -> Int {
+        return getActionsForKnowledge(knowledgeId).filter { $0.isCompleted }.count
+    }
+    
+    /// 获取打卡完成率（仅对日常打卡类型）
+    func getCompletionRate(for knowledgeId: UUID) -> Double {
+        let knowledgeActions = getActionsForKnowledge(knowledgeId)
+        let total = knowledgeActions.count
+        guard total > 0 else { return 0.0 }
+        let completed = knowledgeActions.filter { $0.isCompleted }.count
+        return Double(completed) / Double(total)
+    }
+    
+    /// 获取本次连续打卡天数（从昨天开始往前的连续天数 + 今天的打卡情况）
+    func getCurrentConsecutiveDays(for knowledgeId: UUID) -> Int {
+        let calendar = Calendar.current
+        let knowledgeActions = getActionsForKnowledge(knowledgeId).filter { $0.isCompleted }
+        let completedDates = Set(knowledgeActions.map { calendar.startOfDay(for: $0.date) })
+        
+        guard !completedDates.isEmpty else { return 0 }
+        
+        // 计算昨天开始往前的连续天数
+        var consecutiveDays = 0
+        var currentDate = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: Date()))!
+        
+        while completedDates.contains(currentDate) {
+            consecutiveDays += 1
+            guard let previousDate = calendar.date(byAdding: .day, value: -1, to: currentDate) else {
+                break
+            }
+            currentDate = previousDate
+        }
+        
+        // 加上今天的打卡情况
+        let today = calendar.startOfDay(for: Date())
+        if completedDates.contains(today) {
+            consecutiveDays += 1
+        }
+        
+        return consecutiveDays
+    }
+    
+    /// 获取历史最长连续打卡天数（包含当前正在进行的连续天数）
+    func getMaxConsecutiveDays(for knowledgeId: UUID) -> Int {
+        let calendar = Calendar.current
+        let knowledgeActions = getActionsForKnowledge(knowledgeId).filter { $0.isCompleted }
+        let completedDates = Set(knowledgeActions.map { calendar.startOfDay(for: $0.date) })
+        
+        guard !completedDates.isEmpty else { return 0 }
+        
+        // 按日期排序
+        let sortedDates = completedDates.sorted()
+        
+        var maxConsecutive = 0
+        var currentConsecutive = 1
+        
+        for i in 1..<sortedDates.count {
+            if let previousDate = calendar.date(byAdding: .day, value: 1, to: sortedDates[i - 1]),
+               calendar.isDate(previousDate, inSameDayAs: sortedDates[i]) {
+                currentConsecutive += 1
+            } else {
+                maxConsecutive = max(maxConsecutive, currentConsecutive)
+                currentConsecutive = 1
+            }
+        }
+        
+        maxConsecutive = max(maxConsecutive, currentConsecutive)
+        return maxConsecutive
+    }
+    
+    /// 获取今日行动列表（日常打卡类型且未挂起）
+    func getTodayDailyActions() -> [ActionRecord] {
+        let today = Calendar.current.startOfDay(for: Date())
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        
+        // 获取所有未挂起的日常打卡类型的Knowledge
+        let activeDailyKnowledges = knowledges.filter { knowledge in
+            knowledge.hasAction &&
+            knowledge.actionType == .daily &&
+            !knowledge.isSuspended
+        }
+        
+        var todayActions: [ActionRecord] = []
+        
+        for knowledge in activeDailyKnowledges {
+            // 查找今天是否已有ActionRecord
+            let existingAction = actions.first { action in
+                action.knowledgeId == knowledge.id &&
+                Calendar.current.startOfDay(for: action.date) >= today &&
+                Calendar.current.startOfDay(for: action.date) < tomorrow
+            }
+            
+            if let action = existingAction {
+                todayActions.append(action)
+            } else {
+                // 自动创建一条未完成的ActionRecord
+                let newAction = createAction(for: knowledge.id, date: Date())
+                todayActions.append(newAction)
+            }
+        }
+        
+        return todayActions
+    }
+    
+    /// 获取日常行动列表（场景触发类型）
+    func getScenarioActions() -> [Knowledge] {
+        return knowledges.filter { knowledge in
+            knowledge.hasAction && knowledge.actionType == .scenario
+        }
+    }
+    
+    /// 获取场景触发类型行动今天的打卡记录（如果存在）
+    func getTodayActionRecord(for knowledgeId: UUID) -> ActionRecord? {
+        let today = Calendar.current.startOfDay(for: Date())
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        
+        return actions.first { action in
+            action.knowledgeId == knowledgeId &&
+            Calendar.current.startOfDay(for: action.date) >= today &&
+            Calendar.current.startOfDay(for: action.date) < tomorrow
+        }
+    }
+    
+    /// 获取场景触发类型行动今天最近的一条已完成的打卡记录
+    func getLatestTodayCompletedAction(for knowledgeId: UUID) -> ActionRecord? {
+        let today = Calendar.current.startOfDay(for: Date())
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        
+        let todayActions = actions.filter { action in
+            action.knowledgeId == knowledgeId &&
+            action.isCompleted &&
+            Calendar.current.startOfDay(for: action.date) >= today &&
+            Calendar.current.startOfDay(for: action.date) < tomorrow
+        }
+        
+        // 按日期倒序排列，返回最近的一条
+        return todayActions.sorted { $0.date > $1.date }.first
+    }
+    
+    /// 获取成功率（仅对场景触发类型）
+    func getSuccessRate(for knowledgeId: UUID) -> Double {
+        let knowledgeActions = getActionsForKnowledge(knowledgeId).filter { $0.isCompleted }
+        guard !knowledgeActions.isEmpty else { return 0.0 }
+        let successCount = knowledgeActions.filter { $0.isSuccess == true }.count
+        return Double(successCount) / Double(knowledgeActions.count)
+    }
+    
+    /// 获取综合评分（仅对场景触发类型，仅统计成功的记录）
+    func getAverageScore(for knowledgeId: UUID) -> Double {
+        let knowledgeActions = getActionsForKnowledge(knowledgeId)
+            .filter { $0.isCompleted && $0.isSuccess == true && $0.score != nil }
+        guard !knowledgeActions.isEmpty else { return 0.0 }
+        let totalScore = knowledgeActions.compactMap { $0.score }.reduce(0, +)
+        return Double(totalScore) / Double(knowledgeActions.count)
     }
 
     // MARK: - 数据持久化
@@ -4150,10 +4348,6 @@ class KnowledgeActionManager: ObservableObject {
                     completedAction.isCompleted = true
                     completedAction.notes = "今天做得不错，继续保持。"
                     sampleActions.append(completedAction)
-                } else if Double.random(in: 0...1) > 0.8 {
-                    var suspendedAction = action
-                    suspendedAction.isSuspended = true
-                    sampleActions.append(suspendedAction)
                 } else {
                     sampleActions.append(action)
                 }
