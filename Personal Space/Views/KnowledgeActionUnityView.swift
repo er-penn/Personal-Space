@@ -1682,7 +1682,7 @@ struct KnowledgeActionHistoryView: View {
             ScrollView {
                 LazyVStack(spacing: AppTheme.Spacing.md) {
                     ForEach(actionRecords) { action in
-                        ActionHistoryCardView(action: action)
+                        ActionHistoryCardView(action: action, knowledge: knowledge)
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.lg)
@@ -1705,11 +1705,16 @@ struct KnowledgeActionHistoryView: View {
 // MARK: - 行动历史卡片视图
 struct ActionHistoryCardView: View {
     let action: ActionRecord
+    let knowledge: Knowledge
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年MM月dd日 HH:mm"
         return formatter.string(from: date)
+    }
+    
+    private var isScenarioType: Bool {
+        knowledge.actionType == .scenario
     }
 
     var body: some View {
@@ -1740,6 +1745,45 @@ struct ActionHistoryCardView: View {
                             .font(.system(size: AppTheme.FontSize.caption2))
                             .foregroundColor(.gray)
                     }
+                }
+            }
+            
+            // 场景触发类型：显示成功/失败和评分（同一行）
+            if isScenarioType {
+                HStack(spacing: AppTheme.Spacing.md) {
+                    // 成功/失败状态
+                    if let isSuccess = action.isSuccess {
+                        HStack(spacing: AppTheme.Spacing.xs) {
+                            Image(systemName: isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(isSuccess ? .green : .red)
+                            Text(isSuccess ? "成功" : "失败")
+                                .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                                .foregroundColor(isSuccess ? .green : .red)
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.sm)
+                        .padding(.vertical, AppTheme.Spacing.xs)
+                        .background((isSuccess ? Color.green : Color.red).opacity(0.1))
+                        .cornerRadius(AppTheme.Radius.small)
+                    }
+                    
+                    // 评分（仅成功时显示）
+                    if let isSuccess = action.isSuccess, isSuccess, let score = action.score {
+                        HStack(spacing: AppTheme.Spacing.xs) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(.orange)
+                            Text("评分：\(score)分")
+                                .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                                .foregroundColor(.orange)
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.sm)
+                        .padding(.vertical, AppTheme.Spacing.xs)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(AppTheme.Radius.small)
+                    }
+                    
+                    Spacer()
                 }
             }
 
