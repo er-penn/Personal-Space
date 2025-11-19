@@ -15,8 +15,13 @@ struct AnxietySoothingGuideView: View {
 
     @State private var selectedTab: GuideTab = .breathing
     @State private var showingCustomContent = false
-    @State private var showingToolDetail = false
     @State private var selectedTool: OfficialTool?
+    @State private var isToolActive = false
+    @State private var currentStep = 0
+    @State private var startTime: Date?
+    @State private var showingCompletion = false
+    @State private var effectivenessRating: Int?
+    @State private var notes: String = ""
 
     var body: some View {
         NavigationView {
@@ -61,10 +66,59 @@ struct AnxietySoothingGuideView: View {
                 .environmentObject(customContentManager)
         }
         .sheet(item: $selectedTool) { tool in
-            OfficialToolsView()
-                .environmentObject(toolsManager)
-                .environmentObject(usageManager)
+            NavigationView {
+                ToolDetailView(
+                    tool: tool,
+                    isActive: $isToolActive,
+                    currentStep: $currentStep,
+                    startTime: $startTime,
+                    showingCompletion: $showingCompletion,
+                    effectivenessRating: $effectivenessRating,
+                    notes: $notes
+                )
+            }
+            .environmentObject(usageManager)
         }
+        .sheet(isPresented: $showingCompletion) {
+            if let tool = selectedTool, let start = startTime {
+                NavigationView {
+                    CompletionRecordView(
+                        tool: tool,
+                        startTime: start,
+                        effectivenessRating: $effectivenessRating,
+                        notes: $notes,
+                        onFinish: finishSession
+                    )
+                }
+                .environmentObject(usageManager)
+            }
+        }
+    }
+    
+    // MARK: - 工具使用完成处理
+    private func finishSession() {
+        guard let tool = selectedTool,
+              let start = startTime else { return }
+
+        let endTime = Date()
+        let record = UsageRecord(
+            toolType: tool.title,
+            startTime: start,
+            endTime: endTime,
+            effectivenessRating: effectivenessRating,
+            notes: notes.isEmpty ? nil : notes
+        )
+
+        usageManager.addRecord(record)
+
+        // 重置状态
+        isToolActive = false
+        currentStep = 0
+        startTime = nil
+        selectedTool = nil
+        effectivenessRating = nil
+        notes = ""
+        showingCompletion = false
     }
 
     // MARK: - 视图组件
@@ -195,51 +249,26 @@ struct AnxietySoothingGuideView: View {
     private var toolsSection: some View {
         ScrollView {
             VStack(spacing: AppTheme.Spacing.lg) {
-                // 推荐工具
-                recommendedToolsSection
-
-                // 所有工具
-                allToolsSection
-            }
-            .padding(AppTheme.Spacing.lg)
-        }
-    }
-
-    private var recommendedToolsSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            Text("推荐工具")
-                .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.text)
-
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: AppTheme.Spacing.md) {
-                ForEach(Array(toolsManager.tools.prefix(2)), id: \.id) { tool in
-                    QuickToolCardView(tool: tool) {
-                        selectedTool = tool
-                    }
-                }
-            }
-        }
-    }
-
-    private var allToolsSection: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            Text("所有工具")
-                .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.text)
-
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: AppTheme.Spacing.md) {
+                // 工具网格
+                LazyVGrid(columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ], spacing: AppTheme.Spacing.md) {
                 ForEach(toolsManager.tools) { tool in
                     QuickToolCardView(tool: tool) {
+                        // 初始化工具使用状态
                         selectedTool = tool
+                        isToolActive = false
+                        currentStep = 0
+                        startTime = nil
+                        showingCompletion = false
+                        effectivenessRating = nil
+                        notes = ""
                     }
                 }
+                }
             }
+            .padding(AppTheme.Spacing.lg)
         }
     }
 
@@ -632,6 +661,157 @@ func colorFromString(_ colorString: String) -> Color {
         }
     default:
         return .blue
+    }
+}
+
+// MARK: - 完成记录视图
+struct CompletionRecordView: View {
+    let tool: OfficialTool
+    let startTime: Date
+    @Binding var effectivenessRating: Int?
+    @Binding var notes: String
+    let onFinish: () -> Void
+    @EnvironmentObject var usageManager: UsageRecordManager
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: AppTheme.Spacing.lg) {
+                    // 标题
+                    Text("完成记录")
+                        .font(.system(size: AppTheme.FontSize.title, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.text)
+                        .padding(.top, AppTheme.Spacing.lg)
+                    
+                    // 工具信息
+                    HStack {
+                        Image(systemName: tool.iconName)
+                            .font(.system(size: 30))
+                            .foregroundColor(colorFromString(tool.color))
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(tool.title)
+                                .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.text)
+                            
+                            Text("时长：\(formatDuration(Date().timeIntervalSince(startTime)))")
+                                .font(.system(size: AppTheme.FontSize.caption))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding()
+                    .background(AppTheme.Colors.cardBg)
+                    .cornerRadius(AppTheme.Radius.large)
+                    
+                    // 评分选择
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        Text("请评价这次练习的效果")
+                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.text)
+                        
+                        Picker("评分", selection: $effectivenessRating) {
+                            Text("未评分").tag(nil as Int?)
+                            ForEach(1...5, id: \.self) { rating in
+                                Text("\(rating) 分").tag(rating as Int?)
+                            }
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                    }
+                    .padding()
+                    .background(AppTheme.Colors.cardBg)
+                    .cornerRadius(AppTheme.Radius.large)
+                    
+                    // 备注输入
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                        Text("备注（可选）")
+                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.text)
+                        
+                        if #available(iOS 16.0, *) {
+                            TextField("写下你的感受...", text: $notes, axis: .vertical)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .lineLimit(3...6)
+                        } else {
+                            ZStack(alignment: .topLeading) {
+                                if notes.isEmpty {
+                                    Text("写下你的感受...")
+                                        .foregroundColor(.gray)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 8)
+                                }
+                                TextEditor(text: $notes)
+                                    .frame(minHeight: 100)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(AppTheme.Colors.cardBg)
+                    .cornerRadius(AppTheme.Radius.large)
+                    
+                    // 按钮
+                    HStack(spacing: AppTheme.Spacing.md) {
+                        Button(action: {
+                            effectivenessRating = nil
+                            notes = ""
+                            onFinish()
+                            presentationMode.wrappedValue.dismiss()
+                        }) {
+                            Text("跳过")
+                                .font(.system(size: AppTheme.FontSize.headline, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(AppTheme.Colors.cardBg)
+                                .cornerRadius(AppTheme.Radius.large)
+                        }
+                        
+                        Button(action: {
+                            onFinish()
+                            presentationMode.wrappedValue.dismiss()
+                        }) {
+                            Text("提交")
+                                .font(.system(size: AppTheme.FontSize.headline, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(AppTheme.Colors.primary)
+                                .cornerRadius(AppTheme.Radius.large)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    Spacer()
+                }
+                .padding(AppTheme.Spacing.lg)
+            }
+            .background(AppGradient.background)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .foregroundColor(AppTheme.Colors.text)
+                }
+            }
+        }
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        if minutes > 0 {
+            return "\(minutes)分\(seconds)秒"
+        } else {
+            return "\(seconds)秒"
+        }
     }
 }
 

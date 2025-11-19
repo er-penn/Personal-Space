@@ -230,6 +230,10 @@ struct ToolDetailView: View {
                     if isActive {
                         stopSession()
                     }
+                    // 如果完成记录弹窗正在显示，先关闭它
+                    if showingCompletion {
+                        showingCompletion = false
+                    }
                     presentationMode.wrappedValue.dismiss()
                 }
             }
@@ -237,6 +241,10 @@ struct ToolDetailView: View {
         .onDisappear {
             if isActive {
                 stopSession()
+            }
+            // 当视图消失时，如果完成记录弹窗还在显示，关闭它
+            if showingCompletion {
+                showingCompletion = false
             }
         }
     }
@@ -319,6 +327,7 @@ struct ToolDetailView: View {
     private var controlSection: some View {
         VStack(spacing: AppTheme.Spacing.md) {
             if isActive {
+                // 练习进行中：显示停止按钮和步骤控制按钮
                 Button(action: stopSession) {
                     HStack {
                         Image(systemName: "stop.fill")
@@ -333,7 +342,78 @@ struct ToolDetailView: View {
                     .cornerRadius(AppTheme.Radius.large)
                 }
                 .buttonStyle(PlainButtonStyle())
+                
+                // 步骤控制按钮
+                HStack(spacing: AppTheme.Spacing.md) {
+                    if currentStep > 0 {
+                        Button(action: previousStep) {
+                            HStack {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 16))
+                                Text("上一步")
+                            }
+                            .foregroundColor(colorFromString(tool.color))
+                            .padding(.horizontal, AppTheme.Spacing.lg)
+                            .padding(.vertical, AppTheme.Spacing.md)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                                    .stroke(colorFromString(tool.color), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        // 第一步时，添加一个占位视图，使"下一步"按钮与后续步骤位置一致
+                        HStack {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16))
+                            Text("上一步")
+                        }
+                        .foregroundColor(.clear)
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+                        .padding(.vertical, AppTheme.Spacing.md)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                                .stroke(Color.clear, lineWidth: 1)
+                        )
+                        .allowsHitTesting(false)
+                    }
+                    
+                    if currentStep < tool.instructions.count - 1 {
+                        Button(action: nextStep) {
+                            HStack {
+                                Text("下一步")
+                                    .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 16))
+                            }
+                            .foregroundColor(colorFromString(tool.color))
+                            .padding(.horizontal, AppTheme.Spacing.lg)
+                            .padding(.vertical, AppTheme.Spacing.md)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                                    .stroke(colorFromString(tool.color), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        Button(action: completeSession) {
+                            HStack {
+                                Text("完成")
+                                    .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 16))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, AppTheme.Spacing.lg)
+                            .padding(.vertical, AppTheme.Spacing.md)
+                            .background(Color.green)
+                            .cornerRadius(AppTheme.Radius.medium)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
             } else {
+                // 未开始练习：只显示开始按钮
                 Button(action: startSession) {
                     HStack {
                         Image(systemName: "play.fill")
@@ -348,58 +428,6 @@ struct ToolDetailView: View {
                     .cornerRadius(AppTheme.Radius.large)
                 }
                 .buttonStyle(PlainButtonStyle())
-
-                if currentStep > 0 && currentStep < tool.instructions.count - 1 {
-                    Button(action: previousStep) {
-                        HStack {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16))
-                            Text("上一步")
-                        }
-                        .foregroundColor(colorFromString(tool.color))
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                        .padding(.vertical, AppTheme.Spacing.md)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                                .stroke(colorFromString(tool.color), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-
-                if currentStep < tool.instructions.count - 1 {
-                    Button(action: nextStep) {
-                        HStack {
-                            Text("下一步")
-                                .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 16))
-                        }
-                        .foregroundColor(colorFromString(tool.color))
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                        .padding(.vertical, AppTheme.Spacing.md)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                                .stroke(colorFromString(tool.color), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                } else {
-                    Button(action: completeSession) {
-                        HStack {
-                            Text("完成")
-                                .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 16))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                        .padding(.vertical, AppTheme.Spacing.md)
-                        .background(Color.green)
-                        .cornerRadius(AppTheme.Radius.medium)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
             }
         }
     }
@@ -430,6 +458,7 @@ struct ToolDetailView: View {
 
     private func completeSession() {
         isActive = false
+        currentStep = 0  // 重置到第一步
         showingCompletion = true
     }
 }
