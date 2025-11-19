@@ -15,7 +15,7 @@ struct Personal_SpaceApp: App {
         WindowGroup {
             // 根据登录状态显示不同视图
             if apiService.isLoggedIn {
-                MainTabView()
+            MainTabView()
             } else {
                 LoginView()
             }

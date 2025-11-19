@@ -74,33 +74,33 @@ struct ProfileView: View {
             Button(action: {
                 showingPersonalInfo = true
             }) {
-                HStack(spacing: AppTheme.Spacing.md) {
-                    // 头像
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: [.blue, .purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 50, height: 50)
-                        .overlay(
-                            Text("我")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.white)
-                        )
+            HStack(spacing: AppTheme.Spacing.md) {
+                // 头像
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [.blue, .purple],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Text("我")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+                
+                // 昵称
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("SSSPenn")
+                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.text)
                     
-                    // 昵称
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("SSSPenn")
-                            .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.text)
-                        
-                        Text("已使用 15 天")
-                            .font(.system(size: AppTheme.FontSize.caption))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    
-                    Spacer()
+                    Text("已使用 15 天")
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                
+                Spacer()
                     
                     // 右箭头提示可点击
                     Image(systemName: "chevron.right")

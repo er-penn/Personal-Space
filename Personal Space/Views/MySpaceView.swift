@@ -563,14 +563,14 @@ struct MySpaceView: View {
                             
                             // TA状态 - 不可点击，仅显示（有伴侣时才显示）
                             if partnerState.hasPartner {
-                                VStack(spacing: 4) {
-                                    // 小电池图标 - 无背景圆形
-                                    BatteryIconView(energyLevel: partnerState.energyLevel)
-                                        .scaleEffect(0.6) // 缩小到60%
-                                    
-                                    Text("TA")
-                                        .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                            VStack(spacing: 4) {
+                                // 小电池图标 - 无背景圆形
+                                BatteryIconView(energyLevel: partnerState.energyLevel)
+                                    .scaleEffect(0.6) // 缩小到60%
+                                
+                                Text("TA")
+                                    .font(.system(size: AppTheme.FontSize.caption2, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
                                 }
                             }
                         }

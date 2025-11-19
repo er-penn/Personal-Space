@@ -35,12 +35,12 @@ def get_current_energy_status(request):
         'current_status': {
             'base_energy_level': current_status['base_energy_level'],
             'display_energy_level': current_status['display_energy_level'],
-            'temporary_state': {
+        'temporary_state': {
                 'is_active': current_status['temporary_state']['is_active'],
                 'type': current_status['temporary_state']['type'],
                 'remaining_minutes': current_status['temporary_state']['remaining_minutes']
-            },
-            'planned_state': {
+        },
+        'planned_state': {
                 'is_active': current_status['planned_state']['is_active'],
                 'level': current_status['planned_state']['level'],
                 'remaining_minutes': current_status['planned_state']['remaining_minutes']
@@ -481,7 +481,7 @@ def update_base_energy_record(request):
                 {'detail': f'时间段缺少必需字段: {required_fields}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+    
         # 验证时间范围
         if not (0 <= slot['start_hour'] <= 23 and 0 <= slot['end_hour'] <= 23):
             return Response(

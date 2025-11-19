@@ -58,22 +58,22 @@ struct OurSpaceView: View {
                 ScrollView {
                     if partnerState.hasPartner {
                         // 有伴侣时显示正常内容
-                        VStack(spacing: AppTheme.Spacing.lg) {
-                            // 1. 顶部状态区（可滚动离开）
-                            partnerStatusSection
-                            
-                            // 2. Tab标签栏（可滚动离开）
-                            tabBarSection
-                            
-                            // 3. TabView内容区（固定高度，支持左右滑动）
-                            tabContentSection
-                            
-                            // 4. 共同记录区（可滚动离开）
-                            commonRecordsSection
-                        }
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                        .padding(.top, AppTheme.Spacing.lg)
-                        .padding(.bottom, AppTheme.Spacing.xl) // 底部留白
+                    VStack(spacing: AppTheme.Spacing.lg) {
+                        // 1. 顶部状态区（可滚动离开）
+                        partnerStatusSection
+                        
+                        // 2. Tab标签栏（可滚动离开）
+                        tabBarSection
+                        
+                        // 3. TabView内容区（固定高度，支持左右滑动）
+                        tabContentSection
+                        
+                        // 4. 共同记录区（可滚动离开）
+                        commonRecordsSection
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.lg)
+                    .padding(.top, AppTheme.Spacing.lg)
+                    .padding(.bottom, AppTheme.Spacing.xl) // 底部留白
                     } else {
                         // 没有伴侣时显示提示页面
                         noPartnerView
