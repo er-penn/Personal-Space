@@ -435,20 +435,6 @@ class OfficialToolsManager: ObservableObject {
     private func loadDefaultTools() {
         tools = [
             OfficialTool(
-                title: "4-7-8 呼吸法",
-                description: "放松呼吸法，帮助缓解焦虑和压力",
-                iconName: "wind",
-                color: "blue",
-                duration: 300,
-                instructions: [
-                    "找一个安静舒适的地方坐下",
-                    "用鼻子慢慢吸气4秒钟",
-                    "屏住呼吸7秒钟",
-                    "用嘴巴慢慢呼气8秒钟",
-                    "重复这个过程，感觉身体逐渐放松"
-                ]
-            ),
-            OfficialTool(
                 title: "渐进式肌肉放松",
                 description: "通过紧张和放松肌肉群来缓解身体紧张",
                 iconName: "figure.walk",
@@ -490,6 +476,81 @@ class OfficialToolsManager: ObservableObject {
                     "思考更平衡、更积极的替代想法",
                     "评估新想法的可信度",
                     "选择相信对你更有帮助的想法"
+                ]
+            ),
+            OfficialTool(
+                title: "正念冥想",
+                description: "通过专注当下，观察思绪而不评判",
+                iconName: "moon.stars",
+                color: "indigo",
+                duration: 600,
+                instructions: [
+                    "找一个安静的地方，舒适地坐下或躺下",
+                    "闭上眼睛，专注于你的呼吸",
+                    "当思绪飘走时，温柔地将注意力带回呼吸",
+                    "观察你的想法，但不要评判它们",
+                    "感受身体的感受，保持开放和接纳",
+                    "慢慢睁开眼睛，带着平静回到当下"
+                ]
+            ),
+            OfficialTool(
+                title: "安全空间可视化",
+                description: "通过想象创造一个内心的安全空间",
+                iconName: "house.fill",
+                color: "teal",
+                duration: 600,
+                instructions: [
+                    "闭上眼睛，深呼吸几次",
+                    "想象一个让你感到完全安全和舒适的地方",
+                    "观察这个地方的细节：颜色、声音、气味",
+                    "感受在这个空间中的安全感和放松感",
+                    "记住这种感觉，随时可以回到这里",
+                    "慢慢睁开眼睛，带着安全感回到当下"
+                ]
+            ),
+            OfficialTool(
+                title: "身体扫描",
+                description: "通过系统性地关注身体各部分来放松",
+                iconName: "hand.raised.fill",
+                color: "cyan",
+                duration: 900,
+                instructions: [
+                    "平躺或舒适地坐下，闭上眼睛",
+                    "从脚趾开始，慢慢将注意力移到身体各部分",
+                    "感受每个部位的感受，不要评判",
+                    "依次扫描：脚、小腿、大腿、腹部、胸部",
+                    "继续向上：手臂、肩膀、颈部、头部",
+                    "感受整个身体的放松和连接"
+                ]
+            ),
+            OfficialTool(
+                title: "感恩练习",
+                description: "通过关注生活中的积极方面来改善情绪",
+                iconName: "heart.fill",
+                color: "pink",
+                duration: 300,
+                instructions: [
+                    "找一个安静的时刻，深呼吸几次",
+                    "思考今天或最近让你感激的三件事",
+                    "可以是小事：一杯热茶、朋友的微笑",
+                    "也可以是大事：健康、家人的支持",
+                    "感受感激带来的温暖和满足感",
+                    "记住这种感觉，让它在心中停留"
+                ]
+            ),
+            OfficialTool(
+                title: "交替鼻孔呼吸法",
+                description: "通过平衡左右脑活动来平静身心",
+                iconName: "wind",
+                color: "blue",
+                duration: 300,
+                instructions: [
+                    "用右手拇指按住右鼻孔",
+                    "通过左鼻孔慢慢吸气4秒",
+                    "用右手无名指按住左鼻孔，屏息4秒",
+                    "松开右鼻孔，通过右鼻孔慢慢呼气8秒",
+                    "通过右鼻孔吸气4秒，屏息4秒",
+                    "松开左鼻孔，通过左鼻孔呼气8秒，重复循环"
                 ]
             )
         ]
