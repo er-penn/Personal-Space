@@ -13,7 +13,7 @@ struct AnxietySoothingGuideView: View {
     @StateObject private var toolsManager = OfficialToolsManager()
     @StateObject private var usageManager = UsageRecordManager()
 
-    @State private var selectedTab: GuideTab = .breathing
+    @State private var selectedTab: GuideTab = .selfCare
     @State private var showingCustomContent = false
     @State private var selectedTool: OfficialTool?
     @State private var isToolActive = false
@@ -173,6 +173,8 @@ struct AnxietySoothingGuideView: View {
     private var contentSection: some View {
         Group {
             switch selectedTab {
+            case .selfCare:
+                selfCareSection
             case .breathing:
                 breathingSection
             case .tools:
@@ -182,6 +184,194 @@ struct AnxietySoothingGuideView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - 自我关怀区域
+    private var selfCareSection: some View {
+        ScrollView {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                // 每日自我关怀提醒
+                dailySelfCareReminderSection
+                
+                // 自我觉察练习
+                selfAwarenessSection
+                
+                // 自我接纳与爱
+                selfAcceptanceSection
+                
+                // 长期修炼指南
+                longTermPracticeSection
+            }
+            .padding(AppTheme.Spacing.lg)
+        }
+    }
+    
+    // MARK: - 每日自我关怀提醒
+    private var dailySelfCareReminderSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            HStack {
+                Image(systemName: "sun.max.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.orange)
+                
+                Text("每日自我关怀提醒")
+                    .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.text)
+            }
+            
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                SelfCareCardView(
+                    icon: "hand.raised.fill",
+                    title: "关注自己的感受",
+                    content: "今天你关注自己的感受了吗？停下来，感受一下此刻的情绪和身体状态。",
+                    color: .blue
+                )
+                
+                SelfCareCardView(
+                    icon: "person.fill.checkmark",
+                    title: "你的需求同样重要",
+                    content: "记住，你的需求和感受同样重要。不要总是把别人放在第一位，也要照顾自己。",
+                    color: .purple
+                )
+                
+                SelfCareCardView(
+                    icon: "sparkles",
+                    title: "今天你为自己做了什么？",
+                    content: "每天至少做一件让自己感到愉悦或放松的事。不需要很大，可以是听一首喜欢的歌，或者喝一杯热茶。",
+                    color: .yellow
+                )
+            }
+        }
+        .padding()
+        .background(AppTheme.Colors.cardBg)
+        .cornerRadius(AppTheme.Radius.large)
+        .shadow(color: AppTheme.Shadows.card, radius: 4, x: 0, y: 2)
+    }
+    
+    // MARK: - 自我觉察练习
+    private var selfAwarenessSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            HStack {
+                Image(systemName: "eye.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.indigo)
+                
+                Text("自我觉察练习")
+                    .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.text)
+            }
+            
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                SelfCareCardView(
+                    icon: "eye.circle.fill",
+                    title: "观察你的情绪，不评判",
+                    content: "当情绪出现时，试着像观察云朵一样观察它。不评判，不抗拒，只是静静地观察。",
+                    color: .indigo
+                )
+                
+                SelfCareCardView(
+                    icon: "ear.fill",
+                    title: "倾听内心的声音",
+                    content: "找个安静的时刻，闭上眼睛，倾听你内心的声音。它在说什么？它需要什么？",
+                    color: .teal
+                )
+                
+                SelfCareCardView(
+                    icon: "shield.fill",
+                    title: "了解自己的边界",
+                    content: "每个人都有边界。了解并尊重自己的边界，学会说'不'，保护自己的能量。",
+                    color: .orange
+                )
+            }
+        }
+        .padding()
+        .background(AppTheme.Colors.cardBg)
+        .cornerRadius(AppTheme.Radius.large)
+        .shadow(color: AppTheme.Shadows.card, radius: 4, x: 0, y: 2)
+    }
+    
+    // MARK: - 自我接纳与爱
+    private var selfAcceptanceSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            HStack {
+                Image(systemName: "heart.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.red)
+                
+                Text("自我接纳与爱")
+                    .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.text)
+            }
+            
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                SelfCareCardView(
+                    icon: "checkmark.circle.fill",
+                    title: "允许自己不够完美",
+                    content: "完美是不存在的。允许自己有缺点，允许自己犯错，允许自己不够好。这就是真实的你。",
+                    color: .green
+                )
+                
+                SelfCareCardView(
+                    icon: "person.2.fill",
+                    title: "善待自己，就像善待最好的朋友",
+                    content: "想象一下，如果是你最好的朋友遇到同样的情况，你会怎么安慰他？用同样的方式对待自己。",
+                    color: .blue
+                )
+                
+                SelfCareCardView(
+                    icon: "star.fill",
+                    title: "你的存在本身就有价值",
+                    content: "你的价值不取决于你的成就、外貌或他人的认可。你的存在本身就有价值，无需证明。",
+                    color: .yellow
+                )
+            }
+        }
+        .padding()
+        .background(AppTheme.Colors.cardBg)
+        .cornerRadius(AppTheme.Radius.large)
+        .shadow(color: AppTheme.Shadows.card, radius: 4, x: 0, y: 2)
+    }
+    
+    // MARK: - 长期修炼指南
+    private var longTermPracticeSection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            HStack {
+                Image(systemName: "infinity")
+                    .font(.system(size: 24))
+                    .foregroundColor(.purple)
+                
+                Text("长期修炼指南")
+                    .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.text)
+            }
+            
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                SelfCareCardView(
+                    icon: "calendar",
+                    title: "建立日常的自我关怀习惯",
+                    content: "每天花5-10分钟，做一些让自己感到舒适和放松的事情。可以是冥想、阅读、散步，或任何你喜欢的事。",
+                    color: .purple
+                )
+                
+                SelfCareCardView(
+                    icon: "brain.head.profile",
+                    title: "培养自我觉察的能力",
+                    content: "定期停下来，问自己：'我现在感觉如何？' '我需要什么？' 培养这种觉察能力，它会帮助你更好地照顾自己。",
+                    color: .cyan
+                )
+                
+                SelfCareCardView(
+                    icon: "hand.raised.slash.fill",
+                    title: "学会说'不'，保护自己的能量",
+                    content: "不是所有的请求都需要答应。学会说'不'，保护自己的时间和精力。你的能量是有限的，要用在重要的事情上。",
+                    color: .red
+                )
+            }
+        }
+        .padding()
+        .background(AppTheme.Colors.cardBg)
+        .cornerRadius(AppTheme.Radius.large)
+        .shadow(color: AppTheme.Shadows.card, radius: 4, x: 0, y: 2)
     }
 
     // MARK: - 呼吸练习区域
@@ -402,6 +592,7 @@ struct AnxietySoothingGuideView: View {
 
 // MARK: - 辅助枚举
 enum GuideTab: String, CaseIterable {
+    case selfCare = "自我关怀"
     case breathing = "呼吸练习"
     case tools = "官方工具"
     case custom = "自定义内容"
@@ -412,6 +603,7 @@ enum GuideTab: String, CaseIterable {
 
     var iconName: String {
         switch self {
+        case .selfCare: return "heart.circle.fill"
         case .breathing: return "wind"
         case .tools: return "briefcase.medical"
         case .custom: return "heart.text.square"
@@ -812,6 +1004,39 @@ struct CompletionRecordView: View {
         } else {
             return "\(seconds)秒"
         }
+    }
+}
+
+// MARK: - 自我关怀卡片视图
+struct SelfCareCardView: View {
+    let icon: String
+    let title: String
+    let content: String
+    let color: Color
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(color)
+                .frame(width: 30)
+            
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                Text(title)
+                    .font(.system(size: AppTheme.FontSize.subheadline, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.text)
+                
+                Text(content)
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            Spacer()
+        }
+        .padding(AppTheme.Spacing.md)
+        .background(color.opacity(0.1))
+        .cornerRadius(AppTheme.Radius.medium)
     }
 }
 
