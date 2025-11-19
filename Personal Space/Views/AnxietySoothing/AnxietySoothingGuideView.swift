@@ -166,7 +166,7 @@ struct AnxietySoothingGuideView: View {
                 BreathingTipView(
                     pattern: ._4_7_8,
                     title: "放松呼吸法",
-                    description: "深度放松，缓解压力",
+                    description: "无屏息设计，节奏流畅自然",
                     benefits: ["深度放松", "降低心率", "缓解失眠"]
                 )
 
@@ -175,6 +175,13 @@ struct AnxietySoothingGuideView: View {
                     title: "三角呼吸法",
                     description: "平衡身心，增强平静",
                     benefits: ["平衡情绪", "增强意识", "减轻紧张"]
+                )
+                
+                BreathingTipView(
+                    pattern: ._7_11,
+                    title: "深度呼吸法",
+                    description: "深度腹式呼吸，最大程度放松",
+                    benefits: ["深度放松", "缓解焦虑", "改善睡眠"]
                 )
             }
         }

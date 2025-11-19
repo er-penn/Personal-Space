@@ -16,7 +16,7 @@ import Combine
 enum BreathingPattern: String, CaseIterable, Codable {
     case box_4_4_4_4 = "方形呼吸 (4-4-4-4)"
     case triangle_4_7_8 = "三角呼吸 (4-7-8)"
-    case _4_7_8 = "放松呼吸 (4-7-8)"
+    case _4_7_8 = "放松呼吸 (4-8)"
     case _7_11 = "深度呼吸 (7-11)"
 
     var inhaleTime: TimeInterval {
@@ -31,8 +31,8 @@ enum BreathingPattern: String, CaseIterable, Codable {
     var holdTime: TimeInterval {
         switch self {
         case .box_4_4_4_4: return 4.0
-        case .triangle_4_7_8: return 7.0
-        case ._4_7_8: return 7.0
+        case .triangle_4_7_8: return 7.0  // 三角呼吸法：4-7-8（有屏息）
+        case ._4_7_8: return 0.0  // 放松呼吸法：4-0-8（无屏息，更流畅）
         case ._7_11: return 0.0
         }
     }
@@ -40,8 +40,8 @@ enum BreathingPattern: String, CaseIterable, Codable {
     var exhaleTime: TimeInterval {
         switch self {
         case .box_4_4_4_4: return 4.0
-        case .triangle_4_7_8: return 8.0
-        case ._4_7_8: return 8.0
+        case .triangle_4_7_8: return 8.0  // 三角呼吸法：4-7-8
+        case ._4_7_8: return 8.0  // 放松呼吸法：4-0-8（吸气-呼气，无屏息）
         case ._7_11: return 11.0
         }
     }
@@ -60,7 +60,12 @@ enum BreathingPattern: String, CaseIterable, Codable {
     }
 
     var description: String {
-        return "\(Int(inhaleTime))-\(Int(holdTime))-\(Int(exhaleTime))\(restTime > 0 ? "-\(Int(restTime))" : "")"
+        // 如果屏息时间为0，不显示屏息阶段
+        if holdTime == 0 {
+            return "\(Int(inhaleTime))-\(Int(exhaleTime))\(restTime > 0 ? "-\(Int(restTime))" : "")"
+        } else {
+            return "\(Int(inhaleTime))-\(Int(holdTime))-\(Int(exhaleTime))\(restTime > 0 ? "-\(Int(restTime))" : "")"
+        }
     }
 }
 

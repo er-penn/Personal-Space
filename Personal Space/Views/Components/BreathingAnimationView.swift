@@ -59,11 +59,9 @@ struct BreathingAnimationView: View {
                 .stroke(getPhaseColor(), lineWidth: CGFloat(3 - index))
                 .scaleEffect(scale * (1.0 + Double(index) * 0.3))
                 .opacity(opacity * (1.0 - Double(index) * 0.2))
-                .animation(
-                    Animation.easeInOut(duration: getCurrentPhaseDuration())
-                    .repeatForever(autoreverses: false),
-                    value: scale
-                )
+                .animation(.easeInOut(duration: getCurrentPhaseDuration()), value: scale)
+                .animation(.easeInOut(duration: getCurrentPhaseDuration()), value: opacity)
+                .animation(.easeInOut(duration: getCurrentPhaseDuration()), value: currentPhase)
         }
     }
     
@@ -121,26 +119,57 @@ struct BreathingAnimationView: View {
     }
     
     private var patternPicker: some View {
-        Picker("呼吸模式", selection: $selectedPattern) {
-            ForEach(BreathingPattern.allCases, id: \.self) { pattern in
-                Text(pattern.rawValue)
-                    .font(.system(size: AppTheme.FontSize.body))
-                    .tag(pattern)
+        HStack {
+            Spacer()
+            HStack(spacing: AppTheme.Spacing.sm) {
+                ForEach(BreathingPattern.allCases, id: \.self) { pattern in
+                    Button(action: {
+                        // 切换呼吸模式
+                        selectedPattern = pattern
+                        // 如果正在运行，重启呼吸
+                        if isRunning {
+                            stopBreathing()
+                            startBreathing()
+                        }
+                    }) {
+                        Text(getPatternShortName(pattern))
+                            .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
+                            .foregroundColor(selectedPattern == pattern ? .white : AppTheme.Colors.text)
+                            .padding(.horizontal, AppTheme.Spacing.md)
+                            .padding(.vertical, AppTheme.Spacing.sm)
+                            .background(
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                                    .fill(selectedPattern == pattern ? AppTheme.Colors.primary : AppTheme.Colors.cardBg)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                                    .stroke(selectedPattern == pattern ? AppTheme.Colors.primary : Color.clear, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
+            Spacer()
         }
-        .pickerStyle(MenuPickerStyle())
-        .foregroundColor(AppTheme.Colors.text)
-        .onChange(of: selectedPattern) { _ in
-            if isRunning {
-                stopBreathing()
-                startBreathing()
-            }
+    }
+    
+    // 获取呼吸法的简短名称（用于按钮显示）
+    private func getPatternShortName(_ pattern: BreathingPattern) -> String {
+        switch pattern {
+        case .box_4_4_4_4:
+            return "方形"
+        case .triangle_4_7_8:
+            return "三角"
+        case ._4_7_8:
+            return "放松"
+        case ._7_11:
+            return "深度"
         }
     }
     
     private var patternDescriptionSection: some View {
         VStack(spacing: AppTheme.Spacing.sm) {
-            Text("推荐：\(selectedPattern.rawValue)")
+            Text("当前：\(selectedPattern.rawValue)")
                 .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
                 .foregroundColor(AppTheme.Colors.text)
             
@@ -176,46 +205,111 @@ struct BreathingAnimationView: View {
     }
 
     private func moveToPhase(_ phase: BreathingPhase) {
+        // 停止之前的定时器
+        timer?.invalidate()
+        timer = nil
+        
         currentPhase = phase
 
         // 播放阶段对应的音效
         playPhaseSound()
 
         // 重置进度
-        withAnimation(.linear(duration: 0.2)) {
-            phaseProgress = 0.0
-        }
+        phaseProgress = 0.0
+        
+        // 根据阶段更新动画参数
+        updateAnimationForPhase(phase)
 
-        // 启动下一阶段的定时器
-        timer = Timer.scheduledTimer(withTimeInterval: getCurrentPhaseDuration(), repeats: false) { _ in
-            moveToNextPhase()
-        }
-
-        // 启动进度动画
+        // 启动进度动画和阶段切换定时器
         startProgressAnimation()
     }
 
     private func moveToNextPhase() {
+        guard isRunning else { return }
+        
         switch currentPhase {
         case .inhale:
-            moveToPhase(.hold)
+            // 如果 holdTime 为 0，跳过屏息阶段
+            if selectedPattern.holdTime > 0 {
+                moveToPhase(.hold)
+            } else {
+                moveToPhase(.exhale)
+            }
         case .hold:
             moveToPhase(.exhale)
         case .exhale:
-            moveToPhase(selectedPattern.restTime > 0 ? .rest : .inhale)
+            // 如果 restTime > 0，进入休息阶段，否则直接进入下一轮吸气
+            if selectedPattern.restTime > 0 {
+                moveToPhase(.rest)
+            } else {
+                moveToPhase(.inhale)
+            }
         case .rest:
             moveToPhase(.inhale)
         }
     }
 
     private func startProgressAnimation() {
-        timer?.invalidate()
-        timer = nil
-
         let duration = getCurrentPhaseDuration()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+        
+        // 如果阶段时长为 0，立即切换到下一阶段
+        guard duration > 0 else {
+            moveToNextPhase()
+            return
+        }
+        
+        // 使用类来存储 elapsedTime，以便在闭包中修改
+        class TimeTracker {
+            var elapsedTime: TimeInterval = 0.0
+        }
+        let timeTracker = TimeTracker()
+        
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+            guard self.isRunning else {
+                timer.invalidate()
+                return
+            }
+            
+            timeTracker.elapsedTime += 0.1
+            
+            // 更新进度
             withAnimation(.linear(duration: 0.1)) {
-                phaseProgress = min(phaseProgress + 0.1 / duration, 1.0)
+                self.phaseProgress = min(timeTracker.elapsedTime / duration, 1.0)
+            }
+            
+            // 当阶段时间到达时，切换到下一阶段
+            if timeTracker.elapsedTime >= duration {
+                timer.invalidate()
+                self.moveToNextPhase()
+            }
+        }
+    }
+    
+    private func updateAnimationForPhase(_ phase: BreathingPhase) {
+        let duration = getCurrentPhaseDuration()
+        
+        switch phase {
+        case .inhale:
+            // 吸气：放大并增加不透明度
+            withAnimation(.easeInOut(duration: duration)) {
+                scale = 1.5
+                opacity = 0.8
+            }
+        case .hold:
+            // 屏息：保持当前状态
+            // scale 和 opacity 保持不变
+            break
+        case .exhale:
+            // 呼气：缩小并降低不透明度
+            withAnimation(.easeInOut(duration: duration)) {
+                scale = 1.0
+                opacity = 0.3
+            }
+        case .rest:
+            // 休息：保持最小状态
+            withAnimation(.easeInOut(duration: duration)) {
+                scale = 1.0
+                opacity = 0.3
             }
         }
     }
@@ -256,7 +350,7 @@ struct BreathingAnimationView: View {
         case .exhale:
             return "呼气"
         case .rest:
-            return "休息"
+            return "暂停呼吸"
         }
     }
 
@@ -269,7 +363,7 @@ struct BreathingAnimationView: View {
         case .exhale:
             return "通过嘴巴慢慢呼气"
         case .rest:
-            return "放松休息"
+            return "呼气后暂停呼吸，自然停顿"
         }
     }
 
