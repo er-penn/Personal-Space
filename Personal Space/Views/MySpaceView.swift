@@ -81,7 +81,7 @@ struct MySpaceView: View {
         let firstLine = "今日打卡：\(completed)/\(total) 已完成"
         let consecutiveDays = knowledgeActionManager.getConsecutiveCompletionDays()
         let flame = consecutiveDays >= 3 ? " 🔥" : ""
-        let secondLine = "连续打卡：\(consecutiveDays)天\(flame)"
+        let secondLine = "持续打卡：\(consecutiveDays)天\(flame)"
         return firstLine + "\n" + secondLine
     }
     
