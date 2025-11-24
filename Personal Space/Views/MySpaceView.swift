@@ -64,6 +64,12 @@ struct MySpaceView: View {
     @StateObject private var knowledgeActionManager = KnowledgeActionManager()
     @StateObject private var customContentManager = CustomContentManager()
     
+    // MARK: - 随手记相关状态变量
+    @StateObject private var quickNoteManager = QuickNoteManager()
+    @State private var showingQuickNoteList = false
+    @State private var showingQuickNoteChat = false
+    @State private var selectedQuickNoteId: UUID? = nil
+    
     init() {
         // 每天第一次打开app时重置状态
         let today = Calendar.current.startOfDay(for: Date())
@@ -168,6 +174,11 @@ struct MySpaceView: View {
                         // 我的动态内容部分
                         MyMomentSection(onTap: { showingMyMoments = true })
                             .environmentObject(userState)
+                        
+                        // 随手记卡片
+                        QuickNoteCardSection(manager: quickNoteManager, onTap: {
+                            showingQuickNoteList = true
+                        })
                         
                         // 焦虑平复指南卡片（放在最后）
                         FunctionCardView(card: anxietyGuideCard)
@@ -297,6 +308,19 @@ struct MySpaceView: View {
         .sheet(isPresented: $showingAnxietySoothingGuide) {
             AnxietySoothingGuideView()
                 .environmentObject(customContentManager)
+        }
+        .fullScreenCover(isPresented: $showingQuickNoteList) {
+            QuickNoteListView(manager: quickNoteManager)
+        }
+        .fullScreenCover(isPresented: $showingQuickNoteChat) {
+            QuickNoteChatView(
+                noteId: selectedQuickNoteId,
+                manager: quickNoteManager,
+                onDismiss: {
+                    selectedQuickNoteId = nil
+                    showingQuickNoteChat = false
+                }
+            )
         }
     }
     
@@ -822,6 +846,9 @@ struct MySpaceView: View {
             showingFragmentCreate = true
         case "发布瞬间":
             showingMomentCreate = true
+        case "随手记":
+            selectedQuickNoteId = nil
+            showingQuickNoteChat = true
         default:
             break
         }
@@ -1037,7 +1064,8 @@ struct FABMenuView: View {
         ("安心确认", "checkmark.circle", Color.green),
         ("赠送心意", "gift", Color.pink),
         ("分享碎片", "photo", Color.orange),
-        ("发布瞬间", "camera", Color.purple)
+        ("发布瞬间", "camera", Color.purple),
+        ("随手记", "note.text", Color.indigo)
     ]
     
     // 根据是否有伴侣关系过滤菜单项
@@ -1046,8 +1074,8 @@ struct FABMenuView: View {
             // 有伴侣时显示所有功能
             return allFabItems
         } else {
-            // 没有伴侣时只显示"发布瞬间"
-            return allFabItems.filter { $0.0 == "发布瞬间" }
+            // 没有伴侣时只显示"发布瞬间"和"随手记"
+            return allFabItems.filter { $0.0 == "发布瞬间" || $0.0 == "随手记" }
         }
     }
     
