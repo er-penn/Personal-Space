@@ -146,7 +146,7 @@ struct QuickNote: Identifiable, Codable {
     // 生成默认标题（时间戳格式）
     static func generateDefaultTitle(from date: Date = Date()) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyMMddHHmmss"
+        formatter.dateFormat = "yy-MM-dd HH:mm:ss"
         return formatter.string(from: date)
     }
     
@@ -162,35 +162,18 @@ struct QuickNote: Identifiable, Codable {
     // 获取最近一条消息
     var latestMessage: NoteMessage? {
         let sorted = messages.sorted { $0.createdAt > $1.createdAt }
-        let latest = sorted.first
-        print("🔍 [QuickNote.latestMessage] title: \(title)")
-        print("🔍 [QuickNote.latestMessage] messages.count: \(messages.count)")
-        if !messages.isEmpty {
-            print("🔍 [QuickNote.latestMessage] 所有消息的时间戳:")
-            for (index, msg) in messages.sorted(by: { $0.createdAt < $1.createdAt }).enumerated() {
-                print("   [\(index)] createdAt: \(msg.createdAt), type: \(msg.type.rawValue), badge: \(msg.badge?.rawValue ?? "无"), content: \(msg.content?.prefix(20) ?? "无内容")")
-            }
-        }
-        if let latest = latest {
-            print("✅ [QuickNote.latestMessage] 最新消息 - createdAt: \(latest.createdAt), type: \(latest.type.rawValue), badge: \(latest.badge?.rawValue ?? "无")")
-        } else {
-            print("⚠️ [QuickNote.latestMessage] 没有消息")
-        }
-        return latest
+        return sorted.first
     }
     
     // 获取最近消息预览
     var latestMessagePreview: String {
-        print("🔍 [QuickNote.latestMessagePreview] title: \(title)")
         guard let latest = latestMessage else {
-            print("⚠️ [QuickNote.latestMessagePreview] 没有最新消息")
             return ""
         }
         var preview = latest.getPreviewText()
         if let badge = latest.badge {
             preview += " [\(badge.rawValue)]"
         }
-        print("✅ [QuickNote.latestMessagePreview] 预览文本: \(preview)")
         return preview
     }
     
@@ -198,37 +181,23 @@ struct QuickNote: Identifiable, Codable {
     var hasInsight: Bool {
         let hasSummary = insightSummary != nil && !insightSummary!.isEmpty
         let hasMessage = messages.contains { $0.badge == .insight }
-        let result = hasSummary || hasMessage
-        print("🔍 [QuickNote.hasInsight] title: \(title), hasSummary: \(hasSummary), hasMessage: \(hasMessage), result: \(result)")
-        return result
+        return hasSummary || hasMessage
     }
     
     var hasPainPoint: Bool {
         let hasSummary = painPointSummary != nil && !painPointSummary!.isEmpty
         let hasMessage = messages.contains { $0.badge == .painPoint }
-        let result = hasSummary || hasMessage
-        print("🔍 [QuickNote.hasPainPoint] title: \(title), hasSummary: \(hasSummary), hasMessage: \(hasMessage), result: \(result)")
-        if hasMessage {
-            print("   📌 包含痛点的消息:")
-            for msg in messages.filter({ $0.badge == .painPoint }) {
-                print("      - createdAt: \(msg.createdAt), content: \(msg.content?.prefix(30) ?? "无内容")")
-            }
-        }
-        return result
+        return hasSummary || hasMessage
     }
     
     var hasSolution: Bool {
         let hasSummary = solutionSummary != nil && !solutionSummary!.isEmpty
         let hasMessage = messages.contains { $0.badge == .solution }
-        let result = hasSummary || hasMessage
-        print("🔍 [QuickNote.hasSolution] title: \(title), hasSummary: \(hasSummary), hasMessage: \(hasMessage), result: \(result)")
-        return result
+        return hasSummary || hasMessage
     }
     
     var isAnalyzed: Bool {
-        let result = hasInsight || hasPainPoint || hasSolution
-        print("🔍 [QuickNote.isAnalyzed] title: \(title), hasInsight: \(hasInsight), hasPainPoint: \(hasPainPoint), hasSolution: \(hasSolution), result: \(result)")
-        return result
+        return hasInsight || hasPainPoint || hasSolution
     }
     
     // 获取指定角标的所有消息（按时间顺序）
@@ -273,13 +242,11 @@ class QuickNoteManager: ObservableObject {
         let duplicateIndices = notes.enumerated().filter { $0.element.id == note.id }.map { $0.offset }
         
         if duplicateIndices.isEmpty {
-            print("⚠️ [QuickNoteManager.updateNote] 未找到要更新的 note: \(note.id.uuidString)")
             return
         }
         
         // 如果有多个重复的，先删除所有重复的
         if duplicateIndices.count > 1 {
-            print("🔄 [QuickNoteManager.updateNote] 发现 \(duplicateIndices.count) 个重复的 note，先删除所有")
             notes.removeAll { $0.id == note.id }
         }
         
@@ -294,7 +261,6 @@ class QuickNoteManager: ObservableObject {
         }
         
         saveNotes()
-        print("✅ [QuickNoteManager.updateNote] 更新完成 - id: \(note.id.uuidString), messages.count: \(updatedNote.messages.count)")
     }
     
     func deleteNote(_ note: QuickNote) {
@@ -314,31 +280,10 @@ class QuickNoteManager: ObservableObject {
     // MARK: - 查询操作
     
     func getNotes(filter: QuickNoteFilter = .all) -> [QuickNote] {
-        print("🔍 [QuickNoteManager.getNotes] filter: \(filter.rawValue)")
-        print("🔍 [QuickNoteManager.getNotes] 原始 notes.count: \(notes.count)")
-        
-        // 统计空记录
-        let emptyNotes = notes.filter { $0.messages.isEmpty }
-        if !emptyNotes.isEmpty {
-            print("⚠️ [QuickNoteManager.getNotes] 发现 \(emptyNotes.count) 条空记录（没有消息）:")
-            for (index, note) in emptyNotes.enumerated() {
-                print("   [\(index)] id: \(note.id.uuidString), title: \(note.title), messages.count: \(note.messages.count)")
-            }
-        }
-        
         // 过滤掉没有消息的记录
         let notesWithMessages = notes.filter { !$0.messages.isEmpty }
-        print("🔍 [QuickNoteManager.getNotes] 有消息的 notes.count: \(notesWithMessages.count)")
-        
         let filtered = filterNotes(notesWithMessages, by: filter)
-        print("🔍 [QuickNoteManager.getNotes] 筛选后的 notes.count: \(filtered.count)")
-        for (index, note) in filtered.enumerated() {
-            print("   [\(index)] title: \(note.title), messages.count: \(note.messages.count), isAnalyzed: \(note.isAnalyzed)")
-        }
-        
-        let sorted = filtered.sorted { $0.latestUpdateTime > $1.latestUpdateTime }
-        print("✅ [QuickNoteManager.getNotes] 最终返回 \(sorted.count) 条记录")
-        return sorted
+        return filtered.sorted { $0.latestUpdateTime > $1.latestUpdateTime }
     }
     
     func getRecentNotes(count: Int = 3) -> [QuickNote] {
@@ -349,32 +294,18 @@ class QuickNoteManager: ObservableObject {
     }
     
     private func filterNotes(_ notes: [QuickNote], by filter: QuickNoteFilter) -> [QuickNote] {
-        print("🔍 [QuickNoteManager.filterNotes] filter: \(filter.rawValue), 输入 notes.count: \(notes.count)")
-        
-        let result: [QuickNote]
         switch filter {
         case .all:
-            result = notes
-            print("🔍 [QuickNoteManager.filterNotes] 全部 - 返回 \(result.count) 条")
+            return notes
         case .notAnalyzed:
-            result = notes.filter { note in
-                let isAnalyzed = note.isAnalyzed
-                print("   🔍 检查 note '\(note.title)': isAnalyzed = \(isAnalyzed)")
-                return !isAnalyzed
-            }
-            print("🔍 [QuickNoteManager.filterNotes] 未拆解 - 返回 \(result.count) 条")
+            return notes.filter { !$0.isAnalyzed }
         case .hasInsight:
-            result = notes.filter { $0.hasInsight }
-            print("🔍 [QuickNoteManager.filterNotes] 有洞察 - 返回 \(result.count) 条")
+            return notes.filter { $0.hasInsight }
         case .hasPainPoint:
-            result = notes.filter { $0.hasPainPoint }
-            print("🔍 [QuickNoteManager.filterNotes] 有痛点 - 返回 \(result.count) 条")
+            return notes.filter { $0.hasPainPoint }
         case .hasSolution:
-            result = notes.filter { $0.hasSolution }
-            print("🔍 [QuickNoteManager.filterNotes] 有方案 - 返回 \(result.count) 条")
+            return notes.filter { $0.hasSolution }
         }
-        
-        return result
     }
     
     // MARK: - 文件管理
@@ -420,7 +351,6 @@ class QuickNoteManager: ObservableObject {
     // MARK: - 数据持久化
     
     private func loadNotes() {
-        print("📦 [QuickNoteManager.loadNotes] 开始加载数据")
         if let data = userDefaults.data(forKey: notesKey),
            let decoded = try? JSONDecoder().decode([QuickNote].self, from: data) {
             // 去重：如果有重复的 ID，保留最新的（updatedAt 最大的）
@@ -430,9 +360,6 @@ class QuickNoteManager: ObservableObject {
                     // 如果已存在，保留 updatedAt 更大的
                     if note.updatedAt > existing.updatedAt {
                         uniqueNotes[note.id] = note
-                        print("🔄 [QuickNoteManager.loadNotes] 发现重复 ID: \(note.id.uuidString)，保留更新版本")
-                    } else {
-                        print("🔄 [QuickNoteManager.loadNotes] 发现重复 ID: \(note.id.uuidString)，保留旧版本")
                     }
                 } else {
                     uniqueNotes[note.id] = note
@@ -443,10 +370,6 @@ class QuickNoteManager: ObservableObject {
             // 自动清理空记录（没有消息的记录）
             let emptyNotes = loadedNotes.filter { $0.messages.isEmpty }
             if !emptyNotes.isEmpty {
-                print("🧹 [QuickNoteManager.loadNotes] 发现 \(emptyNotes.count) 条空记录，自动清理:")
-                for note in emptyNotes {
-                    print("   🗑️ 删除空记录 - id: \(note.id.uuidString), title: \(note.title)")
-                }
                 loadedNotes.removeAll { $0.messages.isEmpty }
             }
             
@@ -455,16 +378,9 @@ class QuickNoteManager: ObservableObject {
             if !emptyNotes.isEmpty {
                 // 如果有清理，立即保存
                 saveNotes()
-                print("💾 [QuickNoteManager.loadNotes] 已保存清理后的数据")
-            }
-            
-            print("✅ [QuickNoteManager.loadNotes] 加载成功 - 原始数量: \(decoded.count), 去重后: \(uniqueNotes.count), 清理后: \(notes.count)")
-            for (index, note) in notes.enumerated() {
-                print("   [\(index)] id: \(note.id.uuidString), title: \(note.title), messages.count: \(note.messages.count), updatedAt: \(note.updatedAt)")
             }
         } else {
             notes = []
-            print("⚠️ [QuickNoteManager.loadNotes] 没有数据或解码失败")
         }
     }
     

@@ -66,8 +66,8 @@ struct QuickNoteListView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        // 先设置 selectedNoteId，然后 showingChatView 会通过 onChange 自动更新
                         selectedNoteId = nil
+                        showingChatView = true
                     }) {
                         Image(systemName: "plus")
                             .foregroundColor(AppTheme.Colors.primary)
@@ -77,20 +77,14 @@ struct QuickNoteListView: View {
             .fullScreenCover(item: Binding(
                 get: { 
                     if let id = selectedNoteId {
-                        let result = NoteIdWrapper(id: id)
-                        print("🔍 [QuickNoteListView.fullScreenCover.get] selectedNoteId: \(id.uuidString), 返回编辑模式")
-                        return result
+                        return NoteIdWrapper(id: id)
                     } else if showingChatView {
-                        let result = NoteIdWrapper(isNewNote: true)
-                        print("🔍 [QuickNoteListView.fullScreenCover.get] selectedNoteId: nil, showingChatView: true, 返回新建模式")
-                        return result
+                        return NoteIdWrapper(isNewNote: true)
                     } else {
-                        print("🔍 [QuickNoteListView.fullScreenCover.get] selectedNoteId: nil, showingChatView: false, 返回 nil")
                         return nil
                     }
                 },
                 set: { newValue in
-                    print("🔍 [QuickNoteListView.fullScreenCover.set] newValue: \(newValue?.id.uuidString ?? "nil"), isNewNote: \(newValue?.isNewNote ?? false)")
                     if let wrapper = newValue {
                         if wrapper.isNewNote {
                             selectedNoteId = nil
@@ -102,7 +96,6 @@ struct QuickNoteListView: View {
                         selectedNoteId = nil
                         showingChatView = false
                     }
-                    print("🔍 [QuickNoteListView.fullScreenCover.set] 设置后 selectedNoteId: \(selectedNoteId?.uuidString ?? "nil"), showingChatView: \(showingChatView)")
                 }
             )) { wrapper in
                 QuickNoteChatView(
@@ -113,9 +106,6 @@ struct QuickNoteListView: View {
                         showingChatView = false
                     }
                 )
-            }
-            .onChange(of: selectedNoteId) { newValue in
-                print("🔄 [QuickNoteListView.onChange] selectedNoteId 变化: \(newValue?.uuidString ?? "nil")")
             }
         }
     }
@@ -148,22 +138,7 @@ struct QuickNoteListView: View {
             LazyVStack(spacing: AppTheme.Spacing.sm) {
                 ForEach(manager.getNotes(filter: selectedFilter)) { note in
                     QuickNoteListCardView(note: note) {
-                        print("👆 [QuickNoteListView] 点击卡片")
-                        print("👆 [QuickNoteListView] note.id: \(note.id.uuidString)")
-                        print("👆 [QuickNoteListView] note.title: \(note.title)")
-                        print("👆 [QuickNoteListView] note.messages.count: \(note.messages.count)")
-                        print("👆 [QuickNoteListView] manager.notes.count: \(manager.notes.count)")
-                        
-                        // 验证这个 note 是否在 manager.notes 中
-                        if let foundNote = manager.notes.first(where: { $0.id == note.id }) {
-                            print("✅ [QuickNoteListView] note 在 manager.notes 中找到 - messages.count: \(foundNote.messages.count)")
-                        } else {
-                            print("❌ [QuickNoteListView] note 不在 manager.notes 中！")
-                        }
-                        
                         selectedNoteId = note.id
-                        print("👆 [QuickNoteListView] selectedNoteId 已设置: \(selectedNoteId?.uuidString ?? "nil")")
-                        // showingChatView 会通过 onChange 自动更新
                     }
                 }
             }
@@ -188,13 +163,8 @@ struct QuickNoteListView: View {
             // 只有选择"全部"筛选且没有数据时，才显示创建按钮
             if selectedFilter == .all {
                 Button(action: {
-                    print("👆 [QuickNoteListView.emptyStateView] 点击创建第一条随手记按钮")
-                    print("👆 [QuickNoteListView.emptyStateView] 当前 selectedNoteId: \(selectedNoteId?.uuidString ?? "nil")")
-                    print("👆 [QuickNoteListView.emptyStateView] 当前 showingChatView: \(showingChatView)")
                     selectedNoteId = nil
                     showingChatView = true
-                    print("👆 [QuickNoteListView.emptyStateView] 设置 selectedNoteId = nil, showingChatView = true")
-                    print("👆 [QuickNoteListView.emptyStateView] 设置后 selectedNoteId: \(selectedNoteId?.uuidString ?? "nil"), showingChatView: \(showingChatView)")
                 }) {
                     Text("创建第一条随手记")
                         .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))

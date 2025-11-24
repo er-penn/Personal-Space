@@ -746,71 +746,40 @@ struct QuickNoteChatView: View {
     }
     
     private func addMessage(_ message: NoteMessage) {
-        print("📨 [addMessage] 开始添加消息")
-        print("📨 [addMessage] message.type: \(message.type.rawValue), content: \(message.content?.prefix(20) ?? "无内容")")
-        print("📨 [addMessage] noteId: \(noteId?.uuidString ?? "nil")")
-        print("📨 [addMessage] 当前 displayNote.messages.count: \(displayNote.messages.count)")
-        print("📨 [addMessage] 当前 newNote?.messages.count: \(newNote?.messages.count ?? -1)")
-        print("📨 [addMessage] manager.notes 中是否有此 note: \(manager.notes.contains(where: { $0.id == displayNote.id }))")
-        
         var note = displayNote
-        print("📨 [addMessage] 获取 displayNote 后，note.messages.count: \(note.messages.count)")
-        
         note.messages.append(message)
         note.updatedAt = Date()
-        print("📨 [addMessage] 添加消息后，note.messages.count: \(note.messages.count)")
-        
         saveOrUpdateNote(note)
-        print("📨 [addMessage] 保存后，displayNote.messages.count: \(displayNote.messages.count)")
-        print("📨 [addMessage] 保存后，newNote?.messages.count: \(newNote?.messages.count ?? -1)")
-        print("📨 [addMessage] 保存后，manager.notes 中此 note 的 messages.count: \(manager.notes.first(where: { $0.id == note.id })?.messages.count ?? -1)")
     }
     
     private func saveOrUpdateNote(_ note: QuickNote) {
-        print("💾 [saveOrUpdateNote] 开始保存/更新 note")
-        print("💾 [saveOrUpdateNote] note.id: \(note.id.uuidString)")
-        print("💾 [saveOrUpdateNote] note.messages.count: \(note.messages.count)")
-        print("💾 [saveOrUpdateNote] noteId: \(noteId?.uuidString ?? "nil")")
-        print("💾 [saveOrUpdateNote] manager.notes 中是否包含此 note: \(manager.notes.contains(where: { $0.id == note.id }))")
-        
         if manager.notes.contains(where: { $0.id == note.id }) {
-            print("💾 [saveOrUpdateNote] 更新现有记录")
             // 更新现有记录
             manager.updateNote(note)
-            print("💾 [saveOrUpdateNote] 更新后，manager.notes 中此 note 的 messages.count: \(manager.notes.first(where: { $0.id == note.id })?.messages.count ?? -1)")
             
             // 如果是新建模式，也要同步更新 newNote
             if noteId == nil {
-                print("💾 [saveOrUpdateNote] 新建模式，同步更新 newNote")
-                print("💾 [saveOrUpdateNote] 更新前 newNote?.messages.count: \(newNote?.messages.count ?? -1)")
                 newNote = note
-                print("💾 [saveOrUpdateNote] 更新后 newNote?.messages.count: \(newNote?.messages.count ?? -1)")
             }
         } else {
-            print("💾 [saveOrUpdateNote] 新建记录")
             // 新建记录
             if !note.messages.isEmpty || !note.title.isEmpty {
-                print("💾 [saveOrUpdateNote] note 有内容，添加到 manager")
                 manager.addNote(note)
-                print("💾 [saveOrUpdateNote] 添加后，manager.notes.count: \(manager.notes.count)")
-                print("💾 [saveOrUpdateNote] manager.notes 中此 note 的 messages.count: \(manager.notes.first(where: { $0.id == note.id })?.messages.count ?? -1)")
                 
                 // 如果是新建模式，更新newNote
                 if noteId == nil {
-                    print("💾 [saveOrUpdateNote] 新建模式，更新 newNote")
-                    print("💾 [saveOrUpdateNote] 更新前 newNote?.messages.count: \(newNote?.messages.count ?? -1)")
                     newNote = note
-                    print("💾 [saveOrUpdateNote] 更新后 newNote?.messages.count: \(newNote?.messages.count ?? -1)")
                 }
-            } else {
-                print("💾 [saveOrUpdateNote] note 为空，不保存")
             }
         }
     }
     
     private func handleBack() {
         if displayNote.messages.isEmpty {
-            // 未发送任何内容，直接返回
+            // 未发送任何内容，删除可能已保存的空 note
+            if manager.notes.contains(where: { $0.id == displayNote.id }) {
+                manager.deleteNote(displayNote)
+            }
             dismiss()
             onDismiss?()
         } else {

@@ -39,16 +39,11 @@ struct QuickNoteCardSection: View {
                             .font(.system(size: AppTheme.FontSize.caption))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
-                    .onAppear {
-                        print("📊 [QuickNoteCardSection] 计算记录数")
-                        print("   📊 manager.notes.count (总数): \(manager.notes.count)")
-                        print("   📊 notesWithMessages (有消息的): \(manager.notes.filter { !$0.messages.isEmpty }.count)")
-                        print("   📊 getNotes(filter: .all).count (筛选后): \(manager.getNotes(filter: .all).count)")
-                        print("   📊 当前显示: \(manager.getNotes(filter: .all).count) 条记录")
-                    }
                 }
                 
-                if manager.notes.isEmpty {
+                let notesWithMessages = manager.getNotes(filter: .all)
+                
+                if notesWithMessages.isEmpty {
                     // 空状态
                     Text("点击右下角"+"按钮创建第一条随手记")
                         .font(.system(size: AppTheme.FontSize.body))
@@ -57,9 +52,8 @@ struct QuickNoteCardSection: View {
                         .padding(.vertical, AppTheme.Spacing.lg)
                 } else {
                     // 显示最近2条（按更新时间排序，去重）
-                    let allNotes = manager.notes
                     var seenIds: Set<UUID> = []
-                    let uniqueNotes = allNotes.compactMap { note -> QuickNote? in
+                    let uniqueNotes = notesWithMessages.compactMap { note -> QuickNote? in
                         if seenIds.contains(note.id) {
                             return nil
                         }
