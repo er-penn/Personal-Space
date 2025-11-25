@@ -183,15 +183,17 @@ struct QuickNoteChatView: View {
                     }
                 }
             }
-            .overlay(
-                // 点击外部区域关闭菜单（必须在菜单之前，这样菜单可以覆盖它）
+            .background(
+                // 点击外部区域关闭菜单
                 Group {
-                    if showingMenu {
+                    if showingMenu || showingBadgeMenu || showingPlusMenu {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 withAnimation {
                                     showingMenu = false
+                                    showingBadgeMenu = false
+                                    showingPlusMenu = false
                                 }
                             }
                     }
@@ -286,6 +288,12 @@ struct QuickNoteChatView: View {
         VStack(spacing: 0) {
             Divider()
             
+            // 角标选择菜单（在输入框上方）
+            if showingBadgeMenu {
+                badgeMenuGrid
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+            
             // 加号菜单（在输入框上方）
             if showingPlusMenu {
                 plusMenuGrid
@@ -313,20 +321,105 @@ struct QuickNoteChatView: View {
                     textInputField
                 }
                 
-                // 右侧：加号按钮
+                // 右侧：加号/发送按钮
                 Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showingPlusMenu.toggle()
+                    if !isVoiceMode && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        // 有文字内容时，点击发送
+                        sendTextMessage()
+                    } else {
+                        // 无内容时，显示加号菜单
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            // 关闭角标菜单（如果打开）
+                            if showingBadgeMenu {
+                                showingBadgeMenu = false
+                            }
+                            showingPlusMenu.toggle()
+                        }
                     }
                 }) {
-                    Image(systemName: showingPlusMenu ? "xmark" : "plus")
-                        .font(.system(size: 24))
-                        .foregroundColor(AppTheme.Colors.primary)
+                    if !isVoiceMode && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        // 显示发送按钮
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(AppTheme.Colors.primary)
+                    } else {
+                        // 显示加号按钮
+                        Image(systemName: showingPlusMenu ? "xmark" : "plus")
+                            .font(.system(size: 24))
+                            .foregroundColor(AppTheme.Colors.primary)
+                    }
                 }
                 .frame(width: 44, height: 44)
             }
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.sm)
+            .background(AppTheme.Colors.cardBg)
+        }
+    }
+    
+    // MARK: - 角标选择菜单网格（按钮70x70pt）
+    private var badgeMenuGrid: some View {
+        VStack(spacing: 0) {
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: AppTheme.Spacing.md),
+                GridItem(.flexible(), spacing: AppTheme.Spacing.md),
+                GridItem(.flexible(), spacing: AppTheme.Spacing.md),
+                GridItem(.flexible(), spacing: AppTheme.Spacing.md)
+            ], spacing: AppTheme.Spacing.lg) {
+                // 洞察
+                PlusMenuItem(
+                    icon: "lightbulb.fill",
+                    title: "洞察",
+                    size: 70,
+                    action: {
+                        pendingBadge = .insight
+                        withAnimation {
+                            showingBadgeMenu = false
+                        }
+                    }
+                )
+                
+                // 痛点
+                PlusMenuItem(
+                    icon: "exclamationmark.triangle.fill",
+                    title: "痛点",
+                    size: 70,
+                    action: {
+                        pendingBadge = .painPoint
+                        withAnimation {
+                            showingBadgeMenu = false
+                        }
+                    }
+                )
+                
+                // 方案
+                PlusMenuItem(
+                    icon: "checkmark.circle.fill",
+                    title: "方案",
+                    size: 70,
+                    action: {
+                        pendingBadge = .solution
+                        withAnimation {
+                            showingBadgeMenu = false
+                        }
+                    }
+                )
+                
+                // 不加角标
+                PlusMenuItem(
+                    icon: "xmark.circle.fill",
+                    title: "无角标",
+                    size: 70,
+                    action: {
+                        pendingBadge = nil
+                        withAnimation {
+                            showingBadgeMenu = false
+                        }
+                    }
+                )
+            }
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            .padding(.vertical, AppTheme.Spacing.md)
             .background(AppTheme.Colors.cardBg)
         }
     }
@@ -367,45 +460,6 @@ struct QuickNoteChatView: View {
                         showingCamera = true
                     }
                 )
-                
-                // 洞察
-                PlusMenuItem(
-                    icon: "lightbulb.fill",
-                    title: "洞察",
-                    size: 70,
-                    action: {
-                        withAnimation {
-                            showingPlusMenu = false
-                        }
-                        pendingBadge = .insight
-                    }
-                )
-                
-                // 痛点
-                PlusMenuItem(
-                    icon: "exclamationmark.triangle.fill",
-                    title: "痛点",
-                    size: 70,
-                    action: {
-                        withAnimation {
-                            showingPlusMenu = false
-                        }
-                        pendingBadge = .painPoint
-                    }
-                )
-                
-                // 方案
-                PlusMenuItem(
-                    icon: "checkmark.circle.fill",
-                    title: "方案",
-                    size: 70,
-                    action: {
-                        withAnimation {
-                            showingPlusMenu = false
-                        }
-                        pendingBadge = .solution
-                    }
-                )
             }
             .padding(.horizontal, AppTheme.Spacing.lg)
             .padding(.vertical, AppTheme.Spacing.md)
@@ -414,6 +468,8 @@ struct QuickNoteChatView: View {
     }
     
     @State private var showingPlusMenu = false
+    @State private var showingBadgeMenu = false
+    @State private var voiceButtonWidth: CGFloat = 0
     
     private var textInputField: some View {
         Group {
@@ -490,32 +546,6 @@ struct QuickNoteChatView: View {
                     pendingImagePath = nil
                 }
             }
-            .confirmationDialog("选择角标", isPresented: $showingAudioBadgePicker, titleVisibility: .visible) {
-                Button("无角标") {
-                    if let path = pendingAudioPath, let duration = pendingAudioDuration {
-                        sendAudioMessage(path: path, duration: duration, badge: nil)
-                    }
-                }
-                Button("洞察") {
-                    if let path = pendingAudioPath, let duration = pendingAudioDuration {
-                        sendAudioMessage(path: path, duration: duration, badge: .insight)
-                    }
-                }
-                Button("痛点") {
-                    if let path = pendingAudioPath, let duration = pendingAudioDuration {
-                        sendAudioMessage(path: path, duration: duration, badge: .painPoint)
-                    }
-                }
-                Button("方案") {
-                    if let path = pendingAudioPath, let duration = pendingAudioDuration {
-                        sendAudioMessage(path: path, duration: duration, badge: .solution)
-                    }
-                }
-                Button("取消", role: .cancel) {
-                    pendingAudioPath = nil
-                    pendingAudioDuration = nil
-                }
-            }
     }
     
     private var voiceButton: some View {
@@ -533,11 +563,51 @@ struct QuickNoteChatView: View {
                         .offset(x: -4, y: -4),
                     alignment: .topTrailing
                 )
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .preference(key: VoiceButtonWidthKey.self, value: geometry.size.width)
+                            .onAppear {
+                                print("🎤 [voiceButton] GeometryReader onAppear - size: width=\(geometry.size.width), height=\(geometry.size.height)")
+                                voiceButtonWidth = geometry.size.width
+                            }
+                            .onChange(of: geometry.size.width) { newWidth in
+                                print("🎤 [voiceButton] GeometryReader width changed - oldWidth=\(voiceButtonWidth), newWidth=\(newWidth)")
+                                voiceButtonWidth = newWidth
+                            }
+                    }
+                )
+        }
+        .onPreferenceChange(VoiceButtonWidthKey.self) { width in
+            print("🎤 [voiceButton] PreferenceKey changed - width=\(width)")
+            voiceButtonWidth = width
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isRecording {
+                .onChanged { value in
+                    print("🎤 [voiceButton] DragGesture onChanged - location: x=\(value.location.x), y=\(value.location.y), voiceButtonWidth=\(voiceButtonWidth)")
+                    
+                    // 计算角标区域（右上角，18x18pt，偏移-4pt）
+                    let badgeSize: CGFloat = 18
+                    let badgeOffset: CGFloat = 4
+                    let buttonWidth = voiceButtonWidth > 0 ? voiceButtonWidth : (UIScreen.main.bounds.width - 44 - 44 - AppTheme.Spacing.md * 3)
+                    let badgeXMin = buttonWidth - badgeOffset - badgeSize
+                    let badgeXMax = buttonWidth - badgeOffset
+                    let badgeYMin: CGFloat = -badgeOffset
+                    let badgeYMax = badgeYMin + badgeSize
+                    
+                    print("🎤 [voiceButton] Badge area - buttonWidth=\(buttonWidth), badgeXMin=\(badgeXMin), badgeXMax=\(badgeXMax), badgeYMin=\(badgeYMin), badgeYMax=\(badgeYMax)")
+                    
+                    // 检查点击位置是否在角标区域内
+                    let isInBadgeArea = value.location.x >= badgeXMin && 
+                                      value.location.x <= badgeXMax &&
+                                      value.location.y >= badgeYMin && 
+                                      value.location.y <= badgeYMax
+                    
+                    print("🎤 [voiceButton] isInBadgeArea=\(isInBadgeArea)")
+                    
+                    // 如果不在角标区域内，才触发录音
+                    if !isInBadgeArea && !isRecording {
                         startRecording()
                     }
                 }
@@ -549,18 +619,34 @@ struct QuickNoteChatView: View {
         )
     }
     
-    // MARK: - 角标图标覆盖层
+    // MARK: - 角标图标覆盖层（始终显示）
     @ViewBuilder
     private var badgeIconOverlay: some View {
-        if let badge = pendingBadge {
-            Button(action: {
-                pendingBadge = nil
-            }) {
+        Button(action: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                // 关闭加号菜单（如果打开）
+                if showingPlusMenu {
+                    showingPlusMenu = false
+                }
+                showingBadgeMenu.toggle()
+            }
+        }) {
+            if let badge = pendingBadge {
+                // 显示选中的角标
                 Image(systemName: badgeIconName(for: badge))
                     .font(.system(size: 12))
                     .foregroundColor(.white)
                     .frame(width: 18, height: 18)
                     .background(badge.color)
+                    .clipShape(Circle())
+                    .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+            } else {
+                // 默认显示加号
+                Image(systemName: "plus")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white)
+                    .frame(width: 18, height: 18)
+                    .background(AppTheme.Colors.primary)
                     .clipShape(Circle())
                     .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
             }
@@ -671,10 +757,10 @@ struct QuickNoteChatView: View {
         
         if let audioData = try? Data(contentsOf: url),
            let path = manager.saveAudioFile(audioData) {
-            // 显示角标选择弹窗
-            showingAudioBadgePicker = true
-            pendingAudioPath = path
-            pendingAudioDuration = duration
+            // 使用当前选中的角标发送语音消息
+            sendAudioMessage(path: path, duration: duration, badge: pendingBadge)
+            // 发送后清除角标
+            pendingBadge = nil
         }
         
         // 删除临时文件
@@ -688,10 +774,6 @@ struct QuickNoteChatView: View {
         try? audioSession.setActive(false)
     }
     
-    @State private var showingAudioBadgePicker = false
-    @State private var pendingAudioPath: String? = nil
-    @State private var pendingAudioDuration: TimeInterval? = nil
-    
     private func sendAudioMessage(path: String, duration: TimeInterval, badge: BadgeType?) {
         let message = NoteMessage(
             type: .audio,
@@ -701,8 +783,6 @@ struct QuickNoteChatView: View {
         )
         
         addMessage(message)
-        pendingAudioPath = nil
-        pendingAudioDuration = nil
     }
     
     // MARK: - 其他功能
@@ -1159,6 +1239,14 @@ struct Triangle: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.closeSubpath()
         return path
+    }
+}
+
+// MARK: - PreferenceKey for Voice Button Width
+struct VoiceButtonWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
