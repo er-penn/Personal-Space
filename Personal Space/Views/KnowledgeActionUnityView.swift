@@ -302,7 +302,7 @@ struct ActionView: View {
     private var todayDailyActions: [ActionRecord] {
         manager.getTodayDailyActions()
     }
-    
+
     private var scenarioActions: [Knowledge] {
         manager.getScenarioActions()
     }
@@ -424,19 +424,19 @@ struct ActionStatsView: View {
 
                 // 知行库
                 Button(action: onKnowledgeLibraryTap) {
-                    VStack(spacing: AppTheme.Spacing.sm) {
+                VStack(spacing: AppTheme.Spacing.sm) {
                         Image(systemName: "books.vertical")
-                            .font(.system(size: AppTheme.FontSize.title2, weight: .bold))
+                        .font(.system(size: AppTheme.FontSize.title2, weight: .bold))
                             .foregroundColor(AppTheme.Colors.primary)
                         Text("知行库")
-                            .font(.system(size: AppTheme.FontSize.caption))
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(AppTheme.Radius.medium)
-                    .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                        .font(.system(size: AppTheme.FontSize.caption))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(AppTheme.Radius.medium)
+                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
                 }
             }
         }
@@ -777,7 +777,7 @@ struct ActionCheckInView: View {
                         }
                     }
                 }
-                
+
                 // 心得输入
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                     Text("今日心得")

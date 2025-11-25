@@ -4048,7 +4048,7 @@ class KnowledgeActionManager: ObservableObject {
             saveData()
         }
     }
-    
+
     func updateActionNotes(_ action: ActionRecord, notes: String?, isSuccess: Bool? = nil, score: Int? = nil) {
         if let index = actions.firstIndex(where: { $0.id == action.id }) {
             actions[index].notes = notes

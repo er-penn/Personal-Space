@@ -64,7 +64,7 @@ enum BreathingPattern: String, CaseIterable, Codable {
         if holdTime == 0 {
             return "\(Int(inhaleTime))-\(Int(exhaleTime))\(restTime > 0 ? "-\(Int(restTime))" : "")"
         } else {
-            return "\(Int(inhaleTime))-\(Int(holdTime))-\(Int(exhaleTime))\(restTime > 0 ? "-\(Int(restTime))" : "")"
+        return "\(Int(inhaleTime))-\(Int(holdTime))-\(Int(exhaleTime))\(restTime > 0 ? "-\(Int(restTime))" : "")"
         }
     }
 }

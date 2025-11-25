@@ -122,15 +122,15 @@ struct BreathingAnimationView: View {
         HStack {
             Spacer()
             HStack(spacing: AppTheme.Spacing.sm) {
-                ForEach(BreathingPattern.allCases, id: \.self) { pattern in
+            ForEach(BreathingPattern.allCases, id: \.self) { pattern in
                     Button(action: {
                         // 切换呼吸模式
                         selectedPattern = pattern
                         // 如果正在运行，重启呼吸
-                        if isRunning {
-                            stopBreathing()
-                            startBreathing()
-                        }
+            if isRunning {
+                stopBreathing()
+                startBreathing()
+            }
                     }) {
                         Text(getPatternShortName(pattern))
                             .font(.system(size: AppTheme.FontSize.caption, weight: .medium))
@@ -215,7 +215,7 @@ struct BreathingAnimationView: View {
         playPhaseSound()
 
         // 重置进度
-        phaseProgress = 0.0
+            phaseProgress = 0.0
         
         // 根据阶段更新动画参数
         updateAnimationForPhase(phase)
@@ -231,7 +231,7 @@ struct BreathingAnimationView: View {
         case .inhale:
             // 如果 holdTime 为 0，跳过屏息阶段
             if selectedPattern.holdTime > 0 {
-                moveToPhase(.hold)
+            moveToPhase(.hold)
             } else {
                 moveToPhase(.exhale)
             }

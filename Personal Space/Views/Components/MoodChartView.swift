@@ -135,10 +135,10 @@ struct MoodChartView: View {
         withAnimation(.easeInOut(duration: 0.3)) {
             // 使用 UserState 的 addMoodRecord 方法，会自动保存到 UserDefaults
             userState.addMoodRecord(
-                value: currentMood,
-                timestamp: Date(),
-                note: trimmedNote.isEmpty ? nil : trimmedNote
-            )
+            value: currentMood,
+            timestamp: Date(),
+            note: trimmedNote.isEmpty ? nil : trimmedNote
+        )
             showingRecordButton = false
             moodNote = ""
         }
@@ -258,12 +258,12 @@ struct MoodPath: View {
         // 3. 如果总间隔为0（所有记录在同一时间），使用等距分布
         guard totalInterval > 0 else {
             let xStep = availableWidth / CGFloat(moodRecords.count - 1)
-            var points: [CGPoint] = []
-            for (index, record) in moodRecords.enumerated() {
-                let x = padding + CGFloat(index) * xStep
-                let y = height - padding - (CGFloat(record.value - 1) * yStep)
-                points.append(CGPoint(x: x, y: y))
-            }
+        var points: [CGPoint] = []
+        for (index, record) in moodRecords.enumerated() {
+            let x = padding + CGFloat(index) * xStep
+            let y = height - padding - (CGFloat(record.value - 1) * yStep)
+            points.append(CGPoint(x: x, y: y))
+        }
             return points
         }
         
@@ -339,7 +339,7 @@ struct MoodDataPoints: View {
         // 3. 如果总间隔为0（所有记录在同一时间），使用等距分布
         guard totalInterval > 0 else {
             let xStep = availableWidth / CGFloat(moodRecords.count - 1)
-            let x = padding + CGFloat(index) * xStep
+        let x = padding + CGFloat(index) * xStep
             let y = height - padding - (CGFloat(record.value - 1) * yStep)
             return CGPoint(x: x, y: y)
         }
@@ -507,8 +507,8 @@ struct MoodRecordPageView: View {
                             let displayedDates = Array(sortedDates.prefix(displayedDaysCount))
                             
                             ForEach(displayedDates, id: \.self) { date in
-                                DailyMoodRecords(
-                                    date: date,
+                                    DailyMoodRecords(
+                                        date: date,
                                     moodRecords: groupedMoodRecords[date] ?? [],
                                     isSelected: selectedDate != nil && Calendar.current.isDate(date, inSameDayAs: selectedDate!)
                                 )
@@ -877,9 +877,9 @@ struct MoodRecordItem: View {
     // MARK: - 备注内容视图（拆分为独立计算属性）
     @ViewBuilder
     private var noteContent: some View {
-        if let note = record.note, !note.isEmpty {
+            if let note = record.note, !note.isEmpty {
             noteTextWithExpansion(note: note)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 .background(measurementBackground(note: note))
                 .onPreferenceChange(TextHeightPreferenceKey.self) { fullHeight in
                     if fullHeight > 45 {
@@ -891,13 +891,13 @@ struct MoodRecordItem: View {
                         needsExpansion = true
                     }
                 }
-        } else {
-            Text("无备注")
-                .font(.system(size: AppTheme.FontSize.body))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text("无备注")
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
-    }
     
     // MARK: - 备注文本（带展开/收起功能）
     @ViewBuilder

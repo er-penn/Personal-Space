@@ -258,6 +258,7 @@ struct QuickNoteChatView: View {
                         updateNoteTitle(newTitle)
                     }
                 )
+                .applyRenameSheetModifiers()
             }
             .sheet(item: Binding(
                 get: { showingBadgeSummary },
@@ -912,27 +913,52 @@ struct RenameNoteSheet: View {
     @State private var newTitle: String = ""
     
     var body: some View {
-        NavigationView {
-            Form {
-                TextField("标题", text: $newTitle)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-            }
-            .navigationTitle("编辑标题")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                // 标题栏
+                HStack {
                     Button("取消") {
                         dismiss()
                     }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
+                    .font(.system(size: AppTheme.FontSize.body))
+                    .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Text("编辑标题")
+                        .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                    
+                    Spacer()
+                    
                     Button("保存") {
                         onSave(newTitle.isEmpty ? currentTitle : newTitle)
                         dismiss()
                     }
+                    .font(.system(size: AppTheme.FontSize.headline, weight: .semibold))
+                    .foregroundColor(.blue)
                 }
+                .padding(.horizontal, AppTheme.Spacing.xl)
+                .padding(.top, 20) //AppTheme.Spacing.md
+                .padding(.bottom, 20) //AppTheme.Spacing.sm
+                .background(
+                    GeometryReader { headerGeometry in
+                        Color.clear
+                    }
+                )
+                
+                Divider()
+                
+                // 输入框区域
+                VStack(spacing: AppTheme.Spacing.md) {
+                    TextField("标题", text: $newTitle)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .padding(.horizontal, AppTheme.Spacing.xl)
+                        .padding(.top, 30)//AppTheme.Spacing.xl
+                }
+                .padding(.bottom, AppTheme.Spacing.md)
             }
+            .frame(height: 250, alignment: .top)
+            .background(Color(.systemBackground))
             .onAppear {
                 newTitle = currentTitle
             }
@@ -1133,6 +1159,25 @@ struct Triangle: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.closeSubpath()
         return path
+    }
+}
+
+// MARK: - iOS 16.0+ 兼容性扩展
+private extension View {
+    @ViewBuilder
+    func applyRenameSheetModifiers() -> some View {
+        if #available(iOS 16.4, *) {
+            self
+                .presentationDetents([.height(250)])
+                .presentationDragIndicator(.hidden)
+                .presentationBackground(.clear)
+        } else if #available(iOS 16.0, *) {
+            self
+                .presentationDetents([.height(250)])
+                .presentationDragIndicator(.hidden)
+        } else {
+            self
+        }
     }
 }
 

@@ -91,7 +91,7 @@ struct AnxietySoothingGuideView: View {
                     )
                 }
                 .environmentObject(usageManager)
-            }
+        }
         }
     }
     
@@ -440,10 +440,10 @@ struct AnxietySoothingGuideView: View {
         ScrollView {
             VStack(spacing: AppTheme.Spacing.lg) {
                 // 工具网格
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: AppTheme.Spacing.md) {
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: AppTheme.Spacing.md) {
                 ForEach(toolsManager.tools) { tool in
                     QuickToolCardView(tool: tool) {
                         // 初始化工具使用状态
@@ -455,7 +455,7 @@ struct AnxietySoothingGuideView: View {
                         effectivenessRating = nil
                         notes = ""
                     }
-                }
+                    }
                 }
             }
             .padding(AppTheme.Spacing.lg)

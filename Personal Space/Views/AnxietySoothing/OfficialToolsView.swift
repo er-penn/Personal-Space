@@ -346,21 +346,21 @@ struct ToolDetailView: View {
                 // 步骤控制按钮
                 HStack(spacing: AppTheme.Spacing.md) {
                     if currentStep > 0 {
-                        Button(action: previousStep) {
-                            HStack {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 16))
-                                Text("上一步")
-                            }
-                            .foregroundColor(colorFromString(tool.color))
-                            .padding(.horizontal, AppTheme.Spacing.lg)
-                            .padding(.vertical, AppTheme.Spacing.md)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                                    .stroke(colorFromString(tool.color), lineWidth: 1)
-                            )
+                    Button(action: previousStep) {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16))
+                            Text("上一步")
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .foregroundColor(colorFromString(tool.color))
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+                        .padding(.vertical, AppTheme.Spacing.md)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                                .stroke(colorFromString(tool.color), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
                     } else {
                         // 第一步时，添加一个占位视图，使"下一步"按钮与后续步骤位置一致
                         HStack {
@@ -376,41 +376,41 @@ struct ToolDetailView: View {
                                 .stroke(Color.clear, lineWidth: 1)
                         )
                         .allowsHitTesting(false)
-                    }
-                    
-                    if currentStep < tool.instructions.count - 1 {
-                        Button(action: nextStep) {
-                            HStack {
-                                Text("下一步")
-                                    .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 16))
-                            }
-                            .foregroundColor(colorFromString(tool.color))
-                            .padding(.horizontal, AppTheme.Spacing.lg)
-                            .padding(.vertical, AppTheme.Spacing.md)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                                    .stroke(colorFromString(tool.color), lineWidth: 1)
-                            )
+                }
+
+                if currentStep < tool.instructions.count - 1 {
+                    Button(action: nextStep) {
+                        HStack {
+                            Text("下一步")
+                                .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 16))
                         }
-                        .buttonStyle(PlainButtonStyle())
-                    } else {
-                        Button(action: completeSession) {
-                            HStack {
-                                Text("完成")
-                                    .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 16))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, AppTheme.Spacing.lg)
-                            .padding(.vertical, AppTheme.Spacing.md)
-                            .background(Color.green)
-                            .cornerRadius(AppTheme.Radius.medium)
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                        .foregroundColor(colorFromString(tool.color))
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+                        .padding(.vertical, AppTheme.Spacing.md)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
+                                .stroke(colorFromString(tool.color), lineWidth: 1)
+                        )
                     }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    Button(action: completeSession) {
+                        HStack {
+                            Text("完成")
+                                .font(.system(size: AppTheme.FontSize.subheadline, weight: .medium))
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 16))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+                        .padding(.vertical, AppTheme.Spacing.md)
+                        .background(Color.green)
+                        .cornerRadius(AppTheme.Radius.medium)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
                 }
             } else {
                 // 未开始练习：只显示开始按钮
