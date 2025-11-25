@@ -123,11 +123,6 @@ struct QuickNoteChatView: View {
                         ScrollView {
                             LazyVStack(spacing: AppTheme.Spacing.md) {
                                 let sortedMessages = displayNote.messages.sorted { $0.createdAt < $1.createdAt }
-                                let _ = print("📋 [QuickNoteChatView.body] 渲染消息列表")
-                                let _ = print("📋 [QuickNoteChatView.body] displayNote.messages.count: \(displayNote.messages.count)")
-                                let _ = print("📋 [QuickNoteChatView.body] sortedMessages.count: \(sortedMessages.count)")
-                                let _ = print("📋 [QuickNoteChatView.body] noteId: \(noteId?.uuidString ?? "nil")")
-                                let _ = print("📋 [QuickNoteChatView.body] newNote?.messages.count: \(newNote?.messages.count ?? -1)")
                                 
                                 ForEach(sortedMessages) { message in
                                     MessageBubbleView(
@@ -148,7 +143,6 @@ struct QuickNoteChatView: View {
                             .padding(.vertical, AppTheme.Spacing.lg)
                         }
                         .onChange(of: displayNote.messages.count) { newCount in
-                            print("🔄 [QuickNoteChatView.onChange] displayNote.messages.count 变化: \(newCount)")
                             if let lastMessage = displayNote.messages.sorted(by: { $0.createdAt < $1.createdAt }).last {
                                 withAnimation {
                                     proxy.scrollTo(lastMessage.id, anchor: .bottom)
@@ -180,36 +174,65 @@ struct QuickNoteChatView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        showingMenu = true
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showingMenu.toggle()
+                        }
                     }) {
                         Image(systemName: "ellipsis")
                             .foregroundColor(AppTheme.Colors.text)
                     }
                 }
             }
-            .confirmationDialog("", isPresented: $showingMenu, titleVisibility: .hidden) {
-                Button("编辑标题") {
-                    showingRenameSheet = true
-                }
-                
-                if displayNote.hasInsight {
-                    Button("洞察") {
-                        showingBadgeSummary = .insight
+            .overlay(
+                // 点击外部区域关闭菜单（必须在菜单之前，这样菜单可以覆盖它）
+                Group {
+                    if showingMenu {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation {
+                                    showingMenu = false
+                                }
+                            }
                     }
                 }
-                
-                if displayNote.hasPainPoint {
-                    Button("痛点") {
-                        showingBadgeSummary = .painPoint
+            )
+            .overlay(
+                // 气泡菜单（显示在导航栏外部）
+                VStack {
+                    HStack {
+                        Spacer()
+                        if showingMenu {
+                            BubbleMenuView(
+                                hasInsight: displayNote.hasInsight,
+                                hasPainPoint: displayNote.hasPainPoint,
+                                hasSolution: displayNote.hasSolution,
+                                onEditTitle: {
+                                    showingMenu = false
+                                    showingRenameSheet = true
+                                },
+                                onInsight: {
+                                    showingMenu = false
+                                    showingBadgeSummary = .insight
+                                },
+                                onPainPoint: {
+                                    showingMenu = false
+                                    showingBadgeSummary = .painPoint
+                                },
+                                onSolution: {
+                                    showingMenu = false
+                                    showingBadgeSummary = .solution
+                                }
+                            )
+                            .padding(.top, 8)
+                            .padding(.trailing, 16)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            .allowsHitTesting(true)
+                        }
                     }
+                    Spacer()
                 }
-                
-                if displayNote.hasSolution {
-                    Button("方案") {
-                        showingBadgeSummary = .solution
-                    }
-                }
-            }
+            )
             .actionSheet(isPresented: $showingMessageActionSheet) {
                 ActionSheet(
                     title: Text("操作"),
@@ -252,27 +275,6 @@ struct QuickNoteChatView: View {
             .sheet(isPresented: $showingImagePicker) {
                 QuickNoteImagePicker(sourceType: imageSourceType) { image in
                     handleImageSelected(image)
-                }
-            }
-            .onAppear {
-                print("👁️ [QuickNoteChatView.onAppear] 视图出现")
-                print("👁️ [QuickNoteChatView.onAppear] noteId: \(noteId?.uuidString ?? "nil")")
-                print("👁️ [QuickNoteChatView.onAppear] manager.notes.count: \(manager.notes.count)")
-                
-                if let id = noteId {
-                    if let note = manager.notes.first(where: { $0.id == id }) {
-                        print("✅ [QuickNoteChatView.onAppear] 找到 note - title: \(note.title), messages.count: \(note.messages.count)")
-                    } else {
-                        print("❌ [QuickNoteChatView.onAppear] 未找到 note")
-                    }
-                }
-                
-                print("👁️ [QuickNoteChatView.onAppear] displayNote.title: \(displayNote.title)")
-                print("👁️ [QuickNoteChatView.onAppear] displayNote.messages.count: \(displayNote.messages.count)")
-                
-                if displayNote.messages.isEmpty && noteId == nil {
-                    // 新建模式，自动聚焦输入框
-                    print("📝 [QuickNoteChatView.onAppear] 新建模式")
                 }
             }
         }
@@ -999,6 +1001,138 @@ struct PlusMenuItem: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - 菜单按钮视图（带气泡菜单）
+struct MenuButtonView: View {
+    @Binding var showingMenu: Bool
+    let hasInsight: Bool
+    let hasPainPoint: Bool
+    let hasSolution: Bool
+    let onEditTitle: () -> Void
+    let onInsight: () -> Void
+    let onPainPoint: () -> Void
+    let onSolution: () -> Void
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            // 三个点按钮
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showingMenu.toggle()
+                }
+            }) {
+                Image(systemName: "ellipsis")
+                    .foregroundColor(AppTheme.Colors.text)
+            }
+            
+            // 气泡菜单
+            if showingMenu {
+                BubbleMenuView(
+                    hasInsight: hasInsight,
+                    hasPainPoint: hasPainPoint,
+                    hasSolution: hasSolution,
+                    onEditTitle: {
+                        showingMenu = false
+                        onEditTitle()
+                    },
+                    onInsight: {
+                        showingMenu = false
+                        onInsight()
+                    },
+                    onPainPoint: {
+                        showingMenu = false
+                        onPainPoint()
+                    },
+                    onSolution: {
+                        showingMenu = false
+                        onSolution()
+                    }
+                )
+                .offset(x: -8, y: 36)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
+    }
+}
+
+// MARK: - 气泡菜单视图
+struct BubbleMenuView: View {
+    let hasInsight: Bool
+    let hasPainPoint: Bool
+    let hasSolution: Bool
+    let onEditTitle: () -> Void
+    let onInsight: () -> Void
+    let onPainPoint: () -> Void
+    let onSolution: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            // 小三角形（指向三个点）
+            Triangle()
+                .fill(.ultraThinMaterial)
+                .frame(width: 12, height: 8)
+                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: -1)
+                .offset(x: -8)
+            
+            // 菜单内容
+            VStack(alignment: .trailing, spacing: 0) {
+                MenuItemButton(title: "编辑标题", action: onEditTitle)
+                
+                if hasInsight {
+                    Divider()
+                        .background(AppTheme.Colors.border.opacity(0.3))
+                    MenuItemButton(title: "洞察", action: onInsight)
+                }
+                
+                if hasPainPoint {
+                    Divider()
+                        .background(AppTheme.Colors.border.opacity(0.3))
+                    MenuItemButton(title: "痛点", action: onPainPoint)
+                }
+                
+                if hasSolution {
+                    Divider()
+                        .background(AppTheme.Colors.border.opacity(0.3))
+                    MenuItemButton(title: "方案", action: onSolution)
+                }
+            }
+            .background(.ultraThinMaterial)
+            .cornerRadius(AppTheme.Radius.medium)
+            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+            .fixedSize(horizontal: true, vertical: false)
+        }
+    }
+}
+
+// MARK: - 菜单项按钮
+struct MenuItemButton: View {
+    let title: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: AppTheme.FontSize.body))
+                .foregroundColor(AppTheme.Colors.text)
+                .padding(.horizontal, AppTheme.Spacing.lg)
+                .padding(.vertical, AppTheme.Spacing.md)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - 三角形形状（用于气泡菜单的指向）
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
 
