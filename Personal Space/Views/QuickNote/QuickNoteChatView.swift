@@ -76,6 +76,20 @@ struct QuickNoteChatView: View {
     // 微信绿色
     private let wechatGreen = Color(red: 0.584, green: 0.925, blue: 0.412) // #95EC69
     
+    // 计算当前应该显示的角标（优先级：用户手动选择 > 继承的角标 > nil）
+    private var currentBadge: BadgeType? {
+        // 如果用户手动选择了角标，优先使用用户选择的
+        if let userSelectedBadge = pendingBadge {
+            return userSelectedBadge
+        }
+        // 否则，如果引用了消息，继承被引用消息的角标
+        if let refMessage = referencingMessage, let refBadge = refMessage.badge {
+            return refBadge
+        }
+        // 否则，无角标
+        return nil
+    }
+    
     init(noteId: UUID?, manager: QuickNoteManager, onDismiss: (() -> Void)? = nil) {
         print("🚀 [QuickNoteChatView.init] 开始初始化")
         print("🚀 [QuickNoteChatView.init] noteId: \(noteId?.uuidString ?? "nil")")
@@ -133,12 +147,16 @@ struct QuickNoteChatView: View {
                                             showingBadgeSummary = badge
                                         },
                                         onLongPress: {
+                                            print("🔘 [MessageAction] 长按消息 - messageId: \(message.id.uuidString)")
                                             selectedMessageForAction = message
                                             showingMessageActionSheet = true
+                                            print("🔘 [MessageAction] showingMessageActionSheet = true")
                                         },
                                         onQuote: {
                                             if let message = selectedMessageForAction {
                                                 referencingMessage = message
+                                                // 强制继承被引用消息的角标（覆盖之前的选择）
+                                                pendingBadge = message.badge
                                             }
                                             showingMessageActionSheet = false
                                             selectedMessageForAction = nil
@@ -193,8 +211,10 @@ struct QuickNoteChatView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
+                        print("🔘 [Menu] 点击右上角三个点按钮")
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             showingMenu.toggle()
+                            print("🔘 [Menu] showingMenu = \(showingMenu)")
                         }
                     }) {
                         Image(systemName: "ellipsis")
@@ -202,19 +222,23 @@ struct QuickNoteChatView: View {
                     }
                 }
             }
-            .background(
-                // 点击外部区域关闭菜单
+            .overlay(
+                // 点击外部区域关闭菜单 - 放在最上层
                 Group {
                     if showingMenu || showingBadgeMenu || showingPlusMenu {
                         Color.clear
+                            .ignoresSafeArea()
                             .contentShape(Rectangle())
                             .onTapGesture {
+                                print("🔘 [Menu] 点击外部区域关闭菜单 - showingMenu: \(showingMenu), showingBadgeMenu: \(showingBadgeMenu), showingPlusMenu: \(showingPlusMenu)")
                                 withAnimation {
                                     showingMenu = false
                                     showingBadgeMenu = false
                                     showingPlusMenu = false
                                 }
+                                print("🔘 [Menu] 菜单已关闭")
                             }
+                            .zIndex(998) // 在菜单下方，但在其他内容上方
                     }
                 }
             )
@@ -229,18 +253,22 @@ struct QuickNoteChatView: View {
                                 hasPainPoint: displayNote.hasPainPoint,
                                 hasSolution: displayNote.hasSolution,
                                 onEditTitle: {
+                                    print("🔘 [Menu] 点击编辑标题")
                                     showingMenu = false
                                     showingRenameSheet = true
                                 },
                                 onInsight: {
+                                    print("🔘 [Menu] 点击洞察")
                                     showingMenu = false
                                     showingBadgeSummary = .insight
                                 },
                                 onPainPoint: {
+                                    print("🔘 [Menu] 点击痛点")
                                     showingMenu = false
                                     showingBadgeSummary = .painPoint
                                 },
                                 onSolution: {
+                                    print("🔘 [Menu] 点击方案")
                                     showingMenu = false
                                     showingBadgeSummary = .solution
                                 }
@@ -249,22 +277,10 @@ struct QuickNoteChatView: View {
                             .padding(.trailing, 16)
                             .transition(.opacity.combined(with: .scale(scale: 0.95)))
                             .allowsHitTesting(true)
+                            .zIndex(1001)
                         }
                     }
                     Spacer()
-                }
-            )
-            .background(
-                // 背景遮罩（点击关闭菜单）
-                Group {
-                    if showingMessageActionSheet {
-                        Color.black.opacity(0.1)
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                showingMessageActionSheet = false
-                                selectedMessageForAction = nil
-                            }
-                    }
                 }
             )
             .sheet(isPresented: $showingRenameSheet) {
@@ -327,12 +343,19 @@ struct QuickNoteChatView: View {
                 }
                 .frame(width: 44, height: 44)
                 
-                if isVoiceMode {
-                    // 语音按钮
-                    voiceButton
-                } else {
-                    // 文字输入框
-                    textInputField
+                VStack(spacing: AppTheme.Spacing.xs) {
+                    if isVoiceMode {
+                        // 语音按钮
+                        voiceButton
+                    } else {
+                        // 文字输入框
+                        textInputField
+                    }
+                    
+                    // 引用预览（显示在输入框/录音按钮下方）
+                    if let refMessage = referencingMessage {
+                        referencePreviewView
+                    }
                 }
                 
                 // 右侧：加号/发送按钮
@@ -492,11 +515,11 @@ struct QuickNoteChatView: View {
                     .textFieldStyle(.plain)
                     .padding(.horizontal, AppTheme.Spacing.md)
                     .padding(.vertical, AppTheme.Spacing.sm)
-                    .background(pendingBadge != nil ? pendingBadge!.color.opacity(0.05) : AppTheme.Colors.bgMain)
+                    .background(currentBadge != nil ? currentBadge!.color.opacity(0.05) : AppTheme.Colors.bgMain)
                     .cornerRadius(AppTheme.Radius.medium)
                     .overlay(
                         RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                            .stroke(pendingBadge != nil ? pendingBadge!.color.opacity(0.3) : Color.clear, lineWidth: 1)
+                            .stroke(currentBadge != nil ? currentBadge!.color.opacity(0.3) : Color.clear, lineWidth: 1)
                     )
                     .overlay(
                         // 右上角角标图标
@@ -513,11 +536,11 @@ struct QuickNoteChatView: View {
                     .textFieldStyle(.plain)
                     .padding(.horizontal, AppTheme.Spacing.md)
                     .padding(.vertical, AppTheme.Spacing.sm)
-                    .background(pendingBadge != nil ? pendingBadge!.color.opacity(0.05) : AppTheme.Colors.bgMain)
+                    .background(currentBadge != nil ? currentBadge!.color.opacity(0.05) : AppTheme.Colors.bgMain)
                     .cornerRadius(AppTheme.Radius.medium)
                     .overlay(
                         RoundedRectangle(cornerRadius: AppTheme.Radius.medium)
-                            .stroke(pendingBadge != nil ? pendingBadge!.color.opacity(0.3) : Color.clear, lineWidth: 1)
+                            .stroke(currentBadge != nil ? currentBadge!.color.opacity(0.3) : Color.clear, lineWidth: 1)
                     )
                     .overlay(
                         // 右上角角标图标
@@ -645,8 +668,8 @@ struct QuickNoteChatView: View {
                 showingBadgeMenu.toggle()
             }
         }) {
-            if let badge = pendingBadge {
-                // 显示选中的角标
+            if let badge = currentBadge {
+                // 显示选中的角标（用户手动选择或继承的）
                 Image(systemName: badgeIconName(for: badge))
                     .font(.system(size: 12))
                     .foregroundColor(.white)
@@ -665,6 +688,44 @@ struct QuickNoteChatView: View {
                     .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
             }
         }
+    }
+    
+    // MARK: - 引用预览视图
+    private var referencePreviewView: some View {
+        HStack(spacing: AppTheme.Spacing.sm) {
+            // 引用内容预览
+            Text(referencingMessage?.getPreviewText() ?? "")
+                .font(.system(size: AppTheme.FontSize.caption))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            // 取消引用按钮
+            Button(action: {
+                withAnimation {
+                    // 检查角标是否是继承的（pendingBadge等于被引用消息的角标）
+                    let refBadge = referencingMessage?.badge
+                    let isInheritedBadge = (refBadge != nil && pendingBadge == refBadge)
+                    
+                    referencingMessage = nil
+                    
+                    // 如果角标是继承的，取消引用后清除角标
+                    if isInheritedBadge {
+                        pendingBadge = nil
+                    }
+                }
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            .frame(width: 20, height: 20)
+        }
+        .padding(.horizontal, AppTheme.Spacing.sm)
+        .padding(.vertical, AppTheme.Spacing.xs)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(AppTheme.Radius.small)
     }
     
     private func badgeIconName(for badge: BadgeType) -> String {
@@ -686,13 +747,9 @@ struct QuickNoteChatView: View {
         let content = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         inputText = ""
         
-        var badge = pendingBadge
+        // 使用当前角标（已通过currentBadge计算，优先级：用户手动选择 > 继承的角标）
+        let badge = currentBadge
         pendingBadge = nil
-        
-        // 如果引用了消息，继承被引用消息的角标
-        if let refMessage = referencingMessage, badge == nil {
-            badge = refMessage.badge
-        }
         
         let message = NoteMessage(
             type: .text,
@@ -771,10 +828,12 @@ struct QuickNoteChatView: View {
         
         if let audioData = try? Data(contentsOf: url),
            let path = manager.saveAudioFile(audioData) {
-            // 使用当前选中的角标发送语音消息
-            sendAudioMessage(path: path, duration: duration, badge: pendingBadge)
-            // 发送后清除角标
+            // 使用当前角标（已通过currentBadge计算，优先级：用户手动选择 > 继承的角标）
+            let badge = currentBadge
+            sendAudioMessage(path: path, duration: duration, badge: badge, referencedMessageId: referencingMessage?.id, referencedMessagePreview: referencingMessage?.getPreviewText())
+            // 发送后清除角标和引用
             pendingBadge = nil
+            referencingMessage = nil
         }
         
         // 删除临时文件
@@ -788,12 +847,14 @@ struct QuickNoteChatView: View {
         try? audioSession.setActive(false)
     }
     
-    private func sendAudioMessage(path: String, duration: TimeInterval, badge: BadgeType?) {
+    private func sendAudioMessage(path: String, duration: TimeInterval, badge: BadgeType?, referencedMessageId: UUID? = nil, referencedMessagePreview: String? = nil) {
         let message = NoteMessage(
             type: .audio,
             audioPath: path,
             audioDuration: duration,
-            badge: badge
+            badge: badge,
+            referencedMessageId: referencedMessageId,
+            referencedMessagePreview: referencedMessagePreview
         )
         
         addMessage(message)
@@ -911,35 +972,6 @@ struct MessageBubbleView: View {
             Spacer()
             
             VStack(alignment: .trailing, spacing: AppTheme.Spacing.xs) {
-                // 操作菜单（微信风格，横向工具条）
-                if isSelected {
-                    WeChatStyleActionMenu(
-                        onQuote: onQuote,
-                        onDelete: onDelete
-                    )
-                    .padding(.bottom, AppTheme.Spacing.xs)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.8)).combined(with: .move(edge: .bottom)),
-                        removal: .opacity.combined(with: .scale(scale: 0.8))
-                    ))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-                }
-                
-                // 引用预览
-                if let refPreview = message.referencedMessagePreview {
-                    HStack {
-                        Text("引用：\(refPreview)")
-                            .font(.system(size: AppTheme.FontSize.caption))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .lineLimit(1)
-                        Spacer()
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.sm)
-                    .padding(.vertical, AppTheme.Spacing.xs)
-                    .background(AppTheme.Colors.bgMain)
-                    .cornerRadius(AppTheme.Radius.small)
-                }
-                
                 // 角标（显示在消息内容上方）
                 if let badge = message.badge {
                     Button(action: {
@@ -962,8 +994,44 @@ struct MessageBubbleView: View {
                     .background(wechatGreen)
                     .cornerRadius(AppTheme.Radius.medium)
                     .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: .trailing)
+                
+                // 引用预览（显示在消息内容下方，微信风格）
+                if let refPreview = message.referencedMessagePreview {
+                    WeChatStyleReferenceView(preview: refPreview)
+                        .padding(.top, AppTheme.Spacing.xs)
+                }
             }
         }
+        .overlay(
+            // 操作菜单（悬浮显示，不占用布局空间）
+            Group {
+                if isSelected {
+                    WeChatStyleActionMenu(
+                        onQuote: {
+                            print("🔘 [MessageAction] 点击引用按钮")
+                            onQuote()
+                        },
+                        onDelete: {
+                            print("🔘 [MessageAction] 点击删除按钮")
+                            onDelete()
+                        },
+                        onCancel: {
+                            print("🔘 [MessageAction] 点击取消按钮")
+                            onDismiss()
+                        }
+                    )
+                    .offset(y: -AppTheme.Spacing.lg)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.8)).combined(with: .move(edge: .bottom)),
+                        removal: .opacity.combined(with: .scale(scale: 0.8))
+                    ))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+                    .zIndex(1001)
+                    .allowsHitTesting(true)
+                }
+            },
+            alignment: .topTrailing
+        )
         .onLongPressGesture {
             onLongPress()
         }
@@ -1286,47 +1354,160 @@ struct VoiceButtonWidthKey: PreferenceKey {
 struct WeChatStyleActionMenu: View {
     let onQuote: () -> Void
     let onDelete: () -> Void
+    let onCancel: () -> Void
+    
+    // 固定菜单高度
+    private let menuHeight: CGFloat = 40
     
     var body: some View {
         HStack(spacing: 0) {
             // 引用按钮
-            Button(action: onQuote) {
+            Button(action: {
+                print("🔘 [WeChatStyleActionMenu] 引用按钮被点击")
+                onQuote()
+            }) {
                 HStack(spacing: AppTheme.Spacing.xs) {
                     Image(systemName: "quote.bubble")
                         .font(.system(size: 14))
                     Text("引用")
                         .font(.system(size: AppTheme.FontSize.body))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .foregroundColor(.white)
+                .frame(height: menuHeight)
                 .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, AppTheme.Spacing.sm)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(PlainButtonStyle())
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    print("🔘 [WeChatStyleActionMenu] 引用按钮 TapGesture 触发")
+                }
+            )
             
             // 分隔线
-            Divider()
+            Rectangle()
+                .fill(Color.white.opacity(0.3))
                 .frame(width: 1)
-                .background(Color.white.opacity(0.3))
-                .padding(.vertical, AppTheme.Spacing.xs)
+                .frame(height: menuHeight * 0.6)
             
             // 删除按钮
-            Button(action: onDelete) {
+            Button(action: {
+                print("🔘 [WeChatStyleActionMenu] 删除按钮被点击")
+                onDelete()
+            }) {
                 HStack(spacing: AppTheme.Spacing.xs) {
                     Image(systemName: "trash")
                         .font(.system(size: 14))
                     Text("删除")
                         .font(.system(size: AppTheme.FontSize.body))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .foregroundColor(.white)
+                .frame(height: menuHeight)
                 .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, AppTheme.Spacing.sm)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(PlainButtonStyle())
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    print("🔘 [WeChatStyleActionMenu] 删除按钮 TapGesture 触发")
+                }
+            )
+            
+            // 分隔线
+            Rectangle()
+                .fill(Color.white.opacity(0.3))
+                .frame(width: 1)
+                .frame(height: menuHeight * 0.6)
+            
+            // 取消按钮
+            Button(action: {
+                print("🔘 [WeChatStyleActionMenu] 取消按钮被点击")
+                onCancel()
+            }) {
+                HStack(spacing: AppTheme.Spacing.xs) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14))
+                    Text("取消")
+                        .font(.system(size: AppTheme.FontSize.body))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .foregroundColor(.white)
+                .frame(height: menuHeight)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    print("🔘 [WeChatStyleActionMenu] 取消按钮 TapGesture 触发")
+                }
+            )
         }
+        .frame(height: menuHeight)
+        .fixedSize(horizontal: true, vertical: true)
         .background(
             // 深色半透明背景
             Color.black.opacity(0.85)
                 .cornerRadius(AppTheme.Radius.medium)
         )
         .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
+        .allowsHitTesting(true)
+        .onTapGesture {
+            print("🔘 [WeChatStyleActionMenu] 菜单区域被点击")
+        }
+    }
+}
+
+// MARK: - 微信风格引用视图
+struct WeChatStyleReferenceView: View {
+    let preview: String
+    
+    // 估算单行文本宽度（字符数 * 平均字符宽度）
+    private var estimatedTextWidth: CGFloat {
+        let avgCharWidth: CGFloat = 7 // 估算平均字符宽度（根据字体大小 AppTheme.FontSize.caption）
+        return CGFloat(preview.count) * avgCharWidth
+    }
+    
+    // 判断是否需要右对齐（如果左对齐会超出屏幕）
+    private var shouldAlignRight: Bool {
+        // 可用宽度 = 屏幕宽度的75%（与消息气泡一致）
+        let maxAvailableWidth = UIScreen.main.bounds.width * 0.75
+        // 如果估算宽度超过可用宽度的70%，则右对齐（留一些余量）
+        return estimatedTextWidth > maxAvailableWidth * 0.7
+    }
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
+            // 左侧竖线（微信风格）
+            Rectangle()
+                .fill(Color.gray.opacity(0.5))
+                .frame(width: 3)
+                .cornerRadius(1.5)
+            
+            // 引用内容
+            Text(preview)
+                .font(.system(size: AppTheme.FontSize.caption))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: shouldAlignRight ? .trailing : .leading)
+        }
+        .padding(.horizontal, AppTheme.Spacing.sm)
+        .padding(.vertical, AppTheme.Spacing.xs)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(AppTheme.Radius.small)
+        .frame(
+            maxWidth: shouldAlignRight ? UIScreen.main.bounds.width * 0.75 : nil,
+            alignment: shouldAlignRight ? .trailing : .leading
+        )
+        .fixedSize(horizontal: !shouldAlignRight, vertical: false)
+        // 确保短内容左边缘与消息气泡左边缘对齐（通过右对齐的VStack自然实现）
     }
 }
 
