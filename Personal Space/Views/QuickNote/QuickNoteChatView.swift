@@ -128,12 +128,31 @@ struct QuickNoteChatView: View {
                                     MessageBubbleView(
                                         message: message,
                                         manager: manager,
+                                        isSelected: selectedMessageForAction?.id == message.id && showingMessageActionSheet,
                                         onBadgeTap: { badge in
                                             showingBadgeSummary = badge
                                         },
                                         onLongPress: {
                                             selectedMessageForAction = message
                                             showingMessageActionSheet = true
+                                        },
+                                        onQuote: {
+                                            if let message = selectedMessageForAction {
+                                                referencingMessage = message
+                                            }
+                                            showingMessageActionSheet = false
+                                            selectedMessageForAction = nil
+                                        },
+                                        onDelete: {
+                                            if let message = selectedMessageForAction {
+                                                deleteMessage(message)
+                                            }
+                                            showingMessageActionSheet = false
+                                            selectedMessageForAction = nil
+                                        },
+                                        onDismiss: {
+                                            showingMessageActionSheet = false
+                                            selectedMessageForAction = nil
                                         }
                                     )
                                     .id(message.id)
@@ -235,24 +254,19 @@ struct QuickNoteChatView: View {
                     Spacer()
                 }
             )
-            .actionSheet(isPresented: $showingMessageActionSheet) {
-                ActionSheet(
-                    title: Text("操作"),
-                    buttons: [
-                        .default(Text("引用")) {
-                            if let message = selectedMessageForAction {
-                                referencingMessage = message
+            .background(
+                // 背景遮罩（点击关闭菜单）
+                Group {
+                    if showingMessageActionSheet {
+                        Color.black.opacity(0.1)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                showingMessageActionSheet = false
+                                selectedMessageForAction = nil
                             }
-                        },
-                        .destructive(Text("删除")) {
-                            if let message = selectedMessageForAction {
-                                deleteMessage(message)
-                            }
-                        },
-                        .cancel()
-                    ]
-                )
-            }
+                    }
+                }
+            )
             .sheet(isPresented: $showingRenameSheet) {
                 RenameNoteSheet(
                     currentTitle: displayNote.title,
@@ -883,8 +897,12 @@ struct QuickNoteChatView: View {
 struct MessageBubbleView: View {
     let message: NoteMessage
     @ObservedObject var manager: QuickNoteManager
+    let isSelected: Bool
     let onBadgeTap: (BadgeType) -> Void
     let onLongPress: () -> Void
+    let onQuote: () -> Void
+    let onDelete: () -> Void
+    let onDismiss: () -> Void
     
     private let wechatGreen = Color(red: 0.584, green: 0.925, blue: 0.412) // #95EC69
     
@@ -893,6 +911,20 @@ struct MessageBubbleView: View {
             Spacer()
             
             VStack(alignment: .trailing, spacing: AppTheme.Spacing.xs) {
+                // 操作菜单（微信风格，横向工具条）
+                if isSelected {
+                    WeChatStyleActionMenu(
+                        onQuote: onQuote,
+                        onDelete: onDelete
+                    )
+                    .padding(.bottom, AppTheme.Spacing.xs)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.8)).combined(with: .move(edge: .bottom)),
+                        removal: .opacity.combined(with: .scale(scale: 0.8))
+                    ))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+                }
+                
                 // 引用预览
                 if let refPreview = message.referencedMessagePreview {
                     HStack {
@@ -908,15 +940,7 @@ struct MessageBubbleView: View {
                     .cornerRadius(AppTheme.Radius.small)
                 }
                 
-                // 消息内容
-                messageContent
-                    .padding(.horizontal, AppTheme.Spacing.md)
-                    .padding(.vertical, AppTheme.Spacing.sm)
-                    .background(wechatGreen)
-                    .cornerRadius(AppTheme.Radius.medium)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: .trailing)
-                
-                // 角标
+                // 角标（显示在消息内容上方）
                 if let badge = message.badge {
                     Button(action: {
                         onBadgeTap(badge)
@@ -930,6 +954,14 @@ struct MessageBubbleView: View {
                             .cornerRadius(AppTheme.Radius.small)
                     }
                 }
+                
+                // 消息内容
+                messageContent
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                    .padding(.vertical, AppTheme.Spacing.sm)
+                    .background(wechatGreen)
+                    .cornerRadius(AppTheme.Radius.medium)
+                    .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: .trailing)
             }
         }
         .onLongPressGesture {
@@ -1249,6 +1281,55 @@ struct VoiceButtonWidthKey: PreferenceKey {
         value = nextValue()
     }
 }
+
+// MARK: - 微信风格操作菜单（横向工具条）
+struct WeChatStyleActionMenu: View {
+    let onQuote: () -> Void
+    let onDelete: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // 引用按钮
+            Button(action: onQuote) {
+                HStack(spacing: AppTheme.Spacing.xs) {
+                    Image(systemName: "quote.bubble")
+                        .font(.system(size: 14))
+                    Text("引用")
+                        .font(.system(size: AppTheme.FontSize.body))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.sm)
+            }
+            
+            // 分隔线
+            Divider()
+                .frame(width: 1)
+                .background(Color.white.opacity(0.3))
+                .padding(.vertical, AppTheme.Spacing.xs)
+            
+            // 删除按钮
+            Button(action: onDelete) {
+                HStack(spacing: AppTheme.Spacing.xs) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14))
+                    Text("删除")
+                        .font(.system(size: AppTheme.FontSize.body))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.sm)
+            }
+        }
+        .background(
+            // 深色半透明背景
+            Color.black.opacity(0.85)
+                .cornerRadius(AppTheme.Radius.medium)
+        )
+        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
+    }
+}
+
 
 // MARK: - iOS 16.0+ 兼容性扩展
 private extension View {
