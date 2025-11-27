@@ -353,7 +353,7 @@ struct QuickNoteChatView: View {
                     }
                     
                     // 引用预览（显示在输入框/录音按钮下方）
-                    if let refMessage = referencingMessage {
+                    if referencingMessage != nil {
                         referencePreviewView
                     }
                 }
